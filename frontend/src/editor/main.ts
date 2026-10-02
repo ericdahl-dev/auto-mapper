@@ -4,7 +4,7 @@ import { EFFECTS, effectById } from "../effects/index";
 import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
 import { applyPlan } from "./applyEffect";
-import { controlsFor, parseControlValue } from "./controls";
+import { controlsFor, mediaLabel, parseControlValue } from "./controls";
 import { handleIndices, moveOnRun } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
@@ -276,6 +276,15 @@ function renderPanel() {
     effectControls.replaceChildren(
       ...controlsFor(effect, surface.params).map((c) => {
         const row = Object.assign(document.createElement("label"), { className: "control" });
+        if (c.kind === "media") return mediaControl(row, surface.id, c.name, c.label, c.value);
+        if (c.kind === "select") {
+          const choose = document.createElement("select");
+          choose.replaceChildren(...c.options.map((o) => Object.assign(document.createElement("option"), { value: o.value, textContent: o.label })));
+          choose.value = c.value;
+          choose.addEventListener("change", () => patchSurface(surface.id, { params: { [c.name]: choose.value } }));
+          row.append(Object.assign(document.createElement("span"), { textContent: c.label }), choose);
+          return row;
+        }
         const input = Object.assign(document.createElement("input"), { type: c.kind, value: String(c.value) });
         if (c.kind === "range") Object.assign(input, { min: c.min, max: c.max, step: c.step });
         const readout = Object.assign(document.createElement("span"), { className: "muted", textContent: String(c.value) });
@@ -299,6 +308,30 @@ function renderPanel() {
   const log = effectErrors.get(surface.id)?.log;
   effectError.hidden = !log;
   effectError.textContent = log ? `Shader error:\n${log}` : "";
+}
+
+/** A file picker: the chosen image or video is uploaded to the engine, then set on the surface. */
+function mediaControl(row: HTMLLabelElement, surfaceId: number, name: string, label: string, src: string) {
+  const current = Object.assign(document.createElement("span"), { className: "muted", textContent: mediaLabel(src) });
+  const input = Object.assign(document.createElement("input"), { type: "file", accept: "image/*,video/*" });
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    current.textContent = `Uploading ${file.name}…`;
+    const res = await fetch(`/api/media?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
+      current.textContent = mediaLabel(src);
+      notice(`Upload failed: ${detail?.detail ?? res.statusText}`);
+      return;
+    }
+    const uploaded: { url: string } = await res.json();
+    src = uploaded.url;
+    current.textContent = mediaLabel(src);
+    patchSurface(surfaceId, { params: { [name]: src } });
+  });
+  row.append(Object.assign(document.createElement("span"), { textContent: label }), current, input);
+  return row;
 }
 
 effectSelect.addEventListener("change", () => {

@@ -57,7 +57,10 @@ float polyEdge(vec2 p, out float along) {
 
 export function fragmentSource(effect: Effect): string {
   const uniforms = effect.params
-    .map((p) => `uniform ${p.type === "color" ? "vec3" : "float"} u_${p.name};`)
+    .map((p) => {
+      if (p.type === "media") return `uniform sampler2D u_${p.name};\nuniform vec2 u_${p.name}Size;`;
+      return `uniform ${p.type === "color" ? "vec3" : "float"} u_${p.name};`;
+    })
     .join("\n");
   return `${PREAMBLE}${uniforms}\n${effect.fragment ?? ""}`;
 }

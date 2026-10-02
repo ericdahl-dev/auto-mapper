@@ -9,7 +9,7 @@ from typing import Callable
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
@@ -20,6 +20,7 @@ from engine.cameras import CameraSettings, UsbAddress, usb_address
 from engine.files import write_text_atomic
 from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
+from engine import media
 from engine.scan import DecodeResult, block_coverage, diagnose, projector_space_image
 from engine.scan_runner import ScanCancelled, ScanError, capture_scan
 from engine.projects import ProjectStore, UnknownProject
@@ -374,6 +375,22 @@ def create_app(
         scene.present(blackout=not scene.presentation["blackout"])
         await app.state.hub.broadcast_scene()
         return scene.presentation
+
+    @app.post("/api/media")
+    async def upload_media(name: str, request: Request):
+        """The request body is the file itself; `name` is its original filename."""
+        try:
+            return await media.store(scan_dir / "media", name, request.stream())
+        except media.MediaError as e:
+            raise HTTPException(e.status, str(e))
+
+    @app.get("/api/media/{name}")
+    async def get_media(name: str):
+        found = media.lookup(scan_dir / "media", name)
+        if found is None:
+            raise HTTPException(404, "Unknown media")
+        path, content_type = found
+        return FileResponse(path, media_type=content_type)  # serves Range requests, which video needs
 
     @app.get("/api/projects")
     async def list_projects():

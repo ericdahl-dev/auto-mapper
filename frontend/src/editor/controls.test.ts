@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { effectById } from "../effects/index";
-import { controlsFor, parseControlValue } from "./controls";
+import { controlsFor, mediaLabel, parseControlValue } from "./controls";
 
 describe("controlsFor", () => {
   it("builds one control per param, using saved values over defaults", () => {
@@ -14,6 +14,18 @@ describe("controlsFor", () => {
     expect(controls[2]).toMatchObject({ label: "Gradient angle", min: 0, max: 360, step: 1 });
   });
 
+  it("offers a media picker and a fit choice for the media effect", () => {
+    const controls = controlsFor(effectById("media"), { src: "/api/media/wall-0123456789ab.png" });
+    expect(controls).toEqual([
+      { name: "src", label: "Image or video", kind: "media", value: "/api/media/wall-0123456789ab.png" },
+      { name: "fit", label: "Fit", kind: "select", value: "cover", options: [
+        { value: "cover", label: "Cover" },
+        { value: "stretch", label: "Stretch" },
+      ] },
+    ]);
+    expect(controlsFor(effectById("media"), {})[0].value).toBe("");
+  });
+
   it("has no controls for an effect without params", () => {
     expect(controlsFor(effectById("none"), {})).toEqual([]);
   });
@@ -23,5 +35,13 @@ describe("parseControlValue", () => {
   it("keeps colours as hex and turns range input into numbers", () => {
     expect(parseControlValue("color", "#00ff00")).toBe("#00ff00");
     expect(parseControlValue("range", "12.5")).toBe(12.5);
+    expect(parseControlValue("select", "stretch")).toBe("stretch");
+  });
+});
+
+describe("mediaLabel", () => {
+  it("shows the uploaded file's name, or that none is chosen", () => {
+    expect(mediaLabel("/api/media/wall-0123456789ab.png")).toBe("wall-0123456789ab.png");
+    expect(mediaLabel("")).toBe("No file chosen");
   });
 });
