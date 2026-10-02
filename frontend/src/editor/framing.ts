@@ -2,6 +2,7 @@
 // effect's zoom/panX/panY params (pan in fractions of the surface's bounding box).
 
 import { media } from "../effects/media";
+import { boundingBox } from "../shared/geometry";
 import type { Effect } from "../effects/types";
 
 const range = (name: string): [number, number] => {
@@ -17,10 +18,7 @@ export function canFrame(effect: Effect): boolean {
 
 /** New pan after dragging the pointer by `delta` projector pixels. */
 export function panAfterDrag(pan: { panX: number; panY: number }, [dx, dy]: number[], outline: number[][]) {
-  const xs = outline.map((p) => p[0]);
-  const ys = outline.map((p) => p[1]);
-  const w = Math.max(1, Math.max(...xs) - Math.min(...xs));
-  const h = Math.max(1, Math.max(...ys) - Math.min(...ys));
+  const [, , w, h] = boundingBox(outline); // the same box the shader's u_bounds uses
   return {
     panX: round(clamp(pan.panX + dx / w, range("panX"))),
     panY: round(clamp(pan.panY + dy / h, range("panY"))),

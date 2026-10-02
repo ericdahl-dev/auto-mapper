@@ -1,6 +1,7 @@
 """Shared test rig: fake hardware matching the real Mac + projector + AC410 setup."""
 
 import tempfile
+from pathlib import Path
 from contextlib import contextmanager
 
 from fastapi.testclient import TestClient
@@ -61,3 +62,16 @@ def play_output(out, scene, ack=True, on_pattern=None):
             scene.pattern = msg["pattern"]
             if ack:
                 out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+
+
+def write_scan(data_dir, surfaces, width=1920, height=1080, **summary):
+    """A saved scan in <data_dir>/scans/latest with just its summary, written through ScanFolder.
+    Enough for the show, projects and editing tests; use a real synthetic scan when images matter."""
+    import json
+
+    from engine.scan_folder import ScanFolder
+
+    folder = ScanFolder(Path(data_dir) / "scans" / "latest")
+    folder.path.mkdir(parents=True, exist_ok=True)
+    folder.meta_file.write_text(json.dumps({"width": width, "height": height, **summary, "surfaces": surfaces}))
+    return folder

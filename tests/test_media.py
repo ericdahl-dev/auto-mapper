@@ -1,9 +1,8 @@
-import json
 
 import pytest
 
 from engine.hardware import FakeHardware
-from tests.helpers import AC410, LAPTOP, PROJECTOR, engine
+from tests.helpers import AC410, engine, LAPTOP, PROJECTOR, write_scan
 
 WALL = {"polygon": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]], "area": 2073600.0}
 PNG = b"\x89PNG\r\n\x1a\nfake image"
@@ -17,9 +16,7 @@ def rig():
 
 @pytest.fixture
 def scanned(tmp_path):
-    d = tmp_path / "scans" / "latest"
-    d.mkdir(parents=True)
-    (d / "meta.json").write_text(json.dumps({"width": 1920, "height": 1080, "surfaces": [WALL]}))
+    write_scan(tmp_path, [WALL], 1920, 1080)
     return tmp_path
 
 

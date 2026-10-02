@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from engine.files import write_text_atomic
+from engine.geometry import polygon_area
 from engine.scan_folder import ScanFolder
 
 MERGE_CLOSE_PX = 5  # bridges hairline gaps between surfaces being merged
@@ -281,12 +282,6 @@ def _reshaped(surface: dict) -> None:
     """A detected surface reshaped by hand becomes edited, so redetecting won't overwrite it."""
     if surface["source"] == "detected":
         surface["source"] = "edited"
-
-
-def polygon_area(polygon: list[list[float]]) -> float:
-    pts = np.asarray(polygon, float)
-    x, y = pts[:, 0], pts[:, 1]
-    return float(0.5 * abs(np.dot(x, np.roll(y, -1)) - np.dot(y, np.roll(x, -1))))
 
 
 def _mask(polygon: list[list[float]], width: int, height: int) -> np.ndarray:

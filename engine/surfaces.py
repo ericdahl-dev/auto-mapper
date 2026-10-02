@@ -11,6 +11,7 @@ Areas the camera could not see at all (shadows, occlusion) are boundaries too.
 import cv2
 import numpy as np
 
+from engine.geometry import polygon_area
 from engine.scan import DecodeResult
 
 DEPTH_JUMP_FACTOR = 3.0  # a camera step this many times the typical one is a depth edge
@@ -114,7 +115,7 @@ def detect_surfaces(decoded: DecodeResult, view: tuple[np.ndarray, np.ndarray]) 
         poly = outline_polygon(mask)
         if len(poly) < 3:
             continue
-        surfaces.append({"polygon": poly, "area": float(cv2.contourArea(np.int32(poly)))})
+        surfaces.append({"polygon": poly, "area": polygon_area(poly)})
     surfaces.sort(key=lambda s: s["area"], reverse=True)
     return surfaces
 
