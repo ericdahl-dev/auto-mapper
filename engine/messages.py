@@ -46,3 +46,7 @@ class MergeRequest(BaseModel):
 
 class SelectRequest(BaseModel):
     id: int | None
+
+
+class ProjectSaveRequest(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=80)]

@@ -45,6 +45,13 @@ class SceneStore:
             "selected": None,
         }
 
+    def reload(self) -> None:
+        self.scene = self._load()
+
+    def save(self) -> None:
+        if self.scene is not None:
+            self._save()
+
     def reset_from_scan(self, summary: dict) -> None:
         self.scene = self._from_scan(summary)
         self._save()

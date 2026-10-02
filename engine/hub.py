@@ -19,6 +19,7 @@ class Hub:
         self.hardware = hardware
         self.settings = settings
         self.scene = scene
+        self.projects = None  # set by the app; status reports the open project
         self.editors: set[WebSocket] = set()
         self.output: WebSocket | None = None
         self.output_resolution: dict | None = None
@@ -32,6 +33,7 @@ class Hub:
             "output_connected": self.output is not None,
             "output_resolution": self.output_resolution,
             "camera": self._camera_status(),
+            "project": self.projects.active() if self.projects else None,
             "can_scan": self._output_fills_projector()
             and not self.hardware.issues
             and self.settings.selected(self.hardware.cameras) is not None,
