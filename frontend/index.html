@@ -21,6 +21,8 @@
       #surface-panel { border-top: 1px solid var(--line); padding-top: 12px; margin-bottom: 12px; }
       .control { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin-bottom: 8px; }
       .control input[type=range] { grid-column: 1 / -1; width: 100%; }
+      .control input[type=file] { grid-column: 1 / -1; width: 100%; }
+      .control .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16em; }
       #effect-error { color: var(--bad); white-space: pre-wrap; font-size: 12px; background: #2a1414; padding: 8px; }
       #surfaces polygon { fill: rgba(37, 99, 235, 0.18); stroke: #60a5fa; stroke-width: 2; }
       #surfaces polygon.selected { fill: rgba(255, 255, 255, 0.25); stroke: #fff; stroke-width: 3; }
