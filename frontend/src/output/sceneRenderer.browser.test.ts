@@ -96,3 +96,19 @@ describe("SceneRenderer", () => {
     expect(pixel(50, 27)).toEqual([0, 0, 0]);
   });
 });
+
+describe("SceneRenderer resources", () => {
+  it("frees the previous scene's vertex arrays when a new scene arrives", () => {
+    const canvas = Object.assign(document.createElement("canvas"), { width: 64, height: 36 });
+    const gl = canvas.getContext("webgl2")!;
+    let live = 0;
+    const create = gl.createVertexArray.bind(gl);
+    const del = gl.deleteVertexArray.bind(gl);
+    gl.createVertexArray = () => { live++; return create(); };
+    gl.deleteVertexArray = (v) => { live--; del(v); };
+    const r = new SceneRenderer(gl, EFFECTS, () => {});
+    for (let i = 0; i < 20; i++) r.setScene(scene("fill", { colorA: "#00ff00" }));
+
+    expect(live).toBe(4); // 2 surfaces x (fill + outline): only the current scene's
+  });
+});

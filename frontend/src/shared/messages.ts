@@ -90,6 +90,7 @@ export interface SceneMessage {
   surfaces: SceneSurface[];
   selected: number | null;
   presentation: { mode: "edit" | "play"; blackout: boolean };
+  scan_rev?: string | null; // changes only when the scan data changes
 }
 
 export interface ScanReloadMessage {

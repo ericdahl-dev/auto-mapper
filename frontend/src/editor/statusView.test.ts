@@ -100,3 +100,10 @@ describe("calibration at the camera's limit", () => {
     expect(view.calibration).toBe("Exposure 1000, gain 15 (white frame peak 120) - camera at its light limit");
   });
 });
+
+describe("camera list", () => {
+  it("names the cameras rather than printing objects", () => {
+    expect(describeStatus(status()).cameras).toBe("FaceTime HD Camera, Webcam AC410");
+    expect(describeStatus(status({}, ["no_camera"])).cameras).toBe("None");
+  });
+});

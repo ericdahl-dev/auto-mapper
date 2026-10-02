@@ -101,3 +101,33 @@ def test_effects_survive_an_engine_restart(rig, scanned):
         box = client.get("/api/scene").json()["surfaces"][1]
 
     assert box["effect"] == "fill" and box["params"] == {"colorA": "#00ff00"}
+
+
+def test_engine_starts_even_if_scene_file_was_cut_off_by_a_crash(rig, scanned):
+    (scanned / "scans" / "latest" / "scene.json").write_text('{"width": 1920, "surf')  # truncated mid-write
+    with engine(rig, data_dir=scanned) as client:
+        scene = client.get("/api/scene").json()
+
+    assert [s["id"] for s in scene["surfaces"]] == [1, 2]  # rebuilt from the scan's meta.json
+
+
+def test_saved_files_are_written_whole(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        client.patch("/api/scene/surfaces/2", json={"effect": "fill"})
+
+    folder = scanned / "scans" / "latest"
+    assert not list(folder.glob("*.tmp"))  # temp files are renamed into place
+    json.loads((folder / "scene.json").read_text())
+
+
+def test_scene_carries_a_scan_revision_that_only_changes_with_new_scan_data(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        first = client.get("/api/scene").json()["scan_rev"]
+        client.patch("/api/scene/surfaces/2", json={"polygon": [[10, 10], [50, 10], [50, 50]]})
+        after_edit = client.get("/api/scene").json()["scan_rev"]
+        client.post("/api/projects", json={"name": "P"})
+        client.post("/api/projects/p/open")
+        after_open = client.get("/api/scene").json()["scan_rev"]
+
+    assert first == after_edit  # editing geometry must not make the output re-fetch the scan image
+    assert after_open != first

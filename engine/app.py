@@ -17,6 +17,7 @@ from engine.camera_device import CAPTURE_SIZE, CameraFactory, CameraSession, Ope
 from engine.calibrate import CalibrationError, calibrate_exposure
 from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
+from engine.files import write_text_atomic
 from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine.scan import DecodeResult, block_coverage, diagnose, projector_space_image
@@ -234,6 +235,7 @@ def create_app(
                 log.warning("scan failed: %s", e)
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})
             except Exception as e:  # never leave the editor waiting on a dead scan
+                log.exception("scan crashed")
                 await hub.broadcast({"type": "scan_failed", "error": f"Scan crashed: {e}"})
                 raise
             finally:
@@ -250,7 +252,7 @@ def create_app(
             scan_dir / "map.npz", proj_x=decoded.proj_x.astype(np.int16), proj_y=decoded.proj_y.astype(np.int16),
             valid=decoded.valid, covered=covered,
         )
-        (scan_dir / "meta.json").write_text(json.dumps(summary, indent=2))
+        write_text_atomic(scan_dir / "meta.json", json.dumps(summary, indent=2))
 
     def latest_image_url() -> str:
         return f"/api/scan/latest.png?t={int(time.time() * 1000)}"
@@ -314,8 +316,9 @@ def create_app(
             raise HTTPException(404, "No scan yet")
         if scan_busy():
             raise HTTPException(409, "A scan is running")
-        summary = await asyncio.to_thread(detect_saved_scan)
-        scene.apply_detection(summary)
+        async with scanning:  # hold scans/latest so a scan can't start halfway through
+            summary = await asyncio.to_thread(detect_saved_scan)
+            scene.apply_detection(summary)
         await app.state.hub.broadcast_scene()
         await app.state.hub.broadcast({"type": "scan_reload"})
         return scene.public()
@@ -330,7 +333,7 @@ def create_app(
         )
         image = cv2.imread(str(scan_dir / "scan.png"))
         meta["surfaces"] = detect_surfaces(decoded, (image, m["covered"]))
-        (scan_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        write_text_atomic(scan_dir / "meta.json", json.dumps(meta, indent=2))
         return meta
 
     @app.delete("/api/scene/surfaces/{surface_id}")
@@ -378,8 +381,11 @@ def create_app(
 
     @app.post("/api/projects")
     async def save_project(req: ProjectSaveRequest):
+        if scan_busy():
+            raise HTTPException(409, "A scan is running: save after it finishes")
         try:
-            info = await asyncio.to_thread(projects.save, req.name)
+            async with scanning:  # copy a complete scan, never one being written
+                info = await asyncio.to_thread(projects.save, req.name)
         except UnknownProject as e:
             raise HTTPException(409, str(e))
         await app.state.hub.broadcast_status()
@@ -390,7 +396,8 @@ def create_app(
         if scan_busy():
             raise HTTPException(409, "A scan is running")
         try:
-            info = await asyncio.to_thread(projects.open, slug)
+            async with scanning:  # replacing scans/latest: keep a scan from starting meanwhile
+                info = await asyncio.to_thread(projects.open, slug)
         except UnknownProject:
             raise HTTPException(404, "Unknown project")
         scene.present(mode="play", blackout=False)  # an opened project is ready to show
