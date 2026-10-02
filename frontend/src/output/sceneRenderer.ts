@@ -64,6 +64,7 @@ export class SceneRenderer {
   private media = new Map<string, MediaTexture>();
   private frame = 0;
   private audio: AudioValues = SILENT;
+  private sinkId = ""; // audio output device for video sound; "" = the system default
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -133,7 +134,21 @@ export class SceneRenderer {
     });
     this.syncMedia(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
     // Video playback settings. One element per file is shared by every surface showing it, so the
-    // first surface's speed and start win.
+    // first surface's speed and start win. Sound: on if any surface showing the file turns it on, at
+    // the loudest of their volumes, and only in Play mode without blackout.
+    const audible = scene.presentation.mode === "play" && !scene.presentation.blackout;
+    const loudest = new Map<string, number>();
+    for (const s of this.surfaces) {
+      if (s.uniforms.u_sound !== 1) continue;
+      const volume = typeof s.uniforms.u_volume === "number" ? s.uniforms.u_volume : 1;
+      for (const [, src] of s.media) loudest.set(src, Math.max(loudest.get(src) ?? 0, volume));
+    }
+    for (const [src, m] of this.media) {
+      if (!m.video) continue;
+      const volume = loudest.get(src);
+      m.video.muted = !(audible && volume !== undefined);
+      if (volume !== undefined) m.video.volume = volume;
+    }
     const seen = new Set<string>();
     for (const s of this.surfaces) {
       for (const [, src] of s.media) {
@@ -157,10 +172,47 @@ export class SceneRenderer {
     this.audio = values;
   }
 
+  /** Sends video sound to an audio output device (null = the system default). Returns an error
+   *  message if that device can't be used; video sound then stays on the default. */
+  async setOutputDevice(id: string | null): Promise<string | null> {
+    this.sinkId = id ?? "";
+    const videos = [...this.media.values()].flatMap((m) => (m.video ? [m.video] : []));
+    try {
+      await Promise.all(videos.map((v) => v.setSinkId(this.sinkId)));
+      return null;
+    } catch {
+      this.sinkId = "";
+      await Promise.all(videos.map((v) => v.setSinkId("").catch(() => {})));
+      return "That sound output is not available. Pick another output.";
+    }
+  }
+
+  /** The videos currently playing with sound (for reacting to the video's sound). */
+  audibleVideos(): HTMLVideoElement[] {
+    return [...this.media.values()].flatMap((m) => (m.video && !m.video.muted ? [m.video] : []));
+  }
+
+  /** A video element by file (for tests and diagnostics). */
+  mediaElement(src: string): HTMLVideoElement | null {
+    return this.media.get(src)?.video ?? null;
+  }
+
+  /** True when a video should be heard but isn't playing: browsers pause an unmuted video until
+   *  the user clicks in the page. The output window reports this so the editor can say "click". */
+  soundBlocked(): boolean {
+    return [...this.media.values()].some((m) => m.video && !m.video.muted && m.video.paused);
+  }
+
+  /** Restarts paused videos; call from a click handler, which lets the browser allow sound. */
+  async resumeMedia(): Promise<void> {
+    await Promise.all([...this.media.values()].map((m) => m.video?.play().catch(() => {})));
+  }
+
   /** A video's playback settings (for tests and diagnostics); null for images or unknown files. */
-  playback(src: string): { rate: number; start: number; time: number } | null {
+  playback(src: string): { rate: number; start: number; time: number; muted: boolean; volume: number } | null {
     const m = this.media.get(src);
-    return m?.video ? { rate: m.video.playbackRate, start: m.start, time: m.video.currentTime } : null;
+    const v = m?.video;
+    return v ? { rate: v.playbackRate, start: m.start, time: v.currentTime, muted: v.muted, volume: v.volume } : null;
   }
 
   async whenMediaLoaded(): Promise<void> {
@@ -197,6 +249,7 @@ export class SceneRenderer {
     }
     const el = createMediaElement(src);
     const video = el instanceof HTMLVideoElement ? el : null;
+    if (video && this.sinkId) void video.setSinkId(this.sinkId).catch(() => {});
     const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
     m.ready = new Promise<void>((settle) => {
       el.addEventListener("error", () => settle(), { once: true });

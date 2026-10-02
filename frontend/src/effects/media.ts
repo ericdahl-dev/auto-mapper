@@ -33,6 +33,12 @@ export const media: Effect = {
     // Videos only (applied by the renderer to the video element, not the shader).
     { name: "start", label: "Video start (s)", type: "number", default: 0, min: 0, max: 3600, step: 0.1 },
     { name: "speed", label: "Video speed", type: "number", default: 1, min: 0.1, max: 4, step: 0.05 },
+    // Videos only: the video's own sound, from the output window, in Play mode (muted while editing).
+    { name: "sound", label: "Video sound", type: "choice", default: "off", options: [
+      { value: "off", label: "Off" },
+      { value: "on", label: "On" },
+    ] },
+    { name: "volume", label: "Volume", type: "number", default: 1, min: 0, max: 1, step: 0.01 },
   ],
   fragment: `
 // Zoom, pan and rotate a point p centered on 0 (-0.5..0.5 across the space), in a space of the given

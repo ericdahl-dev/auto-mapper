@@ -640,9 +640,22 @@ const postSound = (body: object) =>
   void fetch("/api/sound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 soundToggle.addEventListener("click", () => postSound({ enabled: !scene?.sound?.enabled, device: soundInput.value || undefined }));
 soundInput.addEventListener("change", () => postSound({ device: soundInput.value }));
+const soundSource = $<HTMLSelectElement>("sound-source");
+// Video sound: effects follow the videos playing with sound (no mic, no feedback from the speakers).
+soundSource.addEventListener("change", () => postSound({ source: soundSource.value }));
+const soundOutputSelect = $<HTMLSelectElement>("sound-output");
+soundOutputSelect.addEventListener("change", () => postSound({ output: soundOutputSelect.value }));
 async function refreshSoundInputs() {
   // Same origin as the output window, so device ids match; labels appear once the mic is allowed.
-  const inputs = (await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? []).filter((d) => d.kind === "audioinput");
+  const devices = await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? [];
+  const outputs = devices.filter((d) => d.kind === "audiooutput" && d.deviceId && d.deviceId !== "default");
+  const chosenOutput = scene?.sound?.output ?? "";
+  soundOutputSelect.replaceChildren(
+    Object.assign(document.createElement("option"), { value: "", textContent: "Sound output: Mac default", selected: !chosenOutput }),
+    ...outputs.map((d, i) =>
+      Object.assign(document.createElement("option"), { value: d.deviceId, textContent: `Sound output: ${d.label || `Output ${i + 1}`}`, selected: d.deviceId === chosenOutput })),
+  );
+  const inputs = devices.filter((d) => d.kind === "audioinput");
   const chosen = scene?.sound?.device ?? "";
   soundInput.replaceChildren(
     Object.assign(document.createElement("option"), { value: "", textContent: "Default input", selected: !chosen }),
@@ -655,6 +668,9 @@ void refreshSoundInputs();
 function renderSound() {
   const v = describeSound(scene?.sound ?? { enabled: false, device: null }, status?.output_connected ? status.output_sound ?? null : null);
   soundToggle.textContent = `React to sound: ${v.on ? "on" : "off"}`;
+  const source = scene?.sound?.source ?? "mic";
+  if (document.activeElement !== soundSource) soundSource.value = source;
+  soundInput.hidden = source === "video";
   soundToggle.classList.toggle("on", v.on);
   $<HTMLMeterElement>("sound-meter").value = v.meter;
   $("sound-note").textContent = v.note;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SoundInput } from "./mic";
+import { SoundInput, setVideoSoundOutput } from "./mic";
 
 /** Runs frames for up to `ms`, returning the loudest level seen. */
 async function listen(s: SoundInput, ms: number): Promise<number> {
@@ -33,5 +33,39 @@ describe("SoundInput", () => {
     await s.set({ enabled: true, device: "no-such-device" });
     expect(s.status().error).toMatch(/not available/i);
     expect(s.frame(1 / 60).level).toBe(0);
+  });
+});
+
+describe("SoundInput reacting to video sound", () => {
+  it("hears a playing video's audio instead of the microphone", async () => {
+    const { default: toneVideo } = await import("../effects/fixtures/green-with-tone.webm?url");
+    const video = Object.assign(document.createElement("video"), { src: toneVideo, loop: true, muted: false });
+    await video.play();
+    const s = new SoundInput();
+    await s.set({ enabled: true, device: null, source: "video" });
+    s.setVideos([video]);
+    let bass = 0;
+    const until = performance.now() + 3000;
+    while (performance.now() < until && bass < 0.2) {
+      bass = Math.max(bass, s.frame(1 / 60).bass); // the clip is a 110 Hz tone
+      await new Promise((f) => requestAnimationFrame(f));
+    }
+    expect(bass).toBeGreaterThan(0.2);
+    expect(s.status().error).toBeNull();
+    video.pause();
+  });
+
+  it("says when there's no video sound to react to", async () => {
+    const s = new SoundInput();
+    await s.set({ enabled: true, device: null, source: "video" });
+    s.setVideos([]);
+    expect(s.status().error).toMatch(/turn on video sound/i);
+  });
+});
+
+describe("video sound output when reacting to it", () => {
+  it("follows the chosen device, and reports one that isn't available", async () => {
+    expect(await setVideoSoundOutput(null)).toBeNull();
+    expect(await setVideoSoundOutput("no-such-device")).toMatch(/not available/i);
   });
 });

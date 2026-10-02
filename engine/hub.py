@@ -33,6 +33,8 @@ class Hub:
         self.output_resolution: dict | None = None
         self.output_fps: float | None = None
         self.output_sound: dict | None = None  # the output's sound meter: {"level", "error"}
+        self.output_video_sound_blocked = False  # a video should be heard but waits for a click
+        self.output_sound_output_error: str | None = None  # the chosen sound output couldn't be used
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
 
@@ -53,6 +55,8 @@ class Hub:
             "output_resolution": self.output_resolution,
             "output_fps": self.output_fps,
             "output_sound": self.output_sound,
+            "output_video_sound_blocked": self.output_video_sound_blocked,
+            "output_sound_output_error": self.output_sound_output_error,
             "camera": self._camera_status(),
             "project": self.projects.active() if self.projects else None,
             "can_scan": self._output_fills_projector()
@@ -96,6 +100,8 @@ class Hub:
             self.output_resolution = None
             self.output_fps = None
             self.output_sound = None
+            self.output_video_sound_blocked = False
+            self.output_sound_output_error = None
             # Don't make a scan wait out its timeout for a window that is gone.
             for fut in self._acks.values():
                 if not fut.done():
