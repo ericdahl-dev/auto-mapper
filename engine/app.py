@@ -227,7 +227,7 @@ def create_app(
     @app.patch("/api/show/surfaces/{surface_id}")
     async def update_surface(surface_id: int, req: SurfaceUpdate):
         try:
-            show.update(surface_id, req.effect, req.params, req.polygon, req.name, req.bezier)
+            show.update(surface_id, req.effect, req.params, req.polygon, req.name, req.bezier, req.edge)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         return show.public()

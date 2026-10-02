@@ -155,3 +155,13 @@ def test_merging_drops_the_bezier(rig, scanned):
         client.patch("/api/show/surfaces/2", json={"polygon": BEZ["anchors"], "bezier": BEZ})
         client.post("/api/show/merge", json={"ids": [2, 3]})
         assert surface(client, 2).get("bezier") is None
+
+
+def test_a_surface_edge_can_be_grown_or_shrunk_within_ten_pixels(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        assert surface(client, 2).get("edge", 0) == 0  # untouched surfaces: no change
+        assert client.patch("/api/show/surfaces/2", json={"edge": -3}).status_code == 200
+        assert surface(client, 2)["edge"] == -3
+        assert client.patch("/api/show/surfaces/2", json={"edge": 11}).status_code == 422
+        assert client.patch("/api/show/surfaces/2", json={"edge": 2}).status_code == 200
+        assert surface(client, 2)["edge"] == 2

@@ -1,4 +1,4 @@
-import { boundingBox } from "../shared/geometry";
+import { boundingBox, offsetPolygon } from "../shared/geometry";
 import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import { settingType } from "../effects/settingTypes";
@@ -94,7 +94,9 @@ export class ShowRenderer {
     this.vaos = [];
     this.show = show;
     this.surfaces = show.surfaces.map((s) => {
-      const flat = s.polygon.flat();
+      // The lit area: the outline grown or shrunk by the surface's edge setting. Effects still use the
+      // real outline (u_poly, corner pins), so their geometry doesn't shift.
+      const flat = offsetPolygon(s.polygon, s.edge ?? 0).flat();
       const tris = earcut(flat);
       const fillVerts = new Float32Array(tris.flatMap((i) => [flat[2 * i], flat[2 * i + 1]]));
       // Lines are rasterized through pixel centers; nudge inward so edges land on the polygon.

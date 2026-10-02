@@ -1,3 +1,4 @@
+import { offsetPolygon } from "../shared/geometry";
 import { connect } from "../shared/connection";
 import type { StatusMessage, TestFrameKind } from "../shared/messages";
 import { EFFECTS, effectById } from "../effects/index";
@@ -96,6 +97,13 @@ function refresh() {
   renderSurfaces();
 }
 const surfaceName = $<HTMLInputElement>("surface-name");
+const surfaceEdge = $<HTMLInputElement>("surface-edge");
+const surfaceEdgeReadout = $("surface-edge-readout");
+surfaceEdge.addEventListener("input", () => {
+  if (show?.selected == null) return;
+  patchSurface(show.selected, { edge: Number(surfaceEdge.value) }); // shown at once, saved once per frame
+  refresh();
+});
 const deleteButton = $<HTMLButtonElement>("delete-surface");
 const mergeButton = $<HTMLButtonElement>("merge-surfaces");
 const applyButton = $<HTMLButtonElement>("apply-effect");
@@ -233,6 +241,13 @@ function renderSurfaces() {
       label.setAttribute("y", String(y + 34));
       label.textContent = String(s.id);
       const parts: SVGElement[] = [poly, label];
+      if (s.id === show?.selected && s.edge) {
+        // The lit area when the edge is grown or shrunk, drawn faintly next to the real outline.
+        const lit = document.createElementNS(SVG_NS, "polygon");
+        lit.classList.add("edge");
+        lit.setAttribute("points", offsetPolygon(polygon, s.edge).map(([x, y]) => `${x},${y}`).join(" "));
+        parts.push(lit);
+      }
       if (s.id === show?.selected && bezier) {
         parts.push(...bezierHandles(s.id, bezier, r));
       } else if (s.id === show?.selected) {
@@ -427,6 +442,8 @@ function renderPanel() {
   surfaceTitle.textContent = `Surface ${surface.id}`;
   $("surface-source").textContent = SOURCE_TEXT[surface.source ?? "detected"] ?? "";
   if (document.activeElement !== surfaceName) surfaceName.value = surface.name ?? `Surface ${surface.id}`;
+  if (document.activeElement !== surfaceEdge) surfaceEdge.value = String(surface.edge ?? 0);
+  surfaceEdgeReadout.textContent = `${surface.edge ?? 0} px`;
   effectSelect.value = surface.effect;
   const effect = effectById(surface.effect);
   // Don't rebuild controls under the user's cursor while they drag; only when the surface/effect changes.

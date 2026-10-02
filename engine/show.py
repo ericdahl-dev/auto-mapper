@@ -108,6 +108,7 @@ class CurrentShow:
         polygon: list[list[float]] | None = None,
         name: str | None = None,
         bezier: dict | None = None,
+        edge: int | None = None,
     ) -> None:
         surface = self._surface(surface_id)
         if polygon is not None:
@@ -121,6 +122,8 @@ class CurrentShow:
             _reshaped(surface)
         if name is not None:
             surface["name"] = name.strip() or surface["name"]
+        if edge is not None:
+            surface["edge"] = edge  # how far the lit area grows (+) or shrinks (-) past the outline
         if effect is not None and effect != surface["effect"]:
             surface["effect"], surface["params"] = effect, {}  # params belong to the old effect
         if params:

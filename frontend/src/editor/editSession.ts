@@ -11,6 +11,7 @@ export interface SurfaceEdit {
   polygon?: number[][];
   bezier?: Bezier;
   params?: Record<string, unknown>;
+  edge?: number; // grow (+) or shrink (-) the lit area, in projector pixels
 }
 
 export interface EditSessionOptions {
@@ -23,6 +24,7 @@ export interface EditSessionOptions {
 interface Pending {
   shape?: { polygon: number[][]; bezier?: Bezier };
   params?: Record<string, unknown>;
+  edge?: number;
 }
 
 export class EditSession {
@@ -82,6 +84,7 @@ export class EditSession {
       const entry = map.get(id) ?? {};
       if (change.polygon) entry.shape = { polygon: change.polygon, ...(change.bezier ? { bezier: change.bezier } : {}) };
       if (change.params) entry.params = { ...entry.params, ...change.params };
+      if (change.edge !== undefined) entry.edge = change.edge;
       map.set(id, entry);
     }
     if (!this.flushQueued) {
@@ -108,6 +111,7 @@ export class EditSession {
       ...s,
       ...(l.shape ? { polygon: l.shape.polygon, bezier: l.shape.bezier } : {}),
       ...(l.params ? { params: { ...s.params, ...l.params } } : {}),
+      ...(l.edge !== undefined ? { edge: l.edge } : {}),
     };
   }
 
@@ -116,6 +120,7 @@ export class EditSession {
     for (const [id, p] of this.pending) {
       if (p.shape) this.sendPatch(id, p.shape.bezier ? { polygon: p.shape.polygon, bezier: p.shape.bezier } : { polygon: p.shape.polygon });
       if (p.params) this.sendPatch(id, { params: p.params });
+      if (p.edge !== undefined) this.sendPatch(id, { edge: p.edge });
     }
     this.pending.clear();
   }
