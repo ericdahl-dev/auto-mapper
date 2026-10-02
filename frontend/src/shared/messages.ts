@@ -68,8 +68,10 @@ export type ScanMessage =
       width: number;
       height: number;
       surfaces: Surface[];
+      warnings?: string[];
     }
-  | { type: "scan_failed"; error: string };
+  | { type: "scan_failed"; error: string }
+  | { type: "scan_cancelled" };
 
 export interface SceneSurface {
   id: number;
@@ -149,6 +151,8 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return typeof m.coverage === "number" && typeof m.image === "string" ? (m as unknown as ScanMessage) : null;
     case "scan_failed":
       return typeof m.error === "string" ? (m as unknown as ScanMessage) : null;
+    case "scan_cancelled":
+      return { type: "scan_cancelled" };
     case "scene":
       return typeof m.width === "number" && typeof m.height === "number" && Array.isArray(m.surfaces)
         ? (m as unknown as SceneMessage)

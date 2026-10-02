@@ -17,12 +17,13 @@ def homography(src, dst) -> np.ndarray:
 
 class Scene:
     def __init__(self, proj_w=256, proj_h=144, cam_w=320, cam_h=240, unresolved_bits=0, noise=2.0, seed=0,
-                 box=True, box_albedo=0.9, wall_albedo=0.75, lamp=False):
+                 box=True, box_albedo=0.9, wall_albedo=0.75, lamp=False, ambient=12, power=1.0):
         self.proj_w, self.proj_h, self.cam_w, self.cam_h = proj_w, proj_h, cam_w, cam_h
         self.unresolved_bits = unresolved_bits
         self.noise = noise
         self.rng = np.random.default_rng(seed)
         self.exposure_gain = 1.0
+        self.ambient, self.power = ambient, power  # room light level; projector strength
         self.pattern: dict = {"kind": "black"}
 
         # Projection lands inside the camera view with some keystone.
@@ -89,7 +90,7 @@ class Scene:
 
     def frame(self, pattern: dict | None = None) -> np.ndarray:
         light = self.projector_value(pattern or self.pattern)
-        level = 12 + 200 * self.exposure_gain * self.albedo * light
+        level = self.ambient + 200 * self.power * self.exposure_gain * self.albedo * light
         level = level + self.rng.normal(0, self.noise, level.shape)
         level[self.lamp] = 255
         gray = np.clip(level, 0, 255).astype(np.uint8)

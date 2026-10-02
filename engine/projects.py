@@ -8,7 +8,7 @@ from pathlib import Path
 
 from engine.scene import SceneStore
 
-SCAN_FILES = ["scan.png", "map.npz", "meta.json", "scene.json"]
+SCAN_FILES = ["scan.png", "mask.png", "map.npz", "meta.json", "scene.json"]
 
 
 class UnknownProject(LookupError):

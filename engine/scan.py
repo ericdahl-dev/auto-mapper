@@ -196,3 +196,31 @@ def block_coverage(covered: np.ndarray, block: int = COVERAGE_BLOCK) -> float:
     padded[:h, :w] = covered
     tiles = padded.reshape(bh, block, bw, block).any(axis=(1, 3))
     return float(tiles.mean())
+
+
+LOW_COVERAGE = 0.4
+BRIGHT_ROOM_LEVEL = 80  # black-frame brightness (gray levels) that means room light is washing out
+FAINT_PROJECTION = 25  # white minus black (gray levels) below which the projector barely registers
+
+
+def diagnose(r: DecodeResult, coverage: float) -> list[str]:
+    """Plain-language hints for a poor scan, from what the camera saw."""
+    if coverage >= LOW_COVERAGE:
+        return []
+    white, black = _gray(r.white), _gray(r.black)
+    room = float(np.median(black))
+    reach = float(np.percentile(white - black, 90))
+    hints = [f"Only {round(coverage * 100)}% of the projection decoded."]
+    if room > BRIGHT_ROOM_LEVEL:
+        hints.append("The room is bright: turn off lights or close blinds. Room light washes out the patterns.")
+    elif reach < FAINT_PROJECTION:
+        hints.append(
+            "Projected light is faint on the scene: move the projector closer, use a lighter surface, "
+            "or calibrate exposure again."
+        )
+    else:
+        hints.append(
+            "The camera can't see much of the projection: use Show preview to check the whole projected "
+            "area is in view and nothing blocks it."
+        )
+    return hints

@@ -243,6 +243,33 @@ mergeButton.addEventListener("click", () => {
   });
 });
 
+const missed = $<HTMLCanvasElement>("missed");
+const showMissed = $<HTMLInputElement>("show-missed");
+const scanWarnings = $("scan-warnings");
+let missedFor = "";
+
+/** Tints the areas the scan could not decode, from the engine's coverage mask. */
+function renderMissed() {
+  missed.hidden = !showMissed.checked || !scanState.image;
+  if (missed.hidden || missedFor === scanState.image) return;
+  missedFor = scanState.image!;
+  const img = new Image();
+  img.onload = () => {
+    missed.width = img.width;
+    missed.height = img.height;
+    const ctx = missed.getContext("2d")!;
+    ctx.drawImage(img, 0, 0);
+    const data = ctx.getImageData(0, 0, img.width, img.height);
+    for (let i = 0; i < data.data.length; i += 4) {
+      const decoded = data.data[i] > 127;
+      data.data.set(decoded ? [0, 0, 0, 0] : [239, 68, 68, 140], i);
+    }
+    ctx.putImageData(data, 0, 0);
+  };
+  img.src = `/api/scan/latest-mask.png?t=${Date.now()}`;
+}
+showMissed.addEventListener("change", renderMissed);
+
 function renderScan() {
   scanText.textContent = scanLabel(scanState);
   if (scanState.image && scanImage.getAttribute("src") !== scanState.image) scanImage.src = scanState.image;
@@ -255,8 +282,13 @@ function renderScan() {
   }
   renderSurfaces();
 
-  scan.textContent = scanState.running ? "Scanning…" : "Scan";
-  if (scanState.running) scan.disabled = true;
+  // While scanning, the Scan button cancels.
+  scan.textContent = scanState.running ? "Cancel scan" : "Scan";
+  if (scanState.running) scan.disabled = false;
+  scanWarnings.replaceChildren(
+    ...scanState.warnings.map((w) => Object.assign(document.createElement("div"), { className: "banner", textContent: w })),
+  );
+  renderMissed();
 }
 
 function render() {
@@ -338,6 +370,10 @@ for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-test-frame
   );
 }
 scan.addEventListener("click", async () => {
+  if (scanState.running) {
+    void fetch("/api/scan/cancel", { method: "POST" });
+    return;
+  }
   if (previewTimer !== undefined) previewToggle.click(); // the scan needs the camera to itself
   const res = await fetch("/api/scan", { method: "POST" });
   if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`);

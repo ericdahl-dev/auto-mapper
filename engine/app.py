@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -18,8 +19,8 @@ from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
 from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
-from engine.scan import block_coverage, projector_space_image
-from engine.scan_runner import ScanError, capture_scan
+from engine.scan import block_coverage, diagnose, projector_space_image
+from engine.scan_runner import ScanCancelled, ScanError, capture_scan
 from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
 from engine.surfaces import detect_surfaces
@@ -58,6 +59,7 @@ def create_app(
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
     scan_dir = data_path / "scans" / "latest"
     scanning = asyncio.Lock()
+    cancel_scan = threading.Event()  # set by POST /api/scan/cancel, read by the capture thread
 
     def scan_busy() -> bool:
         task = getattr(app, "state", None) and getattr(app.state, "scan_task", None)
@@ -157,9 +159,17 @@ def create_app(
             raise HTTPException(409, "Scanning needs a USB webcam with UVC controls")
         if scan_busy():
             raise HTTPException(409, "A scan is already running")
+        cancel_scan.clear()
         # Claim the scan before the task starts, so a double click can't start two.
         app.state.scan_task = asyncio.create_task(run_scan(hub, selected, address))
         return {"started": True}
+
+    @app.post("/api/scan/cancel")
+    async def cancel():
+        if not scan_busy():
+            raise HTTPException(409, "No scan is running")
+        cancel_scan.set()
+        return {"cancelling": True}
 
     async def run_scan(hub: Hub, selected: str, address: UsbAddress) -> None:
         async with scanning:
@@ -185,6 +195,7 @@ def create_app(
                     ),
                     settle_seconds=scan_settle_seconds,
                     drop_frames=scan_drop_frames,
+                    cancelled=cancel_scan.is_set,
                 )
 
             try:
@@ -201,10 +212,13 @@ def create_app(
                     "seconds": round(time.monotonic() - started, 1),
                     "bit_reliability": decoded.bit_reliability,
                     "surfaces": surfaces,
+                    "warnings": diagnose(decoded, coverage),
                 }
                 await asyncio.to_thread(save_scan, decoded, image, covered, summary)
                 scene.reset_from_scan(summary)
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
+            except ScanCancelled:
+                await hub.broadcast({"type": "scan_cancelled"})
             except (ScanError, CalibrationError, OutputNotResponding) as e:
                 log.warning("scan failed: %s", e)
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})
@@ -220,6 +234,7 @@ def create_app(
     def save_scan(decoded, image, covered, summary: dict) -> None:
         scan_dir.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(scan_dir / "scan.png"), image)
+        cv2.imwrite(str(scan_dir / "mask.png"), covered.astype(np.uint8) * 255)
         np.savez_compressed(
             scan_dir / "map.npz", proj_x=decoded.proj_x.astype(np.int16), proj_y=decoded.proj_y.astype(np.int16),
             valid=decoded.valid, covered=covered,
@@ -235,6 +250,13 @@ def create_app(
         if not meta.exists():
             raise HTTPException(404, "No scan yet")
         return {**json.loads(meta.read_text()), "image": latest_image_url()}
+
+    @app.get("/api/scan/latest-mask.png")
+    async def latest_scan_mask():
+        path = scan_dir / "mask.png"
+        if not path.exists():
+            raise HTTPException(404, "No scan yet")
+        return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
     @app.get("/api/scan/latest.png")
     async def latest_scan_image():

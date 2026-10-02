@@ -9,6 +9,7 @@ const RESULT = {
   image: "/api/scan/latest.png?t=1",
   width: 1920,
   height: 1080,
+  warnings: [],
   surfaces: [
     { polygon: [[0, 0], [1920, 0], [1920, 1080], [0, 1080]], area: 2073600 },
     { polygon: [[1230, 880], [1540, 880], [1690, 1080], [1220, 1080]], area: 70000 },
@@ -37,3 +38,19 @@ describe("scanReducer", () => {
   });
 });
 
+
+describe("scan problems", () => {
+  it("shows a cancelled scan as cancelled, keeping the previous image", () => {
+    const done = scanReducer(initialScan, RESULT);
+    const s = scanReducer(scanReducer(done, { type: "scan_started" }), { type: "scan_cancelled" });
+    expect(s.running).toBe(false);
+    expect(s.image).toBe(RESULT.image);
+    expect(scanLabel(s)).toBe("Scan cancelled");
+  });
+
+  it("keeps low-coverage warnings until the next scan starts", () => {
+    const warned = scanReducer(initialScan, { ...RESULT, coverage: 0.2, warnings: ["Only 20% of the projection decoded."] });
+    expect(warned.warnings).toEqual(["Only 20% of the projection decoded."]);
+    expect(scanReducer(warned, { type: "scan_started" }).warnings).toEqual([]);
+  });
+});
