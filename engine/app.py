@@ -22,7 +22,7 @@ from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine import media
 from engine.scan import DecodeResult, block_coverage, diagnose, projector_space_image
-from engine.scan_runner import ScanCancelled, ScanError, capture_scan
+from engine.scan_runner import ScanCanceled, ScanError, capture_scan
 from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
 from engine.surfaces import detect_surfaces
@@ -194,7 +194,7 @@ def create_app(
         if not scan_busy():
             raise HTTPException(409, "No scan is running")
         cancel_scan.set()
-        return {"cancelling": True}
+        return {"canceling": True}
 
     async def run_scan(hub: Hub, selected: str, address: UsbAddress) -> None:
         async with scanning:
@@ -220,7 +220,7 @@ def create_app(
                     ),
                     settle_seconds=scan_settle_seconds,
                     drop_frames=scan_drop_frames,
-                    cancelled=cancel_scan.is_set,
+                    canceled=cancel_scan.is_set,
                     frames_per_pattern=scan_frames_per_pattern,
                 )
 
@@ -243,8 +243,8 @@ def create_app(
                 await asyncio.to_thread(save_scan, decoded, image, covered, summary)
                 scene.apply_detection(summary)  # keeps drawn/edited surfaces and carries effects
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
-            except ScanCancelled:
-                await hub.broadcast({"type": "scan_cancelled"})
+            except ScanCanceled:
+                await hub.broadcast({"type": "scan_canceled"})
             except (ScanError, CalibrationError, OutputNotResponding) as e:
                 log.warning("scan failed: %s", e)
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})

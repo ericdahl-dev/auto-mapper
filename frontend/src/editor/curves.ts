@@ -40,7 +40,7 @@ export function handleIndices(polygon: Pt[]): number[] {
   return [...new Set(handles)].sort((a, b) => a - b);
 }
 
-/** Drags a vertex. On a curved run its neighbours follow with a smooth falloff to the run's
+/** Drags a vertex. On a curved run its neighbors follow with a smooth falloff to the run's
  *  corners, so the curve bends instead of kinking; a dragged corner moves alone. */
 export function moveOnRun(polygon: Pt[], index: number, point: Pt): Pt[] {
   const n = polygon.length;

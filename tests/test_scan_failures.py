@@ -30,7 +30,7 @@ def make_rig(**scene_kwargs):
 
 def until_done(ed):
     msg = ed.receive_json()
-    while msg["type"] not in ("scan_result", "scan_failed", "scan_cancelled"):
+    while msg["type"] not in ("scan_result", "scan_failed", "scan_canceled"):
         msg = ed.receive_json()
     return msg
 
@@ -53,8 +53,8 @@ def test_cancel_stops_the_scan_and_restores_the_camera(tmp_path):
                 out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
         done = until_done(ed)
 
-    assert done["type"] == "scan_cancelled"
-    assert shown < 10  # stopped soon after cancelling, not at the end of 34 patterns
+    assert done["type"] == "scan_canceled"
+    assert shown < 10  # stopped soon after canceling, not at the end of 34 patterns
     assert uvc.values == DEFAULTS
 
 
@@ -69,7 +69,7 @@ def test_output_that_stops_responding_gives_an_actionable_error(tmp_path):
     with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc, ack_timeout=0.2) as client, \
             editor(client) as ed, output(client, W, H) as out:
         client.post("/api/scan")
-        out.receive_json()  # first pattern: never acknowledged (e.g. window minimised)
+        out.receive_json()  # first pattern: never acknowledged (e.g. window minimized)
         done = until_done(ed)
 
     assert done["type"] == "scan_failed"
@@ -84,7 +84,7 @@ def test_output_closed_mid_scan_gives_an_actionable_error(tmp_path):
         with output(client, W, H) as out:
             client.post("/api/scan")
             out.receive_json()
-        # Output window closed while the engine waits for the first acknowledgement.
+        # Output window closed while the engine waits for the first acknowledgment.
         done = until_done(ed)
 
     assert done["type"] == "scan_failed"
@@ -178,7 +178,7 @@ def test_scan_data_is_not_touched_while_a_scan_runs(tmp_path):
         out.receive_json()  # scene on hello
         client.app.state.hub.settings.save_calibration(AC410["unique_id"], {"exposure": 200, "gain": 0, "p99": 200})
         client.post("/api/scan")
-        msg = out.receive_json()  # scan running, waiting for the first acknowledgement
+        msg = out.receive_json()  # scan running, waiting for the first acknowledgment
 
         assert client.post("/api/projects", json={"name": "Mid scan"}).status_code == 409
         assert client.post("/api/projects/anything/open").status_code == 409

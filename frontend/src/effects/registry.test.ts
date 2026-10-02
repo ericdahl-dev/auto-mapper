@@ -41,7 +41,7 @@ describe("validateEffect", () => {
 });
 
 describe("uniformsFor", () => {
-  it("fills defaults and turns hex colours into 0..1 RGB", () => {
+  it("fills defaults and turns hex colors into 0..1 RGB", () => {
     expect(uniformsFor(sample, { speed: 2 })).toEqual({ u_tint: [1, 128 / 255, 0], u_speed: 2 });
   });
 

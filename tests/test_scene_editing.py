@@ -122,9 +122,9 @@ def test_applying_copies_params_rather_than_sharing_them(rig, scanned):
         client.patch("/api/scene/surfaces/2", json={"effect": "fill", "params": {"colorA": "#ff0000"}})
         client.post("/api/scene/apply", json={"from": 2})
         client.patch("/api/scene/surfaces/3", json={"params": {"colorA": "#00ff00"}})
-        colours = {s["id"]: s["params"].get("colorA") for s in client.get("/api/scene").json()["surfaces"]}
+        colors = {s["id"]: s["params"].get("colorA") for s in client.get("/api/scene").json()["surfaces"]}
 
-    assert colours[2] == "#ff0000" and colours[3] == "#00ff00"
+    assert colors[2] == "#ff0000" and colors[3] == "#00ff00"
 
 
 def test_apply_from_unknown_surface_is_404(rig, scanned):

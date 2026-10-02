@@ -40,12 +40,12 @@ describe("scanReducer", () => {
 
 
 describe("scan problems", () => {
-  it("shows a cancelled scan as cancelled, keeping the previous image", () => {
+  it("shows a canceled scan as canceled, keeping the previous image", () => {
     const done = scanReducer(initialScan, RESULT);
-    const s = scanReducer(scanReducer(done, { type: "scan_started" }), { type: "scan_cancelled" });
+    const s = scanReducer(scanReducer(done, { type: "scan_started" }), { type: "scan_canceled" });
     expect(s.running).toBe(false);
     expect(s.image).toBe(RESULT.image);
-    expect(scanLabel(s)).toBe("Scan cancelled");
+    expect(scanLabel(s)).toBe("Scan canceled");
   });
 
   it("keeps low-coverage warnings until the next scan starts", () => {

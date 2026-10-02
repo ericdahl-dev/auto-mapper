@@ -5,7 +5,7 @@ export const outline: Effect = {
   id: "outline",
   name: "Outline trace",
   params: [
-    { name: "lineColor", label: "Colour", type: "color", default: "#ffffff" },
+    { name: "lineColor", label: "Color", type: "color", default: "#ffffff" },
     { name: "width", label: "Line width (px)", type: "number", default: 6, min: 1, max: 40, step: 1 },
     { name: "glow", label: "Glow", type: "number", default: 0.5, min: 0, max: 1, step: 0.01 },
     { name: "chase", label: "Chase", type: "number", default: 1, min: 0, max: 1, step: 0.01 },

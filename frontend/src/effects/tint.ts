@@ -1,11 +1,11 @@
 import type { Effect } from "./types";
 
-/** Recolours the real object, keeping its texture (wood grain, fabric) visible. */
+/** Recolors the real object, keeping its texture (wood grain, fabric) visible. */
 export const tint: Effect = {
   id: "tint",
   name: "Tint (scan)",
   params: [
-    { name: "tintColor", label: "Colour", type: "color", default: "#f97316" },
+    { name: "tintColor", label: "Color", type: "color", default: "#f97316" },
     { name: "strength", label: "Texture", type: "number", default: 0.8, min: 0, max: 1, step: 0.01 },
     { name: "gain", label: "Scan gain", type: "number", default: 1.5, min: 0.5, max: 4, step: 0.05 },
   ],

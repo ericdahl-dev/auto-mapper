@@ -41,7 +41,7 @@ const BEAT_DECAY = 0.15;
 const BEAT_GAP = 0.25; // at most 4 beats a second
 
 /** Smoothed band values plus beat detection, updated once per frame. */
-export class AudioAnalyser {
+export class AudioAnalyzer {
   private v: AudioValues = { ...SILENT };
   private bassAverage = 0;
   private sinceBeat = Infinity;

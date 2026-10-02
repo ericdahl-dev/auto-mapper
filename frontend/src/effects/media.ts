@@ -3,7 +3,7 @@ import type { Effect } from "./types";
 /** An uploaded image or video, clipped to the surface's outline. Cover, Stretch, Contain, Original size
  *  and Tile place it in the surface's bounding box; Map to corners warps it onto the surface's four
  *  corners (a corner pin), so it lies flat on a surface seen at an angle. Zoom, pan and rotate then
- *  frame it; anything outside the image shows the background colour. Videos loop from their start time. */
+ *  frame it; anything outside the image shows the background color. Videos loop from their start time. */
 export const media: Effect = {
   id: "media",
   name: "Image / video",
@@ -35,7 +35,7 @@ export const media: Effect = {
     { name: "speed", label: "Video speed", type: "number", default: 1, min: 0.1, max: 4, step: 0.05 },
   ],
   fragment: `
-// Zoom, pan and rotate a point p centred on 0 (-0.5..0.5 across the space), in a space of the given
+// Zoom, pan and rotate a point p centered on 0 (-0.5..0.5 across the space), in a space of the given
 // width/height, so rotation doesn't shear. Returns where in that space to sample.
 vec2 frame(vec2 p, float aspect) {
   p -= vec2(u_panX, u_panY);
@@ -67,7 +67,7 @@ void main() {
       if (image > surface) uv.y = 0.5 + (uv.y - 0.5) * image / surface;
       else uv.x = 0.5 + (uv.x - 0.5) * surface / image;
     } else if (u_fit > 3.5 && u_fit < 4.5) {
-      // Original size: one image pixel per projector pixel, centred on the box.
+      // Original size: one image pixel per projector pixel, centered on the box.
       uv = ((uv - 0.5) * u_bounds.zw + size * 0.5) / size;
     } else if (u_fit > 4.5) {
       // Tile: original-size copies repeating from the box's top-left.

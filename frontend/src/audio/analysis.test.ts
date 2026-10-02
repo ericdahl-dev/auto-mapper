@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AudioAnalyser, bandLevels } from "./analysis";
+import { AudioAnalyzer, bandLevels } from "./analysis";
 
 const SAMPLE_RATE = 48000;
 const BINS = 1024; // AnalyserNode with fftSize 2048: bin i covers i * 48000 / 2048 Hz (~23 Hz)
@@ -38,11 +38,11 @@ describe("bandLevels", () => {
   });
 });
 
-describe("AudioAnalyser", () => {
+describe("AudioAnalyzer", () => {
   const frame = 1 / 60;
 
   it("smooths: rises quickly on a sound, falls slowly after it", () => {
-    const a = new AudioAnalyser(SAMPLE_RATE);
+    const a = new AudioAnalyzer(SAMPLE_RATE);
     const up = a.update(tone(40, 150), frame).bass;
     expect(up).toBeGreaterThan(0.3); // quick attack
     expect(up).toBeLessThan(1);
@@ -55,7 +55,7 @@ describe("AudioAnalyser", () => {
   });
 
   it("pulses on a beat (a bass jump over the recent average) and decays", () => {
-    const a = new AudioAnalyser(SAMPLE_RATE);
+    const a = new AudioAnalyzer(SAMPLE_RATE);
     for (let i = 0; i < 60; i++) a.update(tone(40, 150, 40), frame); // steady quiet bass
     const hit = a.update(tone(40, 150, 255), frame).beat;
     expect(hit).toBeGreaterThan(0.9);
@@ -65,7 +65,7 @@ describe("AudioAnalyser", () => {
   });
 
   it("doesn't call a steady loud sound a beat", () => {
-    const a = new AudioAnalyser(SAMPLE_RATE);
+    const a = new AudioAnalyzer(SAMPLE_RATE);
     let beat = 0;
     for (let i = 0; i < 120; i++) beat = a.update(tone(40, 150, 200), frame).beat;
     expect(beat).toBeLessThan(0.1);

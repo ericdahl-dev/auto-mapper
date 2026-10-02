@@ -16,7 +16,7 @@ def centroid(poly):
     return np.asarray(poly, float).mean(axis=0)
 
 
-def test_box_the_same_colour_as_the_wall_is_found_by_depth_alone():
+def test_box_the_same_color_as_the_wall_is_found_by_depth_alone():
     scene = Scene(box_albedo=0.75, wall_albedo=0.75)
     surfaces = surfaces_for(scene)
 

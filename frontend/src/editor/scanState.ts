@@ -11,18 +11,18 @@ export interface ScanState {
   size: { width: number; height: number } | null;
   surfaces: Surface[];
   warnings: string[];
-  cancelled: boolean;
+  canceled: boolean;
 }
 
 export const initialScan: ScanState = {
   running: false, done: 0, total: 0, image: null, coverage: null, seconds: null, error: null,
-  size: null, surfaces: [], warnings: [], cancelled: false,
+  size: null, surfaces: [], warnings: [], canceled: false,
 };
 
 export function scanReducer(s: ScanState, msg: ScanMessage): ScanState {
   switch (msg.type) {
     case "scan_started":
-      return { ...s, running: true, done: 0, total: 0, error: null, warnings: [], cancelled: false };
+      return { ...s, running: true, done: 0, total: 0, error: null, warnings: [], canceled: false };
     case "scan_progress":
       return { ...s, running: true, done: msg.done, total: msg.total };
     case "scan_result":
@@ -38,14 +38,14 @@ export function scanReducer(s: ScanState, msg: ScanMessage): ScanState {
       };
     case "scan_failed":
       return { ...s, running: false, error: msg.error };
-    case "scan_cancelled":
-      return { ...s, running: false, cancelled: true };
+    case "scan_canceled":
+      return { ...s, running: false, canceled: true };
   }
 }
 
 export function scanLabel(s: ScanState): string {
   if (s.running) return s.total ? `Scanning… ${Math.round((100 * s.done) / s.total)}%` : "Scanning…";
-  if (s.cancelled) return "Scan cancelled";
+  if (s.canceled) return "Scan canceled";
   if (s.error) return "Scan failed";
   if (s.coverage !== null) return `Coverage ${Math.round(s.coverage * 100)}% · ${s.seconds} s`;
   return "No scan yet";

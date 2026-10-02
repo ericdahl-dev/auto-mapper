@@ -40,7 +40,7 @@ describe("controlsFor", () => {
 });
 
 describe("parseControlValue", () => {
-  it("keeps colours as hex and turns range input into numbers", () => {
+  it("keeps colors as hex and turns range input into numbers", () => {
     expect(parseControlValue("color", "#00ff00")).toBe("#00ff00");
     expect(parseControlValue("range", "12.5")).toBe(12.5);
     expect(parseControlValue("select", "stretch")).toBe("stretch");

@@ -22,7 +22,7 @@ interface PreparedSurface {
   perimeter: number;
   fill: WebGLVertexArrayObject; // triangles (earcut: concave polygons are fine)
   fillCount: number;
-  outline: WebGLVertexArrayObject; // line loop through pixel centres
+  outline: WebGLVertexArrayObject; // line loop through pixel centers
   outlineCount: number;
   media: [string, string][]; // [param name, src] for each media param that has a file
   uniforms: Record<string, UniformValue>;
@@ -41,7 +41,7 @@ interface MediaTexture {
 // Texture unit 0 is the scan; media params take the units after it.
 const FIRST_MEDIA_UNIT = 1;
 
-// Plain colour, used for outlines and the selection highlight.
+// Plain color, used for outlines and the selection highlight.
 const SOLID = `#version 300 es
 precision highp float;
 uniform vec4 u_color;
@@ -105,7 +105,7 @@ export class SceneRenderer {
       const x0 = Math.min(...xs), y0 = Math.min(...ys);
       const tris = earcut(flat);
       const fillVerts = new Float32Array(tris.flatMap((i) => [flat[2 * i], flat[2 * i + 1]]));
-      // Lines are rasterised through pixel centres; nudge inward so edges land on the polygon.
+      // Lines are rasterized through pixel centers; nudge inward so edges land on the polygon.
       const lineVerts = new Float32Array(s.polygon.flatMap(([x, y]) => [x + 0.5, y + 0.5]));
       const outline = resampleOutline(s.polygon, MAX_POLY);
       const poly = new Float32Array(MAX_POLY * 2);

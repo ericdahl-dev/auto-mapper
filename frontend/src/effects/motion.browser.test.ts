@@ -32,7 +32,7 @@ describe("outline trace", () => {
     expect(errors).toEqual([]);
     expect(lum(21, 27)).toBeGreaterThan(200); // just inside the left edge
     expect(lum(48, 11)).toBeGreaterThan(200); // just inside the top edge
-    expect(lum(48, 27)).toBe(0); // centre
+    expect(lum(48, 27)).toBe(0); // center
     expect(lum(5, 27)).toBe(0); // outside the polygon
   });
 

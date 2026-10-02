@@ -4,7 +4,7 @@ import type { SceneMessage } from "../shared/messages";
 import { EFFECTS } from "./index";
 
 const W = 64, H = 32;
-// A 24x24 square surface at (8, 4); its centre is (20, 16).
+// A 24x24 square surface at (8, 4); its center is (20, 16).
 const SQUARE = [[8, 4], [32, 4], [32, 28], [8, 28]];
 
 /** A 40x10 (4:1) image in three vertical bands: red x 0..10, green 10..30, blue 30..40. */
@@ -45,7 +45,7 @@ async function render(params: Record<string, unknown>) {
 }
 
 describe("media fit modes", () => {
-  it("contain shows the whole image, letterboxed in the background colour", async () => {
+  it("contain shows the whole image, letterboxed in the background color", async () => {
     const at = await render({ fit: "contain", background: "#ffffff" });
     expect(at(9, 16)).toBe("red"); // image spans the full width, 6 px tall around y=16
     expect(at(20, 16)).toBe("green");
@@ -53,7 +53,7 @@ describe("media fit modes", () => {
     expect(at(20, 6)).toBe("white"); // letterbox above
   });
 
-  it("original size shows the image at 1 image pixel per projector pixel, centred", async () => {
+  it("original size shows the image at 1 image pixel per projector pixel, centered", async () => {
     const at = await render({ fit: "original" });
     expect(at(9, 14)).toBe("red"); // image x = 9 (image spans x 0..40, y 11..21)
     expect(at(20, 14)).toBe("green");
@@ -69,7 +69,7 @@ describe("media fit modes", () => {
 });
 
 describe("media framing", () => {
-  it("zoom scales the image about the surface's centre", async () => {
+  it("zoom scales the image about the surface's center", async () => {
     expect((await render({ fit: "stretch" }))(9, 6)).toBe("red");
     expect((await render({ fit: "stretch", zoom: 2 }))(9, 6)).toBe("green"); // left quarter now shows the middle
   });
@@ -77,10 +77,10 @@ describe("media framing", () => {
   it("pan moves the image across the surface (fractions of the surface)", async () => {
     const at = await render({ fit: "stretch", panX: 0.5 });
     expect(at(9, 6)).toBe("black"); // the left half is now empty
-    expect(at(22, 6)).toBe("red"); // the image's left edge moved to the centre
+    expect(at(22, 6)).toBe("red"); // the image's left edge moved to the center
   });
 
-  it("rotate turns the image about the surface's centre", async () => {
+  it("rotate turns the image about the surface's center", async () => {
     expect((await render({ fit: "stretch", rotate: 180 }))(9, 6)).toBe("blue");
   });
 

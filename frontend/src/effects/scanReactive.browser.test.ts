@@ -39,7 +39,7 @@ function render(effect: string, params: Record<string, unknown>, scan: HTMLCanva
 }
 
 describe("tint", () => {
-  it("recolours the real surface: bright where the scan is bright, dark where it is dark", () => {
+  it("recolors the real surface: bright where the scan is bright, dark where it is dark", () => {
     const { rgb, errors } = render("tint", { tintColor: "#ff0000", strength: 1 }, scanCanvas("split"));
     expect(errors).toEqual([]);
     const [r, g, b] = rgb(8);
