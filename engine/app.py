@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException, Response, WebSocket, WebSocketDiscon
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
 
-from engine.camera_device import CameraFactory, CameraSession, OpenCVCameraFactory
+from engine.camera_device import CAPTURE_SIZE, CameraFactory, CameraSession, OpenCVCameraFactory
 from engine.calibrate import CalibrationError, calibrate_exposure
 from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
@@ -40,6 +40,7 @@ from engine.messages import (
 
 DEFAULT_DATA_DIR = Path.home() / ".auto-mapper"
 log = logging.getLogger("auto-mapper")
+PREVIEW_WIDTH = 1280
 
 
 def create_app(
@@ -51,10 +52,11 @@ def create_app(
     scan_settle_seconds: float = 0.12,
     scan_drop_frames: int = 2,
     ack_timeout: float = 2.0,
+    capture_size: tuple[int, int] = CAPTURE_SIZE,
 ) -> FastAPI:
     probe = hardware or MacHardware()
     settings = CameraSettings(data_dir or DEFAULT_DATA_DIR)
-    session = CameraSession(camera_factory or OpenCVCameraFactory())
+    session = CameraSession(camera_factory or OpenCVCameraFactory(), capture_size)
     make_uvc = uvc_factory or (lambda address: UvcUtil(address.location))
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
     scan_dir = data_path / "scans" / "latest"
@@ -113,6 +115,9 @@ def create_app(
         if scan_busy():
             raise HTTPException(409, "Camera is busy scanning")
         frame = await asyncio.to_thread(session.read, hub.hardware.cameras, selected)
+        if frame.shape[1] > PREVIEW_WIDTH:  # 4K frames are slow to encode and to send
+            scale = PREVIEW_WIDTH / frame.shape[1]
+            frame = cv2.resize(frame, (PREVIEW_WIDTH, round(frame.shape[0] * scale)), interpolation=cv2.INTER_AREA)
         ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         return Response(jpg.tobytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 

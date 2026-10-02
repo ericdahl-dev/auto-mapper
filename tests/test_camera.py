@@ -98,3 +98,28 @@ def test_scan_needs_a_selected_camera(tmp_path):
         client.post("/api/camera", json={"unique_id": FACETIME["unique_id"]})
 
         assert client.get("/api/status").json()["can_scan"] is True
+
+
+def test_camera_is_opened_at_full_4k_resolution(rig, tmp_path):
+    cams = FakeCameraFactory()
+    with engine(rig, data_dir=tmp_path, camera_factory=cams) as client:
+        client.get("/api/camera/preview.jpg")
+
+    assert cams.requested_sizes == [(3840, 2160)]
+
+
+def test_preview_is_downscaled_so_4k_frames_stay_snappy(rig, tmp_path):
+    cams = FakeCameraFactory(width=3840, height=2160)
+    with engine(rig, data_dir=tmp_path, camera_factory=cams) as client:
+        resp = client.get("/api/camera/preview.jpg")
+
+    frame = cv2.imdecode(np.frombuffer(resp.content, np.uint8), cv2.IMREAD_COLOR)
+    assert frame.shape == (720, 1280, 3)
+
+
+def test_capture_size_can_be_overridden(rig, tmp_path):
+    cams = FakeCameraFactory()
+    with engine(rig, data_dir=tmp_path, camera_factory=cams, capture_size=(1920, 1080)) as client:
+        client.get("/api/camera/preview.jpg")
+
+    assert cams.requested_sizes == [(1920, 1080)]

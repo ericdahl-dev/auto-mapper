@@ -13,19 +13,27 @@ class Camera(Protocol):
     def close(self) -> None: ...
 
 
+# Ask for the camera's full resolution. OpenCV's default (1080p) left 3/4 of the AC410's
+# 4K sensor unused, and the finest scan stripes undecodable.
+CAPTURE_SIZE = (3840, 2160)
+
+
 class CameraFactory(Protocol):
-    def open(self, index: int) -> Camera: ...
+    def open(self, index: int, size: tuple[int, int] = CAPTURE_SIZE) -> Camera: ...
 
 
 class OpenCVCamera:
     WARMUP_FRAMES = 8  # first frames after opening are dark while the sensor settles
 
-    def __init__(self, index: int):
+    def __init__(self, index: int, size: tuple[int, int] = CAPTURE_SIZE):
         import cv2
 
         self._cap = cv2.VideoCapture(index, cv2.CAP_AVFOUNDATION)
         if not self._cap.isOpened():
             raise RuntimeError(f"Could not open camera {index}")
+        # A camera that can't do this size picks its nearest; frames report the real size.
+        self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, size[0])
+        self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, size[1])
         for _ in range(self.WARMUP_FRAMES):
             self._cap.read()
 
@@ -40,8 +48,8 @@ class OpenCVCamera:
 
 
 class OpenCVCameraFactory:
-    def open(self, index: int) -> Camera:
-        return OpenCVCamera(index)
+    def open(self, index: int, size: tuple[int, int] = CAPTURE_SIZE) -> Camera:
+        return OpenCVCamera(index, size)
 
 
 class FakeCamera:
@@ -71,8 +79,10 @@ class FakeCameraFactory:
         self.width, self.height, self.brightness, self.frame = width, height, brightness, frame
         self.opened: list[int] = []
         self.open_now: list[int] = []
+        self.requested_sizes: list[tuple[int, int]] = []
 
-    def open(self, index: int) -> Camera:
+    def open(self, index: int, size: tuple[int, int] = CAPTURE_SIZE) -> Camera:
+        self.requested_sizes.append(size)
         self.opened.append(index)
         self.open_now.append(index)
         return FakeCamera(self, index)
@@ -81,8 +91,9 @@ class FakeCameraFactory:
 class CameraSession:
     """Keeps the selected camera open and switches when the selection changes."""
 
-    def __init__(self, factory: CameraFactory):
+    def __init__(self, factory: CameraFactory, size: tuple[int, int] = CAPTURE_SIZE):
         self._factory = factory
+        self._size = size
         self._lock = threading.Lock()
         self._camera: Camera | None = None
         self._unique_id: str | None = None
@@ -94,7 +105,7 @@ class CameraSession:
                 index = opencv_index(cameras, unique_id)
                 if index is None:
                     raise LookupError(unique_id)
-                self._camera = self._factory.open(index)
+                self._camera = self._factory.open(index, self._size)
                 self._unique_id = unique_id
             return self._camera.read()
 
