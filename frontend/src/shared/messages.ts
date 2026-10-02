@@ -41,6 +41,7 @@ export interface StatusMessage {
   output_connected: boolean;
   output_resolution: { width: number; height: number } | null;
   output_fps?: number | null;
+  output_sound?: { level: number; error: string | null } | null;
   camera: { selected: string | null; calibration: Calibration | null };
   project: { name: string; slug: string } | null;
   can_scan: boolean;
@@ -103,6 +104,7 @@ export interface SceneMessage {
   surfaces: SceneSurface[];
   selected: number | null;
   presentation: { mode: "edit" | "play"; blackout: boolean };
+  sound?: { enabled: boolean; device: string | null };
   scan_rev?: string | null; // changes only when the scan data changes
 }
 

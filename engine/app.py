@@ -36,6 +36,7 @@ from engine.messages import (
     NewSurfaceRequest,
     OutputHello,
     PresentationRequest,
+    SoundRequest,
     ProjectSaveRequest,
     SelectRequest,
     SurfaceUpdate,
@@ -382,6 +383,12 @@ def create_app(
         await app.state.hub.broadcast_scene()
         return scene.presentation
 
+    @app.post("/api/sound")
+    async def set_sound(req: SoundRequest):
+        scene.set_sound(req.enabled, req.device)
+        await app.state.hub.broadcast_scene()
+        return scene.sound
+
     @app.post("/api/presentation/blackout/toggle")
     async def toggle_blackout():
         scene.present(blackout=not scene.presentation["blackout"])
@@ -465,7 +472,14 @@ def create_app(
                     fps = msg.get("fps")
                     if isinstance(fps, (int, float)):
                         hub.output_fps = round(float(fps), 1)
-                        await hub.broadcast_status()
+                    sound = msg.get("sound")
+                    if isinstance(sound, dict):
+                        level, error = sound.get("level"), sound.get("error")
+                        hub.output_sound = {
+                            "level": round(min(1.0, max(0.0, float(level))), 3) if isinstance(level, (int, float)) else 0,
+                            "error": str(error)[:200] if error else None,
+                        }
+                    await hub.broadcast_status()
                 elif ws is hub.output and msg.get("type") == "effect_error":
                     await hub.broadcast({k: msg.get(k) for k in ("type", "surface", "effect", "log")})
                 elif ws is hub.output and msg.get("type") == "hello":

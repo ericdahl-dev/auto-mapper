@@ -13,6 +13,7 @@ import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState
 import { canFrame, panAfterDrag, zoomAfterWheel } from "./framing";
 import { movePin, pinHandles } from "./pin";
 import { placeOutput } from "./screens";
+import { describeSound } from "./soundView";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -622,6 +623,34 @@ function render() {
   calibrate.disabled = !status?.output_connected || !status.camera.selected;
 }
 
+// Sound: the output window listens; the editor switches it and shows its meter.
+const soundToggle = $<HTMLButtonElement>("sound-toggle");
+let lastSoundKey = "";
+const soundInput = $<HTMLSelectElement>("sound-input");
+const postSound = (body: object) =>
+  void fetch("/api/sound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+soundToggle.addEventListener("click", () => postSound({ enabled: !scene?.sound?.enabled, device: soundInput.value || undefined }));
+soundInput.addEventListener("change", () => postSound({ device: soundInput.value }));
+async function refreshSoundInputs() {
+  // Same origin as the output window, so device ids match; labels appear once the mic is allowed.
+  const inputs = (await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? []).filter((d) => d.kind === "audioinput");
+  const chosen = scene?.sound?.device ?? "";
+  soundInput.replaceChildren(
+    Object.assign(document.createElement("option"), { value: "", textContent: "Default input", selected: !chosen }),
+    ...inputs.filter((d) => d.deviceId && d.deviceId !== "default").map((d, i) =>
+      Object.assign(document.createElement("option"), { value: d.deviceId, textContent: d.label || `Input ${i + 1}`, selected: d.deviceId === chosen })),
+  );
+}
+navigator.mediaDevices?.addEventListener("devicechange", () => void refreshSoundInputs());
+void refreshSoundInputs();
+function renderSound() {
+  const v = describeSound(scene?.sound ?? { enabled: false, device: null }, status?.output_connected ? status.output_sound ?? null : null);
+  soundToggle.textContent = `React to sound: ${v.on ? "on" : "off"}`;
+  soundToggle.classList.toggle("on", v.on);
+  $<HTMLMeterElement>("sound-meter").value = v.meter;
+  $("sound-note").textContent = v.note;
+}
+
 function notice(text: string) {
   const note = Object.assign(document.createElement("div"), { className: "banner", textContent: text });
   banners.append(note);
@@ -636,6 +665,7 @@ connect({
       status = msg;
       if (projectChanged) void refreshProjects();
       render();
+      renderSound();
       renderScan();
     } else if (msg.type === "scene") {
       if (dragging || pinDrag || framing) {
@@ -647,6 +677,12 @@ connect({
       // An error belongs to one effect; switching the surface to another effect clears it.
       for (const s of msg.surfaces) if (effectErrors.get(s.id)?.effect !== s.effect) effectErrors.delete(s.id);
       renderSurfaces();
+      const soundKey = JSON.stringify(msg.sound ?? null);
+      if (soundKey !== lastSoundKey) {
+        lastSoundKey = soundKey; // settings changed: re-list inputs (labels appear once the mic is allowed)
+        void refreshSoundInputs();
+      }
+      renderSound();
     } else if (msg.type === "scan_reload") {
       void reloadScan();
       void refreshProjects();

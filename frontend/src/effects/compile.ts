@@ -23,6 +23,12 @@ uniform float u_time;        // seconds
 uniform vec2 u_resolution;   // projector size in pixels
 uniform vec4 u_bounds;       // surface bounding box in projector pixels
 uniform sampler2D u_scan;    // the scan image (scene as the projector sees it)
+// Sound (0..1, all 0 without a mic): smoothed loudness, bands, and a pulse that decays after each beat.
+uniform float u_level;
+uniform float u_bass;
+uniform float u_mid;
+uniform float u_treble;
+uniform float u_beat;
 in vec2 v_uv;                // 0..1 across the surface's bounding box
 in vec2 v_pos;               // this pixel, in projector pixels
 out vec4 color;

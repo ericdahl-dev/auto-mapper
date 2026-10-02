@@ -32,6 +32,7 @@ class Hub:
         self.output: WebSocket | None = None
         self.output_resolution: dict | None = None
         self.output_fps: float | None = None
+        self.output_sound: dict | None = None  # the output's sound meter: {"level", "error"}
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
 
@@ -51,6 +52,7 @@ class Hub:
             "output_connected": self.output is not None,
             "output_resolution": self.output_resolution,
             "output_fps": self.output_fps,
+            "output_sound": self.output_sound,
             "camera": self._camera_status(),
             "project": self.projects.active() if self.projects else None,
             "can_scan": self._output_fills_projector()
@@ -93,6 +95,7 @@ class Hub:
             self.output = None
             self.output_resolution = None
             self.output_fps = None
+            self.output_sound = None
             # Don't make a scan wait out its timeout for a window that is gone.
             for fut in self._acks.values():
                 if not fut.done():

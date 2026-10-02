@@ -11,6 +11,7 @@ export const noise: Effect = {
     { name: "speed", label: "Speed", type: "number", default: 0.3, min: 0, max: 2, step: 0.01 },
     { name: "contrast", label: "Contrast", type: "number", default: 1.5, min: 0.5, max: 4, step: 0.05 },
     { name: "brightness", label: "Brightness", type: "number", default: 1, min: 0, max: 1, step: 0.01 },
+    { name: "react", label: "React to sound", type: "number", default: 0, min: 0, max: 1, step: 0.01 },
   ],
   fragment: `
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -35,6 +36,8 @@ void main() {
   vec2 warp = vec2(fbm(p + vec2(0.0, t)), fbm(p + vec2(5.2, -t)));
   float n = fbm(p + 2.0 * warp + vec2(t, 0.0));
   n = clamp((n - 0.5) * u_contrast + 0.5, 0.0, 1.0);
-  color = vec4(mix(u_colorA, u_colorB, n) * u_brightness, 1.0);
+  // React to sound: dim in silence, swell with the bass, flash on beats.
+  float sound = mix(1.0, 0.3 + 0.7 * u_bass + 0.4 * u_beat, u_react);
+  color = vec4(mix(u_colorA, u_colorB, n) * u_brightness * sound, 1.0);
 }`,
 };
