@@ -106,10 +106,9 @@ describe("calibration at the camera's limit", () => {
   });
 });
 
-describe("camera list", () => {
-  it("names the cameras rather than printing objects", () => {
-    expect(describeStatus(status()).cameras).toBe("FaceTime HD Camera, Webcam AC410");
-    expect(describeStatus(status({}, ["no_camera"])).cameras).toBe("None");
+describe("cameras", () => {
+  it("are chosen in the Hardware panel's camera dropdown (cameraOptions), not listed as text", () => {
+    expect("cameras" in describeStatus(status())).toBe(false);
   });
 });
 

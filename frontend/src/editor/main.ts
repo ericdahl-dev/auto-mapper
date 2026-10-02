@@ -23,7 +23,6 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const banners = $("banners");
 const projectorSelect = $<HTMLSelectElement>("projector-select");
 const output = $("output");
-const cameras = $("cameras");
 const scan = $<HTMLButtonElement>("scan");
 const cameraSelect = $<HTMLSelectElement>("camera-select");
 const calibration = $("calibration");
@@ -568,7 +567,6 @@ function render() {
   );
   output.textContent = view.output;
   output.className = status?.output_connected ? "ok" : "bad";
-  cameras.textContent = view.cameras;
   scan.disabled = !view.scanEnabled;
   $("fps").textContent = status?.output_fps ? `${status.output_fps} fps` : "–";
   projectName.textContent = `· ${view.project}`;
