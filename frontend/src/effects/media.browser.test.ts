@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createMediaElement, ShowRenderer } from "../output/showRenderer";
+import { createMediaElement } from "../output/mediaLibrary";
+import { ShowRenderer } from "../output/showRenderer";
 import type { ShowMessage } from "../shared/messages";
 import greenVideo from "./fixtures/green.webm?url"; // 1 s of solid green, 32x16 (ffmpeg lavfi color source)
 import greenThenBlue from "./fixtures/green-then-blue.webm?url";
@@ -52,7 +53,7 @@ function band([r, g, b]: number[]): string {
 describe("media effect", () => {
   it("stretch maps the whole image onto the surface's bounding box", async () => {
     const { r, pixel, errors } = setup({ src: stripes(), fit: "stretch" });
-    await r.whenMediaLoaded();
+    await r.media.whenLoaded();
     r.draw(0);
     expect(errors).toEqual([]);
     expect(band(pixel(9, 6))).toBe("red"); // left edge of the box
@@ -62,7 +63,7 @@ describe("media effect", () => {
 
   it("cover keeps the image's aspect and crops it: a square box shows only the middle", async () => {
     const { r, pixel, errors } = setup({ src: stripes(), fit: "cover" });
-    await r.whenMediaLoaded();
+    await r.media.whenLoaded();
     r.draw(0);
     expect(errors).toEqual([]);
     expect(band(pixel(9, 6))).toBe("green");
@@ -72,7 +73,7 @@ describe("media effect", () => {
 
   it("is clipped to the polygon, not its bounding box", async () => {
     const { r, pixel } = setup({ src: stripes(), fit: "stretch" });
-    await r.whenMediaLoaded();
+    await r.media.whenLoaded();
     r.draw(0);
     expect(band(pixel(30, 26))).toBe("black"); // inside the box, outside the triangle
     expect(band(pixel(50, 16))).toBe("black"); // outside the box
@@ -89,7 +90,7 @@ describe("media effect", () => {
 
   it("plays video frames onto the surface within a few redraws", async () => {
     const { r, pixel, errors } = setup({ src: greenVideo, fit: "stretch" });
-    await r.whenMediaLoaded();
+    await r.media.whenLoaded();
     // The output redraws every frame; under load the first decoded frame can lag "loadeddata" by a
     // frame or two, so what matters is that frames arrive within a few redraws.
     for (let i = 0; i < 60; i++) {
@@ -118,8 +119,8 @@ describe("media effect: video playback", () => {
   it("starts from the chosen start time", async () => {
     // 1 s green, then 1 s blue.
     const { r, pixel } = setup({ src: greenThenBlue, fit: "stretch", start: 1.2 });
-    await r.whenMediaLoaded();
-    expect(r.playback(greenThenBlue)!.time).toBeGreaterThanOrEqual(1.2); // not reachable this fast from 0
+    await r.media.whenLoaded();
+    expect(r.media.playback(greenThenBlue)!.time).toBeGreaterThanOrEqual(1.2); // not reachable this fast from 0
     let shown: number[] = [];
     for (let i = 0; i < 60 && !(shown[2] > 150); i++) {
       r.draw(0);
@@ -131,7 +132,7 @@ describe("media effect: video playback", () => {
 
   it("plays at the chosen speed", async () => {
     const { r } = setup({ src: greenThenBlue, fit: "stretch", speed: 2 });
-    await r.whenMediaLoaded();
-    expect(r.playback(greenThenBlue)).toMatchObject({ rate: 2, start: 0 });
+    await r.media.whenLoaded();
+    expect(r.media.playback(greenThenBlue)).toMatchObject({ rate: 2, start: 0 });
   });
 });

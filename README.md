@@ -327,7 +327,8 @@ Shaders write to `out vec4 color`. Compile errors are reported back to the edito
 | `editor/pin.ts`, `framing.ts` | Corner-pin handles; drag-to-pan and scroll-to-zoom framing |
 | `output/main.ts` | The output page (`output.html`): patterns, test frames, the animated show, fullscreen hint |
 | `output/patterns.ts`, `renderer.ts` | Gray-code stripes (mirrors `engine/scan.py`) and test frames in WebGL2 |
-| `output/showRenderer.ts` | Draws every surface with its effect shader, media textures, selection highlight |
+| `output/showRenderer.ts` | Draws every surface with its effect shader and the selection highlight |
+| `output/mediaLibrary.ts`, `playback.ts` | Images, videos and text textures shared by surfaces: loading, playback rules (speed, start, sound), sound output |
 | `effects/` | Effect definitions, the registry (`index.ts`), schema types and shader compilation |
 | `shared/` | WebSocket connection with reconnect, message types, Play/Blackout keys |
 
