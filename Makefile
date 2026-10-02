@@ -1,4 +1,4 @@
-.PHONY: dev engine frontend test build install
+.PHONY: dev engine frontend test build install spelling
 
 install:
 	uv sync
@@ -20,3 +20,7 @@ test:
 
 build:
 	cd frontend && npm run build
+
+# American spelling check (same as CI): the org's spelling-dialect tool.
+spelling:
+	pipx run --spec git+https://github.com/ericdahl-dev/spelling-dialect@v1.0.0 spelling-dialect --dialect american .

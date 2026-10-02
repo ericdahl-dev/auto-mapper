@@ -349,7 +349,7 @@ make test
 GitHub Actions run on every pull request and on pushes to `main`:
 
 - **CI** (`.github/workflows/ci.yml`): engine tests (pytest via uv), and the frontend's type-check, unit and browser tests (headless Chromium) and production build.
-- **American spelling** (`.github/workflows/spelling.yml`): `scripts/american_spelling.py` fails on British spellings in any tracked text file, including inside identifiers. Web API names such as `AnalyserNode` are allowed, and a line can opt out with `spelling: ok`. It also runs as a pytest test, so `make test` catches it first.
+- **American spelling** (`.github/workflows/spelling.yml`): the org's [spelling-dialect](https://github.com/ericdahl-dev/spelling-dialect) action fails on British spellings in any tracked text file, including inside identifiers. Web API names such as `AnalyserNode` are allowed, and a line can opt out with `spelling: ok`. Run it locally with `make spelling` (needs pipx). The org ruleset requires the same check on every repo.
 
 To run a workflow locally, use [act](https://github.com/nektos/act) with Docker (or Colima):
 
