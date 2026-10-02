@@ -1,3 +1,4 @@
+import { boundingBox } from "../shared/geometry";
 import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
@@ -101,9 +102,6 @@ export class ShowRenderer {
     this.show = show;
     this.surfaces = show.surfaces.map((s) => {
       const flat = s.polygon.flat();
-      const xs = s.polygon.map((p) => p[0]);
-      const ys = s.polygon.map((p) => p[1]);
-      const x0 = Math.min(...xs), y0 = Math.min(...ys);
       const tris = earcut(flat);
       const fillVerts = new Float32Array(tris.flatMap((i) => [flat[2 * i], flat[2 * i + 1]]));
       // Lines are rasterized through pixel centers; nudge inward so edges land on the polygon.
@@ -123,7 +121,7 @@ export class ShowRenderer {
         id: s.id,
         effect,
         params: s.params,
-        bounds: [x0, y0, Math.max(1, Math.max(...xs) - x0), Math.max(1, Math.max(...ys) - y0)],
+        bounds: boundingBox(s.polygon),
         fill: this.vao(fillVerts),
         fillCount: fillVerts.length / 2,
         outline: this.vao(lineVerts),

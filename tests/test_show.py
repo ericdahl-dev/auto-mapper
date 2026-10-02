@@ -3,7 +3,7 @@ import json
 import pytest
 
 from engine.hardware import FakeHardware
-from tests.helpers import AC410, LAPTOP, PROJECTOR, editor, engine, output
+from tests.helpers import AC410, editor, engine, LAPTOP, output, PROJECTOR, write_scan
 
 WALL = {"polygon": [[0, 0], [1920, 0], [1920, 1080], [0, 1080]], "area": 2073600.0}
 BOX = {"polygon": [[1230, 880], [1540, 880], [1690, 1080], [1220, 1080]], "area": 70000.0}
@@ -17,9 +17,7 @@ def rig():
 @pytest.fixture
 def scanned(tmp_path):
     """A data dir holding a finished scan with two detected surfaces."""
-    d = tmp_path / "scans" / "latest"
-    d.mkdir(parents=True)
-    (d / "meta.json").write_text(json.dumps({"width": 1920, "height": 1080, "coverage": 0.99, "surfaces": [WALL, BOX]}))
+    write_scan(tmp_path, [WALL, BOX], 1920, 1080, coverage=0.99)
     return tmp_path
 
 
