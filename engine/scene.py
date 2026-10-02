@@ -85,9 +85,15 @@ class SceneStore:
         params: dict | None = None,
         polygon: list[list[float]] | None = None,
         name: str | None = None,
+        bezier: dict | None = None,
     ) -> None:
         surface = self._surface(surface_id)
         if polygon is not None:
+            # The Bezier (editor curves) must describe this polygon; a plain polygon edit makes it stale.
+            if bezier is not None:
+                surface["bezier"] = bezier
+            else:
+                surface.pop("bezier", None)
             surface["polygon"] = self._clamp(polygon)
             surface["area"] = polygon_area(surface["polygon"])
             if surface["source"] == "detected":
@@ -121,6 +127,7 @@ class SceneStore:
         outline = cv2.approxPolyDP(outline, 1.5, True).reshape(-1, 2)
         keep = surfaces[0]
         keep["polygon"] = outline.tolist()
+        keep.pop("bezier", None)  # the merged outline is new; its old curves don't apply
         if keep["source"] == "detected":
             keep["source"] = "edited"
         keep["area"] = polygon_area(keep["polygon"])

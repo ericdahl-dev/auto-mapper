@@ -131,3 +131,30 @@ def test_apply_from_unknown_surface_is_404(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
         assert client.post("/api/scene/apply", json={"from": 9}).status_code == 404
         assert client.post("/api/scene/apply", json={"from": 2, "to": [9]}).status_code == 404
+
+
+BEZ = {"anchors": [[1200, 800], [1400, 800], [1400, 1000], [1200, 1000]], "controls": {"0": [[1260, 760], [1340, 760]]}}
+
+
+def test_a_bezier_outline_is_stored_with_its_flattened_polygon(rig, scanned):
+    flat = [[1200, 800], [1300, 770], [1400, 800], [1400, 1000], [1200, 1000]]
+    with engine(rig, data_dir=scanned) as client:
+        client.patch("/api/scene/surfaces/2", json={"polygon": flat, "bezier": BEZ})
+        box = surface(client, 2)
+
+    assert box["polygon"] == flat  # what everything renders and detects with
+    assert box["bezier"] == BEZ  # kept only so the editor can keep editing the curves
+
+
+def test_a_plain_polygon_edit_drops_a_stale_bezier(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        client.patch("/api/scene/surfaces/2", json={"polygon": BEZ["anchors"], "bezier": BEZ})
+        client.patch("/api/scene/surfaces/2", json={"polygon": [[1200, 800], [1450, 800], [1400, 1000]]})
+        assert surface(client, 2).get("bezier") is None
+
+
+def test_merging_drops_the_bezier(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        client.patch("/api/scene/surfaces/2", json={"polygon": BEZ["anchors"], "bezier": BEZ})
+        client.post("/api/scene/merge", json={"ids": [2, 3]})
+        assert surface(client, 2).get("bezier") is None

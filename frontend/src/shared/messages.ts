@@ -77,6 +77,7 @@ export interface SceneSurface {
   id: number;
   name?: string;
   source?: "detected" | "edited" | "manual";
+  bezier?: { anchors: number[][]; controls: Record<number, [number[], number[]]> };
   polygon: number[][];
   area: number;
   effect: string;

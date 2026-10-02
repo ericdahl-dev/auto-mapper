@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cornerIndices, handleIndices, moveOnRun } from "./curves";
+import { cornerIndices, handleIndices, moveOnRun, nearestEdge } from "./curves";
 
 /** A square whose top side is a 30-point arc. */
 function archedSquare(): number[][] {
@@ -44,5 +44,14 @@ describe("moveOnRun", () => {
     const moved = moveOnRun(poly, 32, [320, 310]);
     expect(moved[32]).toEqual([320, 310]);
     expect(moved.filter((p, i) => p !== poly[i] && (p[0] !== poly[i][0] || p[1] !== poly[i][1]))).toHaveLength(1);
+  });
+});
+
+
+describe("nearestEdge", () => {
+  it("finds the edge closest to a point", () => {
+    const square = [[0, 0], [200, 0], [200, 200], [0, 200]];
+    expect(nearestEdge(square, [100, 5])).toBe(0);
+    expect(nearestEdge(square, [195, 120])).toBe(1);
   });
 });

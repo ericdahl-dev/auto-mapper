@@ -1,5 +1,9 @@
 # auto-mapper design
 
+> **Historical:** this is the original plan from 2026-10-01. The code has moved on (its own
+> Gray-code decoder rather than OpenCV's `GrayCodePattern`, projects in
+> `~/.auto-mapper/projects/`, and more). See the README for how it works now.
+
 A Lightform-style projection mapper: scan a scene with a projector and webcam, detect surfaces
 automatically, apply effects to them, and play the result back on the projector.
 

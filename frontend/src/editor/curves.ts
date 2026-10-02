@@ -63,3 +63,18 @@ export function moveOnRun(polygon: Pt[], index: number, point: Pt): Pt[] {
   }
   return out;
 }
+
+
+/** Index of the edge (vertex i to i+1) nearest a point. */
+export function nearestEdge(polygon: Pt[], point: Pt): number {
+  let best = 0;
+  let bestDist = Infinity;
+  polygon.forEach((a, i) => {
+    const b = polygon[(i + 1) % polygon.length];
+    const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+    const t = Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    const d = Math.hypot(point[0] - (a[0] + t * dx), point[1] - (a[1] + t * dy));
+    if (d < bestDist) [best, bestDist] = [i, d];
+  });
+  return best;
+}

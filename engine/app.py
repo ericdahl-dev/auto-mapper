@@ -288,7 +288,7 @@ def create_app(
     @app.patch("/api/scene/surfaces/{surface_id}")
     async def update_surface(surface_id: int, req: SurfaceUpdate):
         try:
-            scene.update(surface_id, req.effect, req.params, req.polygon, req.name)
+            scene.update(surface_id, req.effect, req.params, req.polygon, req.name, req.bezier)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
