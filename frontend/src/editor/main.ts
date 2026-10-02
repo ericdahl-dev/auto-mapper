@@ -10,6 +10,7 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
+import { placeOutput } from "./screens";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -566,7 +567,8 @@ connect({
   },
 });
 
-$("open-output").addEventListener("click", () => window.open("/output.html", "auto-mapper-output", "popup,width=960,height=540"));
+const showPlacement = (note: string | null) => note && notice(note);
+$("open-output").addEventListener("click", () => void placeOutput(status?.hardware.projector ?? null).then(showPlacement));
 $("refresh").addEventListener("click", () => void fetch("/api/hardware/refresh", { method: "POST" }));
 for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-test-frame]")) {
   btn.addEventListener("click", () =>
@@ -602,13 +604,16 @@ projectSave.addEventListener("click", async () => {
   void refreshProjects();
 });
 
-projectorSelect.addEventListener("change", () =>
+projectorSelect.addEventListener("change", () => {
+  const display = status?.hardware.displays.find((d) => d.key === projectorSelect.value) ?? null;
+  // Move the output first, while the change still counts as a user gesture (permission prompt).
+  void placeOutput(display).then(showPlacement);
   void fetch("/api/projector", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: projectorSelect.value }),
-  }),
-);
+  });
+});
 
 cameraSelect.addEventListener("change", () =>
   void fetch("/api/camera", {
