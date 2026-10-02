@@ -344,6 +344,21 @@ make test
 
 **Real-scan fixtures.** `tests/test_real_scan.py` runs regression tests against a real scan of the rig in `fixtures/local/room1/`. That directory is gitignored because it is a scan of a real room; without it those tests are skipped (you'll see them as skipped in the pytest summary).
 
+### CI
+
+GitHub Actions run on every pull request and on pushes to `main`:
+
+- **CI** (`.github/workflows/ci.yml`): engine tests (pytest via uv), and the frontend's type-check, unit and browser tests (headless Chromium) and production build.
+- **American spelling** (`.github/workflows/spelling.yml`): `scripts/american_spelling.py` fails on British spellings in any tracked text file, including inside identifiers. Web API names such as `AnalyserNode` are allowed, and a line can opt out with `spelling: ok`. It also runs as a pytest test, so `make test` catches it first.
+
+To run a workflow locally, use [act](https://github.com/nektos/act) with Docker (or Colima):
+
+```bash
+act pull_request -W .github/workflows/ci.yml -j engine -P ubuntu-latest=catthehacker/ubuntu:act-latest --container-architecture linux/amd64
+```
+
+act 0.2.89 runs every step but reports a failure in the actions' cleanup ("Post") steps, because it can't run their Node 24 runtime; the job's own steps are what count.
+
 ### Adding an effect
 
 1. Create `frontend/src/effects/<name>.ts` exporting an `Effect`: an `id`, a display `name`, a `params` schema, and a `fragment` shader body that writes `color`.
