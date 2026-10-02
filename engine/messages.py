@@ -47,6 +47,20 @@ class SurfaceUpdate(BaseModel):
     gesture: Annotated[str, Field(max_length=64)] | None = None  # edits sharing one are one undo step
 
 
+class NewSceneRequest(BaseModel):
+    name: Annotated[str, Field(max_length=80)] | None = None
+    duplicate: int | None = None  # copy this scene's look instead of starting dark
+
+
+class SceneUpdate(BaseModel):
+    name: Annotated[str, Field(max_length=80)] | None = None
+    duration: Annotated[float, Field(gt=0, le=3600)] | None = None  # seconds in a playlist
+
+
+class SceneOrder(BaseModel):
+    ids: Annotated[list[int], Field(min_length=1)]
+
+
 class MergeRequest(BaseModel):
     ids: Annotated[list[int], Field(min_length=2)]
 
@@ -165,6 +179,8 @@ class ShowOut(_Out):
     sound: dict
     alignment: dict
     history: dict
+    scenes: list[dict]
+    scene: int
     scan_rev: str | None
 
 

@@ -19,7 +19,7 @@ from engine import media
 from engine.scan_folder import ScanFolder
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
-from engine.show import CurrentShow, NothingToUndo, UnknownSurface
+from engine.show import CurrentShow, LastScene, NothingToUndo, UnknownScene, UnknownSurface
 from engine.messages import (
     AlignmentRequest,
     ApplyEffectRequest,
@@ -28,6 +28,7 @@ from engine.messages import (
     EffectErrorReport,
     Hello,
     MergeRequest,
+    NewSceneRequest,
     NewSurfaceRequest,
     OutputHello,
     OutputMessage,
@@ -36,6 +37,8 @@ from engine.messages import (
     PresentationRequest,
     ProjectorSelectRequest,
     ProjectSaveRequest,
+    SceneOrder,
+    SceneUpdate,
     SelectRequest,
     SoundRequest,
     SurfaceUpdate,
@@ -288,6 +291,52 @@ def create_app(
     async def set_presentation(req: PresentationRequest):
         show.present(req.mode, req.blackout)
         return show.presentation
+
+    @app.post("/api/show/scenes")
+    async def add_scene(req: NewSceneRequest):
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        try:
+            show.add_scene(req.name, req.duplicate)
+        except UnknownScene:
+            raise HTTPException(404, "Unknown scene")
+        return show.public()
+
+    @app.post("/api/show/scenes/order")
+    async def order_scenes(req: SceneOrder):
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        try:
+            show.order_scenes(req.ids)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        return show.public()
+
+    @app.patch("/api/show/scenes/{scene_id}")
+    async def update_scene(scene_id: int, req: SceneUpdate):
+        try:
+            show.update_scene(scene_id, req.name, req.duration)
+        except UnknownScene:
+            raise HTTPException(404, "Unknown scene")
+        return show.public()
+
+    @app.post("/api/show/scenes/{scene_id}/open")
+    async def open_scene(scene_id: int):
+        try:
+            show.open_scene(scene_id)
+        except UnknownScene:
+            raise HTTPException(404, "Unknown scene")
+        return show.public()
+
+    @app.delete("/api/show/scenes/{scene_id}")
+    async def delete_scene(scene_id: int):
+        try:
+            show.delete_scene(scene_id)
+        except UnknownScene:
+            raise HTTPException(404, "Unknown scene")
+        except LastScene:
+            raise HTTPException(409, "A show needs at least one scene")
+        return show.public()
 
     @app.post("/api/show/undo")
     async def undo():

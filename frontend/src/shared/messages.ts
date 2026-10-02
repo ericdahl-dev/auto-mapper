@@ -109,6 +109,8 @@ export interface ShowMessage {
   presentation: { mode: "edit" | "play"; blackout: boolean };
   alignment?: { corners: number[][]; brightness: number }; // realign the whole show (see output/alignment.ts)
   history?: { undo: string | null; redo: string | null }; // what Undo and Redo would do ("Merge")
+  scenes?: { id: number; name: string; duration: number }[]; // looks on the same outlines, in playlist order
+  scene?: number; // the open scene: its effects and settings are the surfaces' own
   sound?: { enabled: boolean; device: string | null; source?: "mic" | "video"; output?: string | null };
   scan_rev?: string | null; // changes only when the scan data changes
 }

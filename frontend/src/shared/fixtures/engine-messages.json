@@ -139,6 +139,14 @@
       "mode": "edit"
     },
     "scan_rev": "0",
+    "scene": 1,
+    "scenes": [
+      {
+        "duration": 10.0,
+        "id": 1,
+        "name": "Scene 1"
+      }
+    ],
     "selected": null,
     "sound": {
       "device": null,
