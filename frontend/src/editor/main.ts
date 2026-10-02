@@ -4,6 +4,7 @@ import { EFFECTS, effectById } from "../effects/index";
 import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
 import { controlsFor, parseControlValue } from "./controls";
+import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, moveVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
 import { cameraOptions, describeStatus } from "./statusView";
@@ -98,6 +99,68 @@ function patchPolygonSoon(id: number, polygon: number[][]) {
 const select = (id: number | null) =>
   void fetch("/api/scene/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
 
+// --- Drawing surfaces by hand -------------------------------------------------
+let draw = idleDraw;
+const drawButton = $<HTMLButtonElement>("draw");
+const redetectButton = $<HTMLButtonElement>("redetect");
+const SOURCE_TEXT: Record<string, string> = {
+  detected: "Detected automatically",
+  edited: "Detected, then edited by you (kept on redetect)",
+  manual: "Drawn by you (kept on redetect)",
+};
+
+function drawEvent(ev: DrawEvent) {
+  draw = drawStep(draw, ev);
+  if (draw.finished) {
+    void fetch("/api/scene/surfaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ polygon: draw.finished }),
+    });
+    draw = idleDraw;
+  }
+  drawButton.classList.toggle("on", draw.active);
+  surfacesSvg.classList.toggle("drawing", draw.active);
+  renderSurfaces();
+}
+
+drawButton.addEventListener("click", () => drawEvent({ type: draw.active ? "cancel" : "start" }));
+// Capture phase: while drawing, clicks place corners instead of selecting surfaces.
+surfacesSvg.addEventListener("click", (ev) => {
+  if (!draw.active) return;
+  ev.stopPropagation();
+  drawEvent({ type: "point", point: projectorPoint(ev) });
+}, true);
+surfacesSvg.addEventListener("dblclick", (ev) => {
+  if (!draw.active) return;
+  ev.stopPropagation();
+  drawEvent({ type: "finish" });
+}, true);
+window.addEventListener("keydown", (ev) => {
+  if (!draw.active) return;
+  if (ev.key === "Enter") drawEvent({ type: "finish" });
+  if (ev.key === "Escape") drawEvent({ type: "cancel" });
+});
+redetectButton.addEventListener("click", async () => {
+  const r = await fetch("/api/scene/redetect", { method: "POST" });
+  notice(r.ok ? "Surfaces detected again. Drawn and edited surfaces were kept." : `Cannot redetect: ${(await r.json()).detail}`);
+});
+
+function draftElements(): SVGElement[] {
+  if (!draw.active || draw.points.length === 0) return [];
+  const line = document.createElementNS(SVG_NS, "polyline");
+  line.classList.add("draft");
+  line.setAttribute("points", draw.points.map(([x, y]) => `${x},${y}`).join(" "));
+  const r = (4 * (scene?.width ?? 1920)) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
+  const dots = draw.points.map(([x, y]) => {
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.classList.add("draft");
+    Object.entries({ cx: x, cy: y, r }).forEach(([k, v]) => c.setAttribute(k, String(v)));
+    return c;
+  });
+  return [line, ...dots];
+}
+
 function renderSurfaces() {
   const surfaces = scene?.surfaces ?? [];
   const width = scene?.width ?? 1920;
@@ -171,6 +234,7 @@ function renderSurfaces() {
       }
       return parts;
     }),
+    ...draftElements(),
   );
   renderPanel();
   renderPresentation();
@@ -196,6 +260,7 @@ function renderPanel() {
   mergeButton.textContent = `Merge ${multi.size} surfaces`;
   if (!surface) return;
   surfaceTitle.textContent = `Surface ${surface.id}`;
+  $("surface-source").textContent = SOURCE_TEXT[surface.source ?? "detected"] ?? "";
   if (document.activeElement !== surfaceName) surfaceName.value = surface.name ?? `Surface ${surface.id}`;
   effectSelect.value = surface.effect;
   const effect = effectById(surface.effect);
