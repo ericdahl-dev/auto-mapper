@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>auto-mapper output</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+      #hint {
+        position: fixed; inset: 0; display: grid; place-items: center; cursor: pointer;
+        color: #888; font: 16px system-ui, sans-serif; background: rgba(0, 0, 0, 0.6);
+      }
+      #hint[hidden] { display: none; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="hint">Drag this window onto the projector, then click to go fullscreen.</div>
+    <script type="module" src="/src/output/main.ts"></script>
+  </body>
+</html>
