@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- auto-mapper: a projector beam landing on two mapped surfaces -->
+  <rect width="32" height="32" rx="7" fill="#111"/>
+  <path d="M3 25 L29 4 L29 29 Z" fill="#fff" fill-opacity="0.2"/>
+  <circle cx="4.5" cy="25.5" r="2.5" fill="#fff"/>
+  <path d="M12 9 L22 7 L22 19 L12 20 Z" fill="#2dd4bf"/>
+  <path d="M17 18 L27 16 L27 27 L17 28 Z" fill="#fbbf24"/>
+</svg>
