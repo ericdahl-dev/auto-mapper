@@ -50,3 +50,8 @@ class SelectRequest(BaseModel):
 
 class ProjectSaveRequest(BaseModel):
     name: Annotated[str, Field(min_length=1, max_length=80)]
+
+
+class PresentationRequest(BaseModel):
+    mode: Literal["edit", "play"] | None = None
+    blackout: bool | None = None

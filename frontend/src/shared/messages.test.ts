@@ -56,6 +56,7 @@ describe("parseServerMessage", () => {
       height: 1080,
       surfaces: [{ id: 2, polygon: [[0, 0], [10, 0], [10, 10]], area: 50, effect: "fill", params: { colorA: "#ff0000" } }],
       selected: 2,
+      presentation: { mode: "edit", blackout: false },
     };
     expect(parseServerMessage(JSON.stringify(scene))).toEqual(scene);
     const err = { type: "effect_error", surface: 2, effect: "fill", log: "ERROR: 0:3: 'nope' : undeclared identifier" };

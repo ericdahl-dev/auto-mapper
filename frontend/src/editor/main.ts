@@ -2,6 +2,7 @@ import { connect } from "../shared/connection";
 import type { StatusMessage, TestFrameKind } from "../shared/messages";
 import { EFFECTS, effectById } from "../effects/index";
 import type { SceneMessage } from "../shared/messages";
+import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
 import { controlsFor, parseControlValue } from "./controls";
 import { insertVertex, moveVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
@@ -172,6 +173,20 @@ function renderSurfaces() {
     }),
   );
   renderPanel();
+  renderPresentation();
+}
+
+const playButton = $<HTMLButtonElement>("play");
+const blackoutButton = $<HTMLButtonElement>("blackout");
+playButton.addEventListener("click", () => void setMode(scene?.presentation.mode === "play" ? "edit" : "play"));
+blackoutButton.addEventListener("click", () => void toggleBlackout());
+bindPresentationKeys(() => scene?.presentation.mode ?? "edit");
+
+function renderPresentation() {
+  const p = scene?.presentation;
+  playButton.textContent = p?.mode === "play" ? "Edit" : "Play";
+  playButton.classList.toggle("on", p?.mode === "play");
+  blackoutButton.classList.toggle("on", !!p?.blackout);
 }
 
 function renderPanel() {
@@ -254,6 +269,7 @@ function render() {
   output.className = status?.output_connected ? "ok" : "bad";
   cameras.textContent = status?.hardware.cameras.join(", ") || "None";
   scan.disabled = !view.scanEnabled;
+  $("fps").textContent = status?.output_fps ? `${status.output_fps} fps` : "–";
   projectName.textContent = `· ${view.project}`;
   if (status?.project && document.activeElement !== projectSaveName && !projectSaveName.value) {
     projectSaveName.value = status.project.name;

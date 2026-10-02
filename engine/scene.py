@@ -20,6 +20,8 @@ class SceneStore:
     def __init__(self, scan_dir: Path):
         self.scan_dir = Path(scan_dir)
         self.scene: dict | None = self._load()
+        # How the output presents the scene. Session state: not saved with the scene.
+        self.presentation = {"mode": "edit", "blackout": False}
 
     def _load(self) -> dict | None:
         saved = self.scan_dir / "scene.json"
@@ -121,8 +123,17 @@ class SceneStore:
             self.scene["selected"] = surface_id
             self._save()
 
+    def present(self, mode: str | None = None, blackout: bool | None = None) -> None:
+        if mode is not None:
+            self.presentation["mode"] = mode
+        if blackout is not None:
+            self.presentation["blackout"] = blackout
+
+    def public(self) -> dict | None:
+        return {**self.scene, "presentation": dict(self.presentation)} if self.scene else None
+
     def message(self) -> dict | None:
-        return {"type": "scene", **self.scene} if self.scene else None
+        return {"type": "scene", **self.public()} if self.scene else None
 
     def _save(self) -> None:
         self.scan_dir.mkdir(parents=True, exist_ok=True)

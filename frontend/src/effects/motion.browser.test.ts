@@ -12,7 +12,7 @@ function render(effect: string, params: Record<string, unknown>, t: number) {
   const errors: string[] = [];
   const r = new SceneRenderer(gl, EFFECTS, (e) => errors.push(e.log));
   const scene: SceneMessage = {
-    type: "scene", width: W, height: H, selected: null,
+    type: "scene", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
     surfaces: [{ id: 1, polygon: BOX, area: 56 * 34, effect, params }],
   };
   r.setScene(scene);

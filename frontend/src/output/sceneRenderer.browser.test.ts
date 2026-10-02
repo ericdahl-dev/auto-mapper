@@ -22,6 +22,7 @@ function setup(extra: Effect[] = []) {
 function scene(boxEffect: string, boxParams: Record<string, unknown> = {}, selected: number | null = null): SceneMessage {
   return {
     type: "scene",
+    presentation: { mode: "edit", blackout: false },
     width: W,
     height: H,
     selected,
@@ -77,5 +78,21 @@ describe("SceneRenderer", () => {
     r.setScene({ ...scene("none", {}, 2), surfaces: [scene("none").surfaces[1]] });
     r.draw(0);
     expect(pixel(50, 27)[0]).toBeGreaterThan(40); // a dark surface becomes visible when selected
+  });
+
+  it("hides the selection highlight in play mode", () => {
+    const { r, pixel } = setup();
+    const dark = { ...scene("none", {}, 2), surfaces: [scene("none").surfaces[1]] };
+    r.setScene({ ...dark, presentation: { mode: "play", blackout: false } });
+    r.draw(0);
+    expect(pixel(50, 27)).toEqual([0, 0, 0]);
+  });
+
+  it("draws nothing at all during blackout", () => {
+    const { r, pixel } = setup();
+    r.setScene({ ...scene("fill", { colorA: "#00ff00", colorB: "#00ff00" }), presentation: { mode: "play", blackout: true } });
+    r.draw(0);
+    expect(pixel(10, 10)).toEqual([0, 0, 0]);
+    expect(pixel(50, 27)).toEqual([0, 0, 0]);
   });
 });

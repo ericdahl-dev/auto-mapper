@@ -41,6 +41,7 @@
       .banner { background: #3a2a05; color: var(--warn); border-left: 3px solid var(--warn); padding: 8px 16px; }
       button { background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
       button:disabled { opacity: 0.4; cursor: not-allowed; }
+      button.on { background: #b45309; border-color: #b45309; }
       button.primary { background: #2563eb; border-color: #2563eb; }
       .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
       select { width: 100%; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
@@ -54,6 +55,8 @@
       <button id="open-output">Open output window</button>
       <button id="refresh">Refresh hardware</button>
       <button id="scan" class="primary" disabled>Scan</button>
+      <button id="play" title="P">Play</button>
+      <button id="blackout" title="B">Blackout</button>
     </header>
     <div id="banners"></div>
     <main>
@@ -79,6 +82,7 @@
           <dt>Projector</dt><dd id="projector">…</dd>
           <dt>Cameras</dt><dd id="cameras">…</dd>
           <dt>Output</dt><dd id="output">…</dd>
+          <dt>Frame rate</dt><dd id="fps">…</dd>
         </dl>
         <h2>Camera</h2>
         <div class="row"><select id="camera-select"></select></div>

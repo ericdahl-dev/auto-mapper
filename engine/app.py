@@ -23,7 +23,14 @@ from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
 from engine.surfaces import detect_surfaces
 from engine.messages import (
-    CameraSelectRequest, EditorHello, Hello, MergeRequest, OutputHello, ProjectSaveRequest, SelectRequest,
+    CameraSelectRequest,
+    EditorHello,
+    Hello,
+    MergeRequest,
+    OutputHello,
+    PresentationRequest,
+    ProjectSaveRequest,
+    SelectRequest,
     SurfaceUpdate,
     TestFrameRequest,
 )
@@ -230,7 +237,7 @@ def create_app(
     async def get_scene():
         if scene.scene is None:
             raise HTTPException(404, "No scan yet")
-        return scene.scene
+        return scene.public()
 
     @app.patch("/api/scene/surfaces/{surface_id}")
     async def update_surface(surface_id: int, req: SurfaceUpdate):
@@ -239,7 +246,7 @@ def create_app(
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
-        return scene.scene
+        return scene.public()
 
     @app.delete("/api/scene/surfaces/{surface_id}")
     async def delete_surface(surface_id: int):
@@ -248,7 +255,7 @@ def create_app(
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
-        return scene.scene
+        return scene.public()
 
     @app.post("/api/scene/merge")
     async def merge_surfaces(req: MergeRequest):
@@ -257,7 +264,7 @@ def create_app(
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
-        return scene.scene
+        return scene.public()
 
     @app.post("/api/scene/select")
     async def select_surface(req: SelectRequest):
@@ -266,7 +273,19 @@ def create_app(
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
-        return scene.scene
+        return scene.public()
+
+    @app.post("/api/presentation")
+    async def set_presentation(req: PresentationRequest):
+        scene.present(req.mode, req.blackout)
+        await app.state.hub.broadcast_scene()
+        return scene.presentation
+
+    @app.post("/api/presentation/blackout/toggle")
+    async def toggle_blackout():
+        scene.present(blackout=not scene.presentation["blackout"])
+        await app.state.hub.broadcast_scene()
+        return scene.presentation
 
     @app.get("/api/projects")
     async def list_projects():
@@ -289,6 +308,7 @@ def create_app(
             info = await asyncio.to_thread(projects.open, slug)
         except UnknownProject:
             raise HTTPException(404, "Unknown project")
+        scene.present(mode="play", blackout=False)  # an opened project is ready to show
         hub: Hub = app.state.hub
         await hub.broadcast_scene()
         await hub.broadcast({"type": "scan_reload"})  # editors refetch the scan image and summary
@@ -320,6 +340,11 @@ def create_app(
                 msg = await ws.receive_json()
                 if ws is hub.output and msg.get("type") == "pattern_shown":
                     hub.pattern_shown(int(msg.get("seq", -1)))
+                elif ws is hub.output and msg.get("type") == "output_stats":
+                    fps = msg.get("fps")
+                    if isinstance(fps, (int, float)):
+                        hub.output_fps = round(float(fps), 1)
+                        await hub.broadcast_status()
                 elif ws is hub.output and msg.get("type") == "effect_error":
                     await hub.broadcast({k: msg.get(k) for k in ("type", "surface", "effect", "log")})
                 elif ws is hub.output and msg.get("type") == "hello":

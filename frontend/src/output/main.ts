@@ -1,6 +1,7 @@
 import { EFFECTS } from "../effects/index";
 import { connect } from "../shared/connection";
 import type { SceneMessage } from "../shared/messages";
+import { bindPresentationKeys } from "../shared/presentation";
 import { SceneRenderer } from "./sceneRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
@@ -17,8 +18,18 @@ let raf = 0;
 const sceneRenderer = new SceneRenderer(renderer.gl, EFFECTS, (e) => conn.send({ type: "effect_error", ...e }));
 const started = performance.now();
 
+let frames = 0;
+let statsFrom = performance.now();
 function loop() {
   sceneRenderer.draw((performance.now() - started) / 1000);
+  frames++;
+  const now = performance.now();
+  if (now - statsFrom >= 2000) {
+    // Let the editor see whether the projector keeps up (target: the display's 60 Hz).
+    conn.send({ type: "output_stats", fps: (frames * 1000) / (now - statsFrom) });
+    frames = 0;
+    statsFrom = now;
+  }
   raf = requestAnimationFrame(loop);
 }
 
@@ -66,6 +77,7 @@ window.addEventListener("resize", () => {
   size = renderer.resize(mode === "frames");
   conn.send({ type: "hello", role: "output", ...size });
   syncHint();
+bindPresentationKeys(() => scene?.presentation.mode ?? "edit");
 });
 
 // Browsers only allow fullscreen from a user gesture, so the engine can't do it for us.
@@ -81,3 +93,4 @@ document.addEventListener("click", () => {
   if (!document.fullscreenElement) void document.documentElement.requestFullscreen();
 });
 syncHint();
+bindPresentationKeys(() => scene?.presentation.mode ?? "edit");
