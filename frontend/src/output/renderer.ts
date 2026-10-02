@@ -39,7 +39,8 @@ void main() {
 const KIND_INDEX: Record<TestFrameKind, number> = { black: 0, white: 1, grid: 2 };
 
 export class OutputRenderer {
-  private gl: WebGL2RenderingContext;
+  readonly gl: WebGL2RenderingContext;
+  private prog: WebGLProgram;
   private uKind: WebGLUniformLocation | null;
   private uSize: WebGLUniformLocation | null;
   private uAxis: WebGLUniformLocation | null;
@@ -52,6 +53,7 @@ export class OutputRenderer {
     if (!gl) throw new Error("WebGL2 not available");
     this.gl = gl;
     const prog = link(gl, VERT, FRAG);
+    this.prog = prog;
     gl.useProgram(prog);
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -72,13 +74,13 @@ export class OutputRenderer {
   }
 
   /** Canvas size in device pixels; this is what the engine treats as projector pixels. */
-  resize(): { width: number; height: number } {
+  resize(redraw = true): { width: number; height: number } {
     const dpr = window.devicePixelRatio || 1;
     const width = Math.round(window.innerWidth * dpr);
     const height = Math.round(window.innerHeight * dpr);
     this.canvas.width = width;
     this.canvas.height = height;
-    this.draw();
+    if (redraw) this.draw();
     return { width, height };
   }
 
@@ -100,6 +102,8 @@ export class OutputRenderer {
 
   private draw() {
     const { gl } = this;
+    gl.useProgram(this.prog); // the scene renderer shares this context
+    gl.bindVertexArray(null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.uniform1i(this.uKind, this.kind);
     gl.uniform1i(this.uAxis, this.axis);

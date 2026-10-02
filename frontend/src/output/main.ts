@@ -1,4 +1,7 @@
+import { EFFECTS } from "../effects/index";
 import { connect } from "../shared/connection";
+import type { SceneMessage } from "../shared/messages";
+import { SceneRenderer } from "./sceneRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
 
@@ -7,11 +10,50 @@ const hint = document.getElementById("hint")!;
 const renderer = new OutputRenderer(canvas);
 let size = renderer.resize();
 
+// "frames": test frames and scan patterns, drawn once. "scene": effects, animated.
+let mode: "frames" | "scene" = "frames";
+let scene: SceneMessage | null = null;
+let raf = 0;
+const sceneRenderer = new SceneRenderer(renderer.gl, EFFECTS, (e) => conn.send({ type: "effect_error", ...e }));
+const started = performance.now();
+
+function loop() {
+  sceneRenderer.draw((performance.now() - started) / 1000);
+  raf = requestAnimationFrame(loop);
+}
+
+function showScene(msg: SceneMessage) {
+  // A new scan brings new geometry; effect/param edits keep it. Reload the scan image only then.
+  const geometry = (m: SceneMessage | null) => (m ? JSON.stringify(m.surfaces.map((s) => s.polygon)) : "");
+  const changedScan = geometry(scene) !== geometry(msg);
+  scene = msg;
+  sceneRenderer.setScene(msg);
+  if (changedScan) {
+    const img = new Image();
+    img.onload = () => sceneRenderer.setScanImage(img);
+    img.src = `/api/scan/latest.png?t=${Date.now()}`;
+  }
+  if (mode !== "scene") {
+    mode = "scene";
+    raf = requestAnimationFrame(loop);
+  }
+}
+
+function showFrames() {
+  mode = "frames";
+  cancelAnimationFrame(raf);
+}
+
 const conn = connect({
   hello: () => ({ type: "hello", role: "output", ...size }),
   onMessage(msg) {
-    if (msg.type === "show_test_frame") renderer.showTestFrame(msg.kind);
+    if (msg.type === "scene") showScene(msg);
+    if (msg.type === "show_test_frame") {
+      showFrames();
+      renderer.showTestFrame(msg.kind);
+    }
     if (msg.type === "show_pattern") {
+      showFrames();
       renderer.showPattern(msg.pattern);
       // Ack only once the frame has been composited: one rAF gets it drawn, the second
       // guarantees the previous frame was presented.
@@ -21,7 +63,7 @@ const conn = connect({
 });
 
 window.addEventListener("resize", () => {
-  size = renderer.resize();
+  size = renderer.resize(mode === "frames");
   conn.send({ type: "hello", role: "output", ...size });
   syncHint();
 });

@@ -53,6 +53,7 @@ export function linkProgram(gl: WebGL2RenderingContext, vs: string, fs: string):
     gl.attachShader(prog, sh);
     shaders.push(sh);
   }
+  gl.bindAttribLocation(prog, 0, "a_pos"); // every VAO feeds positions on attribute 0
   gl.linkProgram(prog);
   shaders.forEach((s) => gl.deleteShader(s));
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
