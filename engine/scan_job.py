@@ -150,8 +150,8 @@ class ScanJob:
                     "warnings": diagnose(decoded, coverage),
                 }
                 await asyncio.to_thread(self.latest.save, decoded, image, covered, summary)
-                self.show.apply_detection(summary)  # keeps drawn/edited surfaces and carries effects
-                self.show.clear_history()  # a new scan: undo starts over
+                self.show.clear_history()  # a new scan: undo starts over (before the show is pushed)
+                self.show.apply_detection(summary, undoable=False)  # keeps drawn/edited surfaces and effects
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except ScanCanceled:
                 await hub.broadcast({"type": "scan_canceled"})

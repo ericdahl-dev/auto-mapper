@@ -45,7 +45,8 @@ def test_nothing_to_undo_at_first(rig, scanned):
 ])
 def test_each_kind_of_change_can_be_undone_and_redone(rig, scanned, label, change):
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/show/surfaces/2", json={"effect": "media"}) if label == "Apply to all" else None
+        if label == "Apply to all":
+            client.patch("/api/show/surfaces/2", json={"effect": "media"})
         before = client.get("/api/show").json()
         assert change(client).status_code == 200
         after = client.get("/api/show").json()

@@ -248,7 +248,7 @@ class CurrentShow:
         self._changed()
         return new_id
 
-    def apply_detection(self, summary: dict) -> None:
+    def apply_detection(self, summary: dict, undoable: bool = True) -> None:
         """Replaces detected surfaces with a new detection, keeping what the user made.
 
         Drawn and edited surfaces are kept as they are; new detections that mostly cover
@@ -258,7 +258,8 @@ class CurrentShow:
         if self.data is None or (self.data["width"], self.data["height"]) != (summary["width"], summary["height"]):
             self.reset_from_scan(summary)
             return
-        self._record("Redetect")
+        if undoable:
+            self._record("Redetect")
         w, h = summary["width"], summary["height"]
         kept = [s for s in self.data["surfaces"] if s["source"] != "detected"]
         old = [s for s in self.data["surfaces"] if s["source"] == "detected"]
