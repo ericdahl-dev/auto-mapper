@@ -5,11 +5,12 @@ import { noise } from "./noise";
 import { none } from "./none";
 import { outline } from "./outline";
 import { posterize } from "./posterize";
+import { text } from "./text";
 import { tint } from "./tint";
 import type { Effect } from "./types";
 
 /** Built-in effects. Adding an effect = adding one file and listing it here. */
-export const EFFECTS: Effect[] = [none, fill, outline, noise, tint, edgeglow, posterize, media];
+export const EFFECTS: Effect[] = [none, fill, outline, noise, tint, edgeglow, posterize, media, text];
 
 export function effectById(id: string): Effect {
   return EFFECTS.find((e) => e.id === id) ?? none;

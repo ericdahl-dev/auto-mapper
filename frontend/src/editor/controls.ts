@@ -4,7 +4,8 @@ export type Control =
   | { name: string; label: string; kind: "color"; value: string }
   | { name: string; label: string; kind: "range"; value: number; min: number; max: number; step: number }
   | { name: string; label: string; kind: "select"; value: string; options: { value: string; label: string }[] }
-  | { name: string; label: string; kind: "media"; value: string };
+  | { name: string; label: string; kind: "media"; value: string }
+  | { name: string; label: string; kind: "text"; value: string };
 
 /** One editor control per effect param, showing the surface's saved value or the default. */
 export function controlsFor(effect: Effect, params: Record<string, unknown>): Control[] {
@@ -17,6 +18,9 @@ export function controlsFor(effect: Effect, params: Record<string, unknown>): Co
     if (p.type === "choice") {
       const value = p.options.some((o) => o.value === saved) ? (saved as string) : p.default;
       return [{ name: p.name, label: p.label, kind: "select", value, options: p.options }];
+    }
+    if (p.type === "text") {
+      return [{ name: p.name, label: p.label, kind: "text", value: typeof saved === "string" ? saved : p.default }];
     }
     if (p.type === "media") {
       return [{ name: p.name, label: p.label, kind: "media", value: typeof saved === "string" ? saved : p.default }];

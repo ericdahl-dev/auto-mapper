@@ -474,6 +474,15 @@ function renderPanel() {
       ...controlsFor(effect, surface.params).map((c) => {
         const row = Object.assign(document.createElement("label"), { className: "control" });
         if (c.kind === "media") return mediaControl(row, surface.id, c.name, c.label, c.value);
+        if (c.kind === "text") {
+          const area = Object.assign(document.createElement("textarea"), { value: c.value, rows: 3 });
+          area.addEventListener("input", () => {
+            cancelAnimationFrame(patchFrame); // typing: at most one PATCH per frame
+            patchFrame = requestAnimationFrame(() => patchSurface(surface.id, { params: { [c.name]: area.value } }));
+          });
+          row.append(Object.assign(document.createElement("span"), { textContent: c.label }), area);
+          return row;
+        }
         if (c.kind === "select") {
           const choose = document.createElement("select");
           choose.replaceChildren(...c.options.map((o) => Object.assign(document.createElement("option"), { value: o.value, textContent: o.label })));
