@@ -409,6 +409,14 @@ void main() {
 };
 ```
 
+Each setting type's behavior (GLSL declaration, uniform value, editor control, validation, whether it's bound as a texture) lives in one table, `frontend/src/effects/settingTypes.ts`; a new setting type is one entry there.
+
+Effects can also declare **roles**, so the app never relies on setting names:
+
+- `framing: { zoom, panX, panY }`: the effect can be framed on the surface (drag to pan, scroll to zoom), using those settings and their ranges.
+- `textStyle: { font, align }`: which choice settings style its text settings.
+- `playback(params)`: for effects that play video, what the settings mean for speed, start and sound.
+
 Effect ids are stored in each project's `scene.json`, so don't rename an existing effect's `id`.
 
 ### Other commands

@@ -1,6 +1,7 @@
 import { boundingBox } from "../shared/geometry";
 import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
+import { settingType } from "../effects/settingTypes";
 import type { Effect } from "../effects/types";
 import { type AudioValues, SILENT } from "../audio/analysis";
 import { mediaSources, textSources, type UniformValue, uniformsFor } from "../effects/types";
@@ -145,7 +146,7 @@ export class ShowRenderer {
     });
     // Media params without a file still need their sampler off unit 0 (the scan): give them a black texture.
     for (const param of s.effect.params) {
-      if (param.type !== "media" || s.media.some(([name]) => name === param.name)) continue;
+      if (!settingType(param).texture || s.media.some(([name]) => name === param.name)) continue;
       gl.uniform1i(gl.getUniformLocation(p, `u_${param.name}`), FIRST_MEDIA_UNIT + s.media.length);
       gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT + s.media.length);
       gl.bindTexture(gl.TEXTURE_2D, this.blank);

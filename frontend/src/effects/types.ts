@@ -1,4 +1,4 @@
-import { autoCorners, homography } from "./homography";
+import { settingType } from "./settingTypes";
 import { textKey, type TextStyle } from "./textTexture";
 
 // An effect is one GLSL fragment shader plus the schema of its parameters.
@@ -11,7 +11,7 @@ export type ParamSchema =
   | { name: string; label: string; type: "choice"; default: string; options: { value: string; label: string }[] }
   // An uploaded image or video (its URL). The shader gets `sampler2D u_<name>` and its pixel size `vec2 u_<name>Size`.
   | { name: string; label: string; type: "media"; default: string }
-  // Text, drawn to a texture (white on black) in the effect's "font" and "align" params if it has them.
+  // Text, drawn to a texture (white on black) in the font and alignment its effect's textStyle names.
   // The shader gets `sampler2D u_<name>` (use .r as a mask) and its pixel size `vec2 u_<name>Size`.
   | { name: string; label: string; type: "text"; default: string }
   // A corner pin: 4 points (TL, TR, BR, BL) in projector pixels, edited on the surface itself, not in the
@@ -24,11 +24,17 @@ export interface Effect {
   id: string;
   name: string;
   params: ParamSchema[];
+  /** Effects that can be framed on the surface (drag to pan, scroll to zoom): which settings those are. */
+  framing?: { zoom: string; panX: string; panY: string };
+  /** For effects that draw text: which settings choose the font and alignment of their text settings. */
+  textStyle?: { font: string; align: string };
   /** For effects that play video: what the surface's settings mean for playback (see output/playback.ts). */
   playback?: (params: Record<string, unknown>) => { rate: number; start: number; sound: boolean; volume: number };
   /** Fragment shader body. The shared preamble (see compile.ts) is prepended. null = draw nothing. */
   fragment: string | null;
 }
+
+export { hexToRgb, isQuad } from "./settingTypes";
 
 export type UniformValue = number | [number, number, number] | number[]; // number[] = mat3, column-major
 
@@ -36,7 +42,6 @@ export type UniformValue = number | [number, number, number] | number[]; // numb
 export const RESERVED = ["time", "resolution", "bounds", "scan", "poly", "polyCount", "perimeter", "level", "bass", "mid", "treble", "beat"];
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const HEX = /^#[0-9a-f]{6}$/i;
 
 export function validateEffect(effect: Effect): string[] {
   const problems: string[] = [];
@@ -46,27 +51,10 @@ export function validateEffect(effect: Effect): string[] {
     seen.add(p.name);
     if (!IDENT.test(p.name)) problems.push(`param "${p.name}" is not a GLSL identifier`);
     else if (RESERVED.includes(p.name)) problems.push(`param "${p.name}" clashes with a built-in uniform`);
-    if (p.type === "number" && (p.default < (p.min ?? -Infinity) || p.default > (p.max ?? Infinity))) {
-      problems.push(`param "${p.name}" default ${p.default} is outside ${p.min}..${p.max}`);
-    }
-    if (p.type === "color" && !HEX.test(p.default)) problems.push(`param "${p.name}" default "${p.default}" is not #rrggbb`);
-    if (p.type === "choice" && !p.options.some((o) => o.value === p.default)) {
-      problems.push(`param "${p.name}" default "${p.default}" is not one of ${p.options.map((o) => o.value).join(", ")}`);
-    }
+    const issue = settingType(p).validate(p);
+    if (issue) problems.push(issue);
   }
   return problems;
-}
-
-const UNIT_SQUARE = [[0, 0], [1, 0], [1, 1], [0, 1]];
-
-/** 4 finite [x, y] points. */
-export function isQuad(v: unknown): v is number[][] {
-  return Array.isArray(v) && v.length === 4 && v.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite));
-}
-
-export function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
 /** Uniform values for a surface: declared params only, defaults filled, numbers clamped. Media is bound by the renderer.
@@ -74,23 +62,8 @@ export function hexToRgb(hex: string): [number, number, number] {
 export function uniformsFor(effect: Effect, params: Record<string, unknown>, outline: number[][] = []): Record<string, UniformValue> {
   const out: Record<string, UniformValue> = {};
   for (const p of effect.params) {
-    const v = params[p.name];
-    if (p.type === "media" || p.type === "text") continue;
-    if (p.type === "quad") {
-      const h = (isQuad(v) && homography(v, UNIT_SQUARE)) || (outline.length >= 3 && homography(autoCorners(outline), UNIT_SQUARE));
-      // Row-major H to GLSL's column-major mat3; an unusable outline gets all zeros (draws the image's corner).
-      out[`u_${p.name}`] = h ? [h[0], h[3], h[6], h[1], h[4], h[7], h[2], h[5], h[8]] : Array(9).fill(0);
-      continue;
-    }
-    if (p.type === "color") {
-      out[`u_${p.name}`] = hexToRgb(typeof v === "string" && HEX.test(v) ? v : p.default);
-    } else if (p.type === "choice") {
-      const i = p.options.findIndex((o) => o.value === v);
-      out[`u_${p.name}`] = i >= 0 ? i : p.options.findIndex((o) => o.value === p.default);
-    } else {
-      const n = typeof v === "number" && Number.isFinite(v) ? v : p.default;
-      out[`u_${p.name}`] = Math.min(p.max ?? Infinity, Math.max(p.min ?? -Infinity, n));
-    }
+    const value = settingType(p).uniform(p, params[p.name], outline);
+    if (value !== null) out[`u_${p.name}`] = value;
   }
   return out;
 }
@@ -107,7 +80,12 @@ export function textSources(effect: Effect, params: Record<string, unknown>): Re
     if (p.type !== "text") continue;
     const v = params[p.name];
     const text = typeof v === "string" ? v.slice(0, 2000) : p.default;
-    out[p.name] = textKey({ text, font: choice("font", "sans"), align: choice("align", "center") as TextStyle["align"] });
+    const style = effect.textStyle;
+    out[p.name] = textKey({
+      text,
+      font: style ? choice(style.font, "sans") : "sans",
+      align: (style ? choice(style.align, "center") : "center") as TextStyle["align"],
+    });
   }
   return out;
 }
