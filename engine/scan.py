@@ -157,7 +157,7 @@ class GrayDecoder:
         )
 
 
-HOLE_CLOSE_PX = 5  # the camera usually has fewer pixels than the projector, so close small gaps
+HOLE_CLOSE_PX = 9  # camera has fewer pixels than the projector, and coarse decodes leave specks
 COVERAGE_BLOCK = 8
 
 
