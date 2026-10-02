@@ -133,7 +133,21 @@ export class SceneRenderer {
     });
     this.syncMedia(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
     // Video playback settings. One element per file is shared by every surface showing it, so the
-    // first surface's speed and start win.
+    // first surface's speed and start win. Sound: on if any surface showing the file turns it on, at
+    // the loudest of their volumes, and only in Play mode without blackout.
+    const audible = scene.presentation.mode === "play" && !scene.presentation.blackout;
+    const loudest = new Map<string, number>();
+    for (const s of this.surfaces) {
+      if (s.uniforms.u_sound !== 1) continue;
+      const volume = typeof s.uniforms.u_volume === "number" ? s.uniforms.u_volume : 1;
+      for (const [, src] of s.media) loudest.set(src, Math.max(loudest.get(src) ?? 0, volume));
+    }
+    for (const [src, m] of this.media) {
+      if (!m.video) continue;
+      const volume = loudest.get(src);
+      m.video.muted = !(audible && volume !== undefined);
+      if (volume !== undefined) m.video.volume = volume;
+    }
     const seen = new Set<string>();
     for (const s of this.surfaces) {
       for (const [, src] of s.media) {
@@ -158,9 +172,10 @@ export class SceneRenderer {
   }
 
   /** A video's playback settings (for tests and diagnostics); null for images or unknown files. */
-  playback(src: string): { rate: number; start: number; time: number } | null {
+  playback(src: string): { rate: number; start: number; time: number; muted: boolean; volume: number } | null {
     const m = this.media.get(src);
-    return m?.video ? { rate: m.video.playbackRate, start: m.start, time: m.video.currentTime } : null;
+    const v = m?.video;
+    return v ? { rate: v.playbackRate, start: m.start, time: v.currentTime, muted: v.muted, volume: v.volume } : null;
   }
 
   async whenMediaLoaded(): Promise<void> {
