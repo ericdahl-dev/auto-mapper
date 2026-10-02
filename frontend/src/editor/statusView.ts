@@ -6,6 +6,7 @@ export interface StatusView {
   projector: string;
   output: string;
   calibration: string;
+  project: string;
 }
 
 export interface CameraOption {
@@ -30,6 +31,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
       projector: "Unknown",
       output: "Unknown",
       calibration: "Unknown",
+      project: "Unknown",
     };
   }
 
@@ -49,6 +51,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     projector: projector ? `${projector.name} (${size(projector)})` : "None",
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
     calibration: describeCalibration(status.camera.calibration),
+    project: status.project?.name ?? "Unsaved",
   };
 }
 

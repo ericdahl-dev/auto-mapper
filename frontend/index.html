@@ -25,6 +25,10 @@
       #surfaces polygon.multi { stroke: #fbbf24; stroke-width: 3; }
       #surfaces circle.handle { fill: #fff; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
       #surface-name { width: 100%; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
+      #project-save-name { flex: 1; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
+      #project-list { list-style: none; padding: 0; margin: 0 0 16px; }
+      #project-list li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
+      #project-list li.active { color: var(--ok); }
       .hint { font-size: 12px; margin: 0 0 8px; }
       #surfaces text { pointer-events: none; fill: #fff; font: 600 28px system-ui, sans-serif; paint-order: stroke; stroke: #000; stroke-width: 4px; }
       .muted { color: var(--muted); margin: 8px 0 0; }
@@ -46,7 +50,7 @@
   </head>
   <body>
     <header>
-      <h1>auto-mapper</h1>
+      <h1>auto-mapper <span id="project-name" class="muted"></span></h1>
       <button id="open-output">Open output window</button>
       <button id="refresh">Refresh hardware</button>
       <button id="scan" class="primary" disabled>Scan</button>
@@ -64,6 +68,12 @@
         <p id="scan-label" class="muted">No scan yet</p>
       </div>
       <aside>
+        <h2>Project</h2>
+        <div class="row">
+          <input id="project-save-name" type="text" placeholder="Project name" />
+          <button id="project-save">Save</button>
+        </div>
+        <ul id="project-list"></ul>
         <h2>Hardware</h2>
         <dl>
           <dt>Projector</dt><dd id="projector">…</dd>

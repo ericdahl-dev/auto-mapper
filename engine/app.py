@@ -19,10 +19,12 @@ from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine.scan import block_coverage, projector_space_image
 from engine.scan_runner import ScanError, capture_scan
+from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
 from engine.surfaces import detect_surfaces
 from engine.messages import (
-    CameraSelectRequest, EditorHello, Hello, MergeRequest, OutputHello, SelectRequest, SurfaceUpdate,
+    CameraSelectRequest, EditorHello, Hello, MergeRequest, OutputHello, ProjectSaveRequest, SelectRequest,
+    SurfaceUpdate,
     TestFrameRequest,
 )
 
@@ -48,10 +50,12 @@ def create_app(
     scan_dir = data_path / "scans" / "latest"
     scanning = asyncio.Lock()
     scene = SceneStore(scan_dir)
+    projects = ProjectStore(data_path, scan_dir, scene)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.hub = Hub(await asyncio.to_thread(probe.probe), settings, scene)
+        app.state.hub.projects = projects
         # A scan killed mid-way leaves the webcam locked; put its settings back.
         # Assumes the selected camera is the one that was locked.
         selected = settings.selected(app.state.hub.hardware.cameras)
@@ -263,6 +267,33 @@ def create_app(
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
         return scene.scene
+
+    @app.get("/api/projects")
+    async def list_projects():
+        return projects.list()
+
+    @app.post("/api/projects")
+    async def save_project(req: ProjectSaveRequest):
+        try:
+            info = await asyncio.to_thread(projects.save, req.name)
+        except UnknownProject as e:
+            raise HTTPException(409, str(e))
+        await app.state.hub.broadcast_status()
+        return info
+
+    @app.post("/api/projects/{slug}/open")
+    async def open_project(slug: str):
+        if scanning.locked():
+            raise HTTPException(409, "A scan is running")
+        try:
+            info = await asyncio.to_thread(projects.open, slug)
+        except UnknownProject:
+            raise HTTPException(404, "Unknown project")
+        hub: Hub = app.state.hub
+        await hub.broadcast_scene()
+        await hub.broadcast({"type": "scan_reload"})  # editors refetch the scan image and summary
+        await hub.broadcast_status()
+        return info
 
     @app.post("/api/test-frame")
     async def test_frame(req: TestFrameRequest):
