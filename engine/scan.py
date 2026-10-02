@@ -68,6 +68,31 @@ class _Axis:
         self.reliability: dict[int, float] = {}
 
 
+def _refine(values: np.ndarray, valid: np.ndarray, unknown: np.ndarray, coarse: dict) -> np.ndarray:
+    """Recovers sub-stripe positions when the finest stripes were too thin for the camera.
+
+    Projector coordinates change smoothly across the camera image, so averaging the
+    coarse (interval-centre) values of neighbouring camera pixels lands between stripe
+    edges. The window spans about one unresolved stripe, measured in camera pixels.
+    """
+    import cv2
+
+    if not valid.any():
+        return np.full(values.shape, -1, np.int32)
+    k = int(unknown[valid].max())
+    if k == 0:
+        return np.where(valid, values, -1).astype(np.int32)
+    xs, ys = coarse["x"][valid], coarse["y"][valid]
+    proj_area = max(1.0, float(np.ptp(xs) * np.ptp(ys)))
+    cam_per_proj = np.sqrt(valid.sum() / proj_area)
+    sigma = max(1.0, 0.5 * (1 << k) * cam_per_proj)
+    w = valid.astype(np.float32)
+    num = cv2.GaussianBlur(np.where(valid, values, 0).astype(np.float32), (0, 0), sigma)
+    den = cv2.GaussianBlur(w, (0, 0), sigma)
+    refined = np.where(den > 1e-3, num / np.maximum(den, 1e-3), -1)
+    return np.where(valid, np.round(refined), -1).astype(np.int32)
+
+
 class GrayDecoder:
     """Decodes captures incrementally, so only the reference frames are kept in memory.
 
@@ -109,11 +134,17 @@ class GrayDecoder:
         axis.reliable_bits += axis.still_reliable
 
     def result(self) -> DecodeResult:
-        coords, valid = {}, self._lit.copy()
+        coarse, unknown, valid = {}, {}, self._lit.copy()
         for name, axis in self._axes.items():
-            value = _gray_to_binary(axis.code)
-            valid &= (axis.reliable_bits >= axis.bits - MAX_UNRELIABLE_LOW_BITS) & (value < axis.size)
-            coords[name] = value
+            k = np.clip(axis.bits - axis.reliable_bits, 0, None)  # unreadable low bits per pixel
+            base = (_gray_to_binary(axis.code) >> k) << k
+            # Centre of the interval the unreadable bits leave open.
+            coarse[name] = base + ((1 << k) - 1) / 2.0
+            unknown[name] = k
+            valid &= (k <= MAX_UNRELIABLE_LOW_BITS) & (base < axis.size)
+        coords = {name: _refine(coarse[name], valid, unknown[name], coarse) for name in coarse}
+        for name, axis in self._axes.items():
+            valid &= (coords[name] >= 0) & (coords[name] < axis.size)
         return DecodeResult(
             proj_x=np.where(valid, coords["x"], -1),
             proj_y=np.where(valid, coords["y"], -1),

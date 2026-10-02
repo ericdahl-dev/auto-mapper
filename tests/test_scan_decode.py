@@ -75,3 +75,30 @@ def test_full_synthetic_scan_covers_most_of_the_projector():
 
     _, covered = projector_space_image(decode(Scene()))
     assert block_coverage(covered) > 0.9
+
+
+def test_scan_image_is_solid_when_camera_is_coarser_than_projector():
+    """Real rig: ~0.7 camera px per projector px, finest 3 bits unreadable.
+    Pixels must not snap onto an 8-px lattice of dots."""
+    from engine.scan import projector_space_image
+
+    scene = Scene(proj_w=512, proj_h=288, cam_w=320, cam_h=240, unresolved_bits=3)
+    r = decode(scene)
+    img, covered = projector_space_image(r)
+
+    interior = covered[40:-40, 40:-40]
+    assert interior.mean() > 0.98
+    assert (img[40:-40, 40:-40].max(axis=2) > 50).mean() > 0.98
+
+
+def test_coarse_decode_is_refined_below_the_stripe_width():
+    import cv2
+
+    scene = Scene(proj_w=512, proj_h=288, cam_w=320, cam_h=240, unresolved_bits=3)
+    r = decode(scene)
+
+    # Away from the box edge, where smoothing would blend two surfaces.
+    near_box = cv2.dilate(scene.box_region.astype(np.uint8), np.ones((15, 15), np.uint8)).astype(bool)
+    ok = r.valid & scene.lit & ~near_box
+    err = np.abs(r.proj_x[ok] - scene.true_x[ok])
+    assert np.percentile(err, 95) <= 2  # raw coarse decode is up to 7 px off
