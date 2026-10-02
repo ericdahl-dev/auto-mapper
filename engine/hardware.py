@@ -1,4 +1,4 @@
-"""Detects the projector (a non-main display) and attached cameras."""
+"""Detects displays (one is the projector) and attached cameras."""
 
 import json
 import re
@@ -7,18 +7,36 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 
+def display_key(d: dict) -> str:
+    return d.get("key") or d["name"]
+
+
 @dataclass
 class HardwareSnapshot:
     displays: list[dict] = field(default_factory=list)
     cameras: list[dict] = field(default_factory=list)
+    # The display the user chose as the projector ({"key", "name"}); None = first non-main.
+    chosen: dict | None = None
+
+    def _chosen_display(self) -> dict | None:
+        if self.chosen is None:
+            return None
+        return next((d for d in self.displays if display_key(d) == self.chosen["key"]), None)
 
     @property
     def projector(self) -> dict | None:
-        external = [d for d in self.displays if not d["main"]]
-        if not external:
-            return None
-        d = external[0]
-        return {"name": d["name"], "width": d["width"], "height": d["height"]}
+        d = self._chosen_display()
+        if d is None:
+            external = [d for d in self.displays if not d["main"]]
+            if not external:
+                return None
+            d = external[0]
+        return {"name": d["name"], "key": display_key(d), "width": d["width"], "height": d["height"]}
+
+    @property
+    def projector_missing(self) -> str | None:
+        """Name of the chosen projector when it isn't plugged in (we fell back to another display)."""
+        return self.chosen["name"] if self.chosen and self._chosen_display() is None else None
 
     @property
     def issues(self) -> list[str]:
@@ -30,7 +48,16 @@ class HardwareSnapshot:
         return issues
 
     def to_dict(self) -> dict:
-        return {"projector": self.projector, "cameras": self.cameras, "issues": self.issues}
+        return {
+            "projector": self.projector,
+            "projector_missing": self.projector_missing,
+            "displays": [
+                {"name": d["name"], "key": display_key(d), "width": d["width"], "height": d["height"], "main": d["main"]}
+                for d in self.displays
+            ],
+            "cameras": self.cameras,
+            "issues": self.issues,
+        }
 
 
 class HardwareProbe(Protocol):
@@ -89,8 +116,11 @@ def parse_system_profiler(data: dict) -> HardwareSnapshot:
             m = re.match(r"(\d+) x (\d+)", d.get("_spdisplays_pixels", ""))
             if not m:
                 continue
+            # Vendor, product and serial tell apart two monitors with the same name.
+            ids = [d.get(f"_spdisplays_display-{k}") for k in ("vendor-id", "product-id", "serial-number")]
             displays.append({
                 "name": d.get("_name", "Display"),
+                "key": ":".join(ids) if all(ids) else d.get("_name", "Display"),
                 "width": int(m.group(1)),
                 "height": int(m.group(2)),
                 "main": d.get("spdisplays_main") == "spdisplays_yes",

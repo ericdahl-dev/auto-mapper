@@ -10,7 +10,7 @@ Most write routes respond with the updated scene and also broadcast it over the 
 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
-| GET | `/api/status` | | Status: hardware (projector, cameras, issues), output connection and resolution, output fps, selected camera and its calibration, active project, `can_scan` |
+| GET | `/api/status` | | Status: hardware (projector, `projector_missing`, displays, cameras, issues), output connection and resolution, output fps, selected camera and its calibration, active project, `can_scan` |
 | POST | `/api/hardware/refresh` | | Probes displays and cameras again; returns status |
 | POST | `/api/test-frame` | `{"kind": "white" \| "black" \| "grid"}` | `{"ok": true}`. 409 if the output window isn't connected |
 
@@ -18,6 +18,7 @@ Most write routes respond with the updated scene and also broadcast it over the 
 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
+| POST | `/api/projector` | `{"key": "..."}` | Chooses which display is the projector (a `key` from `hardware.displays`) and saves the choice; returns status. 404 for an unknown display |
 | POST | `/api/camera` | `{"unique_id": "..."}` | Selects a camera and saves the choice; returns status. 404 for an unknown camera |
 | GET | `/api/camera/preview.jpg` | | A JPEG frame, downscaled to 1280 px wide. 409 if no camera is selected or a scan is running |
 | POST | `/api/camera/release` | | Closes the camera. 409 while scanning |

@@ -44,7 +44,7 @@ def default_camera(cameras: list[dict]) -> str | None:
 
 
 class CameraSettings:
-    """Remembers the user's camera choice in <data_dir>/settings.json."""
+    """Remembers the user's camera and projector choices in <data_dir>/settings.json."""
 
     def __init__(self, data_dir: Path):
         self.path = Path(data_dir) / "settings.json"
@@ -64,6 +64,15 @@ class CameraSettings:
     def select(self, unique_id: str) -> None:
         data = self._load()
         data["camera"] = unique_id
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_text_atomic(self.path, json.dumps(data, indent=2))
+
+    def projector(self) -> dict | None:
+        return self._load().get("projector")
+
+    def select_projector(self, display: dict) -> None:
+        data = self._load()
+        data["projector"] = {"key": display["key"], "name": display["name"]}
         self.path.parent.mkdir(parents=True, exist_ok=True)
         write_text_atomic(self.path, json.dumps(data, indent=2))
 

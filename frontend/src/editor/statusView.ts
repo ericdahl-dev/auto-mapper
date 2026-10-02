@@ -40,6 +40,9 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   const { projector, issues } = status.hardware;
   const out = status.output_resolution;
   const banners = issues.map((i) => ISSUE_TEXT[i]);
+  if (status.hardware.projector_missing && projector) {
+    banners.push(`${status.hardware.projector_missing} (your chosen projector) is not connected. Using ${projector.name} for now.`);
+  }
 
   if (!status.output_connected) {
     banners.push("Output window not connected. Open it and move it fullscreen onto the projector.");
@@ -73,6 +76,15 @@ const isUsb = (uniqueId: string) => /^0x[0-9a-f]{9,}$/i.test(uniqueId);
 const KIND_LABEL: Record<CameraInfo["device_type"], string> = {
   builtin: "built-in", external: "external", continuity: "phone", other: "other",
 };
+
+export function projectorOptions(status: StatusMessage | null): CameraOption[] {
+  if (!status) return [];
+  return status.hardware.displays.map((d) => ({
+    value: d.key,
+    label: `${d.name} (${size(d)}${d.main ? ", main" : ""})`,
+    selected: d.key === status.hardware.projector?.key,
+  }));
+}
 
 export function cameraOptions(status: StatusMessage | null): CameraOption[] {
   if (!status) return [];

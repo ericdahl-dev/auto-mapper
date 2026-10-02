@@ -29,6 +29,7 @@ from engine.surfaces import detect_surfaces
 from engine.messages import (
     ApplyEffectRequest,
     CameraSelectRequest,
+    ProjectorSelectRequest,
     EditorHello,
     Hello,
     MergeRequest,
@@ -110,6 +111,17 @@ def create_app(
         if not any(c["unique_id"] == req.unique_id for c in hub.hardware.cameras):
             raise HTTPException(404, "Unknown camera")
         settings.select(req.unique_id)
+        await hub.broadcast_status()
+        return hub.status()
+
+    @app.post("/api/projector")
+    async def select_projector(req: ProjectorSelectRequest):
+        hub: Hub = app.state.hub
+        display = next((d for d in hub.hardware.to_dict()["displays"] if d["key"] == req.key), None)
+        if display is None:
+            raise HTTPException(404, "Unknown display")
+        settings.select_projector(display)
+        hub.hardware = hub.hardware  # re-apply the saved choice
         await hub.broadcast_status()
         return hub.status()
 

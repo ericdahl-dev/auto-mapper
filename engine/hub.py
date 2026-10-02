@@ -24,8 +24,8 @@ NOT_CONNECTED = "The output window is not connected. Open it fullscreen on the p
 
 class Hub:
     def __init__(self, hardware: HardwareSnapshot, settings: CameraSettings, scene: SceneStore):
-        self.hardware = hardware
         self.settings = settings
+        self.hardware = hardware
         self.scene = scene
         self.projects = None  # set by the app; status reports the open project
         self.editors: set[WebSocket] = set()
@@ -34,6 +34,15 @@ class Hub:
         self.output_fps: float | None = None
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
+
+    @property
+    def hardware(self) -> HardwareSnapshot:
+        return self._hardware
+
+    @hardware.setter
+    def hardware(self, snapshot: HardwareSnapshot) -> None:
+        snapshot.chosen = self.settings.projector()  # every probe honours the saved choice
+        self._hardware = snapshot
 
     def status(self) -> dict:
         return {

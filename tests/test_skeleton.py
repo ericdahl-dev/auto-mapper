@@ -13,7 +13,7 @@ def test_status_reports_hardware_and_no_output(rig):
     with engine(rig) as client:
         status = client.get("/api/status").json()
 
-    assert status["hardware"]["projector"] == {"name": "AML TV", "width": 1920, "height": 1080}
+    assert status["hardware"]["projector"] == {"name": "AML TV", "key": "AML TV", "width": 1920, "height": 1080}
     assert [c["name"] for c in status["hardware"]["cameras"]] == [
         "OBS Virtual Camera", "FaceTime HD Camera", "Webcam AC410", "erictest Camera"]
     assert status["hardware"]["issues"] == []
