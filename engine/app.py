@@ -385,7 +385,7 @@ def create_app(
 
     @app.post("/api/sound")
     async def set_sound(req: SoundRequest):
-        scene.set_sound(req.enabled, req.device)
+        scene.set_sound(req.enabled, req.device, req.source)
         await app.state.hub.broadcast_scene()
         return scene.sound
 

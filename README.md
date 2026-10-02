@@ -180,9 +180,9 @@ Pick an effect for the selected surface in the surface panel; its controls appea
 | **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Color, Sensitivity, Line width (1 to 8 px), Base light, Pulse |
 | **Posterize (scan)** | Flattens the real surface into a few bands of color, like a screen print | Bands (2 to 8), Dark color, Light color, Scan gain |
 | **Text** | Your text, as large as fits inside the surface (or corner-pinned to it), several lines allowed | Text, Color, Background, Font (Sans, Serif, Mono), Align, Fit (Fit inside, Map to corners), Motion (None, Scroll, Pulse), Speed, React to sound |
-| **Image / video** | An uploaded image or video, clipped to the surface's outline | Image or video (file); Fit: Cover, Stretch, Map to corners, Contain, Original size, Tile; Zoom, Pan, Rotate, Flip, Background; Video start and speed |
+| **Image / video** | An uploaded image or video, clipped to the surface's outline | Image or video (file); Fit: Cover, Stretch, Map to corners, Contain, Original size, Tile; Zoom, Pan, Rotate, Flip, Background; Video start and speed, Video sound and Volume |
 
-The three "(scan)" effects read the scan image, so they react to what is really on the surface. Image / video accepts PNG, JPEG, WebP, GIF, MP4, M4V, MOV and WebM up to 2 GB; videos loop silently from their start time.
+The three "(scan)" effects read the scan image, so they react to what is really on the surface. Image / video accepts PNG, JPEG, WebP, GIF, MP4, M4V, MOV and WebM up to 2 GB; videos loop from their start time, silently unless you turn on **Video sound** (with a Volume). Video sound plays from the output window (the projector's HDMI audio or the Mac's speakers), only in Play mode and never during Blackout. If several surfaces show the same video with sound on, it plays once, at the loudest of their volumes. Browsers hold sound back until you click the output window once; the editor tells you when that's needed.
 
 **Framing images and video.**
 
@@ -197,6 +197,8 @@ If an effect's shader fails to compile, its surface is outlined red in the edito
 ### Sound
 
 Effects can follow music. In the **Sound** panel, click **React to sound: off** to turn it on, and pick the input (the default microphone, or an audio interface). The output window does the listening, so it asks for microphone permission once; if the browser holds the sound back, click the output window once. The meter and note show what it hears, or why it can't.
+
+**React to** picks what the effects follow: the **Microphone**, or **Video sound**. Video sound analyzes the videos playing with sound directly, so the effects stay exactly in sync with the video and the mic can't pick up feedback from the speakers or room noise. Turn on Video sound for at least one playing video.
 
 Then raise **React to sound** (0 = off) on an effect:
 

@@ -125,6 +125,10 @@
         <h2>Sound</h2>
         <div class="row">
           <button id="sound-toggle" title="Effects with React to sound follow the music">React to sound: off</button>
+          <select id="sound-source" title="What sound-reactive effects follow">
+            <option value="mic">React to: Microphone</option>
+            <option value="video">React to: Video sound</option>
+          </select>
           <select id="sound-input" title="Which input the output window listens to"></select>
         </div>
         <div class="row"><meter id="sound-meter" min="0" max="100" value="0"></meter> <span id="sound-note" class="muted">Off</span></div>

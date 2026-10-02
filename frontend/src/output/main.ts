@@ -49,7 +49,7 @@ function showScene(msg: SceneMessage) {
   const changedScan = !scene || scene.scan_rev !== msg.scan_rev;
   scene = msg;
   sceneRenderer.setScene(msg);
-  void sound.set(msg.sound ?? { enabled: false, device: null });
+  void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(sceneRenderer.audibleVideos()));
   if (changedScan) {
     const img = new Image();
     img.onload = () => sceneRenderer.setScanImage(img);

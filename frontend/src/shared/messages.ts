@@ -105,7 +105,7 @@ export interface SceneMessage {
   surfaces: SceneSurface[];
   selected: number | null;
   presentation: { mode: "edit" | "play"; blackout: boolean };
-  sound?: { enabled: boolean; device: string | null };
+  sound?: { enabled: boolean; device: string | null; source?: "mic" | "video" };
   scan_rev?: string | null; // changes only when the scan data changes
 }
 

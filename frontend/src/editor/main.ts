@@ -640,6 +640,9 @@ const postSound = (body: object) =>
   void fetch("/api/sound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 soundToggle.addEventListener("click", () => postSound({ enabled: !scene?.sound?.enabled, device: soundInput.value || undefined }));
 soundInput.addEventListener("change", () => postSound({ device: soundInput.value }));
+const soundSource = $<HTMLSelectElement>("sound-source");
+// Video sound: effects follow the videos playing with sound (no mic, no feedback from the speakers).
+soundSource.addEventListener("change", () => postSound({ source: soundSource.value }));
 async function refreshSoundInputs() {
   // Same origin as the output window, so device ids match; labels appear once the mic is allowed.
   const inputs = (await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? []).filter((d) => d.kind === "audioinput");
@@ -655,6 +658,9 @@ void refreshSoundInputs();
 function renderSound() {
   const v = describeSound(scene?.sound ?? { enabled: false, device: null }, status?.output_connected ? status.output_sound ?? null : null);
   soundToggle.textContent = `React to sound: ${v.on ? "on" : "off"}`;
+  const source = scene?.sound?.source ?? "mic";
+  if (document.activeElement !== soundSource) soundSource.value = source;
+  soundInput.hidden = source === "video";
   soundToggle.classList.toggle("on", v.on);
   $<HTMLMeterElement>("sound-meter").value = v.meter;
   $("sound-note").textContent = v.note;

@@ -29,7 +29,8 @@ class SceneStore:
         # How the output presents the scene. Session state: not saved with the scene.
         self.presentation = {"mode": "edit", "blackout": False}
         # Sound-reactive effects: whether the output listens, and to which input (a browser device id).
-        self.sound = {"enabled": False, "device": None}
+        # source: "mic", or "video" to react to the playing videos' own sound (no mic, no feedback).
+        self.sound = {"enabled": False, "device": None, "source": "mic"}
 
     def _load(self) -> dict | None:
         saved = self.scan_dir / "scene.json"
@@ -226,7 +227,9 @@ class SceneStore:
         if blackout is not None:
             self.presentation["blackout"] = blackout
 
-    def set_sound(self, enabled: bool | None = None, device: str | None = None) -> None:
+    def set_sound(self, enabled: bool | None = None, device: str | None = None, source: str | None = None) -> None:
+        if source is not None:
+            self.sound["source"] = source
         if enabled is not None:
             self.sound["enabled"] = enabled
         if device is not None:

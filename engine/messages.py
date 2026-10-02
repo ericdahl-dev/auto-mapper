@@ -59,6 +59,7 @@ class ProjectSaveRequest(BaseModel):
 
 class SoundRequest(BaseModel):
     enabled: bool | None = None
+    source: Literal["mic", "video"] | None = None
     device: Annotated[str, Field(max_length=200)] | None = None
 
 

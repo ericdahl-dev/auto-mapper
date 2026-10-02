@@ -25,18 +25,18 @@ def scanned(tmp_path):
 
 def test_sound_is_off_until_turned_on(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
-        assert out.receive_json()["sound"] == {"enabled": False, "device": None}
+        assert out.receive_json()["sound"] == {"enabled": False, "device": None, "source": "mic"}
 
 
 def test_turning_sound_on_tells_the_output_which_input_to_use(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         out.receive_json()
         r = client.post("/api/sound", json={"enabled": True, "device": "usb-mic-1"})
-        assert r.json() == {"enabled": True, "device": "usb-mic-1"}
-        assert out.receive_json()["sound"] == {"enabled": True, "device": "usb-mic-1"}
+        assert r.json() == {"enabled": True, "device": "usb-mic-1", "source": "mic"}
+        assert out.receive_json()["sound"] == {"enabled": True, "device": "usb-mic-1", "source": "mic"}
 
         client.post("/api/sound", json={"enabled": False})  # device kept for next time
-        assert out.receive_json()["sound"] == {"enabled": False, "device": "usb-mic-1"}
+        assert out.receive_json()["sound"] == {"enabled": False, "device": "usb-mic-1", "source": "mic"}
 
 
 def test_editors_see_the_outputs_sound_meter_and_errors(rig, scanned):
@@ -63,3 +63,11 @@ def test_editors_learn_when_video_sound_waits_for_a_click(rig, scanned):
 
         out.send_json({"type": "output_stats", "fps": 60, "video_sound_blocked": False})
         assert ed.receive_json()["output_video_sound_blocked"] is False
+
+
+def test_effects_can_react_to_the_video_sound_instead_of_the_mic(rig, scanned):
+    with engine(rig, data_dir=scanned) as client, output(client) as out:
+        assert out.receive_json()["sound"]["source"] == "mic"
+        client.post("/api/sound", json={"enabled": True, "source": "video"})
+        assert out.receive_json()["sound"] == {"enabled": True, "device": None, "source": "video"}
+        assert client.post("/api/sound", json={"source": "radio"}).status_code == 422

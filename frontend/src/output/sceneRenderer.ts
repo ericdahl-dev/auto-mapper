@@ -171,6 +171,11 @@ export class SceneRenderer {
     this.audio = values;
   }
 
+  /** The videos currently playing with sound (for reacting to the video's sound). */
+  audibleVideos(): HTMLVideoElement[] {
+    return [...this.media.values()].flatMap((m) => (m.video && !m.video.muted ? [m.video] : []));
+  }
+
   /** A video element by file (for tests and diagnostics). */
   mediaElement(src: string): HTMLVideoElement | null {
     return this.media.get(src)?.video ?? null;
