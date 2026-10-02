@@ -32,6 +32,7 @@ export const text: Effect = {
     { name: "speed", label: "Speed", type: "number", default: 0.2, min: 0, max: 2, step: 0.01 },
     { name: "react", label: "React to sound", type: "number", default: 0, min: 0, max: 1, step: 0.01 },
   ],
+  textStyle: { font: "font", align: "align" },
   fragment: `
 void main() {
   vec2 size = max(u_textSize, vec2(1.0));

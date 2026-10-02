@@ -12,7 +12,7 @@ import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
 import { EditSession, type SurfaceEdit } from "./editSession";
 import { createEngineClient } from "./engineClient";
-import { canFrame, panAfterDrag, zoomAfterWheel } from "./framing";
+import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
 import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
 import { placeOutput } from "./screens";
@@ -205,7 +205,7 @@ function renderSurfaces() {
       poly.classList.toggle("selected", s.id === show?.selected);
       poly.classList.toggle("multi", multi.has(s.id));
       poly.classList.toggle("error", effectErrors.has(s.id));
-      if (s.id === show?.selected && canFrame(effectById(s.effect))) bindFraming(poly, s);
+      if (s.id === show?.selected && framingOf(effectById(s.effect))) bindFraming(poly, s);
       poly.addEventListener("click", (ev) => {
         ev.stopPropagation();
         if (framedJustNow) {
@@ -277,6 +277,8 @@ function renderSurfaces() {
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
 let framedJustNow = false;
 function bindFraming(poly: SVGPolygonElement, s: ShowMessage["surfaces"][number]) {
+  const effect = effectById(s.effect);
+  const f = framingOf(effect)!; // which of the effect's settings are zoom and pan
   // Always read the latest values (local edits included), so fast scrolls build on each other.
   const num = (name: string, fallback: number) => {
     const v = session.surface(s.id)?.params[name];
@@ -285,7 +287,7 @@ function bindFraming(poly: SVGPolygonElement, s: ShowMessage["surfaces"][number]
   let drag: { start: number[]; moved: boolean; pan: { panX: number; panY: number } } | null = null;
   poly.addEventListener("pointerdown", (ev) => {
     if (ev.altKey || ev.shiftKey || ev.button !== 0) return;
-    drag = { start: projectorPoint(ev), moved: false, pan: { panX: num("panX", 0), panY: num("panY", 0) } };
+    drag = { start: projectorPoint(ev), moved: false, pan: { panX: num(f.panX, 0), panY: num(f.panY, 0) } };
     session.begin();
     trackPointer(ev.pointerId, (move) => panTo(move), () => {
       if (!drag) return;
@@ -301,12 +303,13 @@ function bindFraming(poly: SVGPolygonElement, s: ShowMessage["surfaces"][number]
     const delta = [p[0] - drag.start[0], p[1] - drag.start[1]];
     if (!drag.moved && Math.hypot(delta[0], delta[1]) < 4) return; // still a click
     drag.moved = true;
-    patchSurface(s.id, { params: panAfterDrag(drag.pan, delta, s.polygon) });
+    const pan = panAfterDrag(effect, drag.pan, delta, s.polygon);
+    patchSurface(s.id, { params: { [f.panX]: pan.panX, [f.panY]: pan.panY } });
     refresh();
   };
   poly.addEventListener("wheel", (ev) => {
     ev.preventDefault();
-    patchSurface(s.id, { params: { zoom: zoomAfterWheel(num("zoom", 1), ev.deltaY) } });
+    patchSurface(s.id, { params: { [f.zoom]: zoomAfterWheel(effect, num(f.zoom, 1), ev.deltaY) } });
   }, { passive: false });
 }
 

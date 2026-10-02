@@ -1,4 +1,5 @@
 import type { Effect } from "./types";
+import { settingType } from "./settingTypes";
 
 /** Polygons with more vertices are simplified before upload (see ShowRenderer). */
 export const MAX_POLY = 256;
@@ -62,13 +63,7 @@ float polyEdge(vec2 p, out float along) {
 `;
 
 export function fragmentSource(effect: Effect): string {
-  const uniforms = effect.params
-    .map((p) => {
-      if (p.type === "media" || p.type === "text") return `uniform sampler2D u_${p.name};\nuniform vec2 u_${p.name}Size;`;
-      if (p.type === "quad") return `uniform mat3 u_${p.name};`;
-      return `uniform ${p.type === "color" ? "vec3" : "float"} u_${p.name};`;
-    })
-    .join("\n");
+  const uniforms = effect.params.map((p) => settingType(p).glsl(p)).join("\n");
   return `${PREAMBLE}${uniforms}\n${effect.fragment ?? ""}`;
 }
 

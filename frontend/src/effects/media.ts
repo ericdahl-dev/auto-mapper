@@ -40,6 +40,7 @@ export const media: Effect = {
     ] },
     { name: "volume", label: "Volume", type: "number", default: 1, min: 0, max: 1, step: 0.01 },
   ],
+  framing: { zoom: "zoom", panX: "panX", panY: "panY" },
   // Playback reads the same clamped values the shader would get (see effects/types.ts uniformsFor).
   playback: (params) => {
     const u = uniformsFor(media, params);
