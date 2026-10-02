@@ -50,4 +50,13 @@ for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-test-frame
     }),
   );
 }
+// Placeholder until the scan pipeline lands (#4); a silent enabled button is misleading.
+scan.addEventListener("click", () => {
+  const note = Object.assign(document.createElement("div"), {
+    className: "banner",
+    textContent: "Scanning is not built yet (issue #4). The button shows when the rig is ready.",
+  });
+  banners.append(note);
+  setTimeout(() => note.remove(), 5000);
+});
 render();
