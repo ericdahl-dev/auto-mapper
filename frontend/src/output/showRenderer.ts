@@ -3,9 +3,10 @@ import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
 import { type AudioValues, SILENT } from "../audio/analysis";
-import { drawText, TEXT_KEY } from "../effects/textTexture";
 import { mediaSources, textSources, type UniformValue, uniformsFor } from "../effects/types";
 import type { ShowMessage } from "../shared/messages";
+import { MediaLibrary } from "./mediaLibrary";
+import { playbackPlan } from "./playback";
 
 export interface EffectError {
   surface: number;
@@ -27,16 +28,6 @@ interface PreparedSurface {
   outlineCount: number;
   media: [string, string][]; // [param name, src] for each media param that has a file
   uniforms: Record<string, UniformValue>;
-}
-
-/** An image or video shown on surfaces; one texture per file, shared by every surface showing it. */
-interface MediaTexture {
-  texture: WebGLTexture;
-  size: [number, number]; // 0x0 until loaded
-  video: HTMLVideoElement | null;
-  uploadedFrame: number; // videos: the draw() that last uploaded a frame
-  ready: Promise<void>; // settles on load or on error
-  start: number; // videos: seconds to start from and loop back to
 }
 
 // Texture unit 0 is the scan; media params take the units after it.
@@ -62,16 +53,17 @@ export class ShowRenderer {
   private blank: WebGLTexture; // 1x1 black, for media params with no file
   private buffers: WebGLBuffer[] = [];
   private vaos: WebGLVertexArrayObject[] = [];
-  private media = new Map<string, MediaTexture>();
+  /** Images, videos and text textures, shared by every surface showing them. */
+  readonly media: MediaLibrary;
   private frame = 0;
   private audio: AudioValues = SILENT;
-  private sinkId = ""; // audio output device for video sound; "" = the system default
 
   constructor(
     private gl: WebGL2RenderingContext,
     private effects: Effect[],
     private onError: (e: EffectError) => void,
   ) {
+    this.media = new MediaLibrary(gl, FIRST_MEDIA_UNIT); // uploads never use unit 0: that holds the scan
     const solid = linkProgram(gl, VERTEX, SOLID);
     if (!solid.ok) throw new Error(solid.log);
     this.solid = solid.program;
@@ -130,179 +122,26 @@ export class ShowRenderer {
         uniforms: uniformsFor(effect, s.params, outline), // once per show update, not per frame
       };
     });
-    this.syncMedia(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
-    // Video playback settings. One element per file is shared by every surface showing it, so the
-    // first surface's speed and start win. Sound: on if any surface showing the file turns it on, at
-    // the loudest of their volumes, and only in Play mode without blackout.
-    const audible = show.presentation.mode === "play" && !show.presentation.blackout;
-    const loudest = new Map<string, number>();
-    for (const s of this.surfaces) {
-      if (s.uniforms.u_sound !== 1) continue;
-      const volume = typeof s.uniforms.u_volume === "number" ? s.uniforms.u_volume : 1;
-      for (const [, src] of s.media) loudest.set(src, Math.max(loudest.get(src) ?? 0, volume));
-    }
-    for (const [src, m] of this.media) {
-      if (!m.video) continue;
-      const volume = loudest.get(src);
-      m.video.muted = !(audible && volume !== undefined);
-      if (volume !== undefined) m.video.volume = volume;
-    }
-    const seen = new Set<string>();
-    for (const s of this.surfaces) {
-      for (const [, src] of s.media) {
-        const m = this.media.get(src);
-        if (!m?.video || seen.has(src)) continue;
-        seen.add(src);
-        const speed = typeof s.uniforms.u_speed === "number" ? s.uniforms.u_speed : 1;
-        const start = typeof s.uniforms.u_start === "number" ? s.uniforms.u_start : 0;
-        m.video.playbackRate = speed;
-        if (start !== m.start) {
-          m.start = start;
-          if (m.video.readyState >= m.video.HAVE_METADATA) m.video.currentTime = start;
-        }
-      }
-    }
+    this.media.sync(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
+    const wants = this.surfaces.flatMap((s) => {
+      const playback = s.effect.playback?.(s.params);
+      return playback ? s.media.map(([, src]) => ({ src, ...playback })) : [];
+    });
+    this.media.apply(playbackPlan(wants, show.presentation));
   }
 
-  /** Resolves once every media file the show uses has loaded (or failed to). */
   /** The latest sound values, used by every following draw. */
   setAudio(values: AudioValues) {
     this.audio = values;
   }
 
-  /** Sends video sound to an audio output device (null = the system default). Returns an error
-   *  message if that device can't be used; video sound then stays on the default. */
-  async setOutputDevice(id: string | null): Promise<string | null> {
-    this.sinkId = id ?? "";
-    const videos = [...this.media.values()].flatMap((m) => (m.video ? [m.video] : []));
-    try {
-      await Promise.all(videos.map((v) => v.setSinkId(this.sinkId)));
-      return null;
-    } catch {
-      this.sinkId = "";
-      await Promise.all(videos.map((v) => v.setSinkId("").catch(() => {})));
-      return "That sound output is not available. Pick another output.";
-    }
-  }
-
-  /** The videos currently playing with sound (for reacting to the video's sound). */
-  audibleVideos(): HTMLVideoElement[] {
-    return [...this.media.values()].flatMap((m) => (m.video && !m.video.muted ? [m.video] : []));
-  }
-
-  /** A video element by file (for tests and diagnostics). */
-  mediaElement(src: string): HTMLVideoElement | null {
-    return this.media.get(src)?.video ?? null;
-  }
-
-  /** True when a video should be heard but isn't playing: browsers pause an unmuted video until
-   *  the user clicks in the page. The output window reports this so the editor can say "click". */
-  soundBlocked(): boolean {
-    return [...this.media.values()].some((m) => m.video && !m.video.muted && m.video.paused);
-  }
-
-  /** Restarts paused videos; call from a click handler, which lets the browser allow sound. */
-  async resumeMedia(): Promise<void> {
-    await Promise.all([...this.media.values()].map((m) => m.video?.play().catch(() => {})));
-  }
-
-  /** A video's playback settings (for tests and diagnostics); null for images or unknown files. */
-  playback(src: string): { rate: number; start: number; time: number; muted: boolean; volume: number } | null {
-    const m = this.media.get(src);
-    const v = m?.video;
-    return v ? { rate: v.playbackRate, start: m.start, time: v.currentTime, muted: v.muted, volume: v.volume } : null;
-  }
-
-  async whenMediaLoaded(): Promise<void> {
-    await Promise.all([...this.media.values()].map((m) => m.ready));
-  }
-
-  private syncMedia(wanted: Set<string>) {
-    const { gl } = this;
-    for (const [src, m] of this.media) {
-      if (wanted.has(src)) continue;
-      m.video?.pause();
-      m.video?.removeAttribute("src");
-      m.video?.load(); // lets the browser drop the decoder
-      gl.deleteTexture(m.texture);
-      this.media.delete(src);
-    }
-    for (const src of wanted) {
-      if (!this.media.has(src)) this.media.set(src, this.loadMedia(src));
-    }
-  }
-
-  private loadMedia(src: string): MediaTexture {
-    const { gl } = this;
-    const texture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
-    if (src.startsWith(TEXT_KEY)) {
-      // Text: drawn now, no loading.
-      const canvas = drawText(src);
-      const m: MediaTexture = { texture, size: [canvas.width, canvas.height], video: null, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
-      gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT); // not unit 0: that holds the scan
-      this.upload(m, canvas);
-      return m;
-    }
-    const el = createMediaElement(src);
-    const video = el instanceof HTMLVideoElement ? el : null;
-    if (video && this.sinkId) void video.setSinkId(this.sinkId).catch(() => {});
-    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
-    m.ready = new Promise<void>((settle) => {
-      el.addEventListener("error", () => settle(), { once: true });
-      if (video) {
-        // Looping wraps to 0: jump to the start instead (also covers a start set before loading).
-        video.addEventListener("timeupdate", () => {
-          if (m.start > 0 && video.currentTime < m.start - 0.05) video.currentTime = m.start;
-        });
-        video.addEventListener("loadeddata", () => {
-          m.size = [video.videoWidth, video.videoHeight];
-          if (m.start > 0) {
-            // Loaded means showing the start frame: wait for the seek.
-            video.addEventListener("seeked", () => settle(), { once: true });
-            video.currentTime = m.start;
-          } else settle();
-        }, { once: true });
-        void video.play().catch(() => {}); // muted, so autoplay is allowed
-      } else {
-        el.addEventListener("load", () => {
-          const img = el as HTMLImageElement;
-          if (this.media.get(src) === m) {
-            gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT); // not unit 0: that holds the scan
-            this.upload(m, img);
-          }
-          m.size = [img.naturalWidth, img.naturalHeight];
-          settle();
-        }, { once: true });
-      }
-    });
-    return m;
-  }
-
-  private upload(m: MediaTexture, source: TexImageSource) {
-    const { gl } = this;
-    gl.bindTexture(gl.TEXTURE_2D, m.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  }
-
   private bindMedia(p: WebGLProgram, s: PreparedSurface) {
     const { gl } = this;
     s.media.forEach(([name, src], i) => {
-      const m = this.media.get(src)!;
-      const v = m.video;
-      gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT + i); // before any upload, which binds: keep unit 0 the scan
       // Videos: the current frame, uploaded once per draw however many surfaces show it.
-      if (v && m.uploadedFrame !== this.frame && v.readyState >= v.HAVE_CURRENT_DATA && v.videoWidth > 0) {
-        this.upload(m, v);
-        m.uploadedFrame = this.frame;
-      }
-      gl.bindTexture(gl.TEXTURE_2D, m.texture);
+      const size = this.media.bind(src, FIRST_MEDIA_UNIT + i, this.frame);
       gl.uniform1i(gl.getUniformLocation(p, `u_${name}`), FIRST_MEDIA_UNIT + i);
-      gl.uniform2f(gl.getUniformLocation(p, `u_${name}Size`), ...m.size);
+      gl.uniform2f(gl.getUniformLocation(p, `u_${name}Size`), ...size);
     });
     // Media params without a file still need their sampler off unit 0 (the scan): give them a black texture.
     for (const param of s.effect.params) {
@@ -429,19 +268,4 @@ export function resampleOutline(polygon: number[][], max: number): number[][] {
     out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
   }
   return out;
-}
-
-const VIDEO = /\.(mp4|m4v|mov|webm)([?#]|$)/i;
-
-/** The element that decodes a media file: a looping, muted, inline video, or an image. */
-export function createMediaElement(src: string): HTMLImageElement | HTMLVideoElement {
-  if (VIDEO.test(src) || src.startsWith("data:video/")) {
-    const video = document.createElement("video");
-    Object.assign(video, { muted: true, loop: true, playsInline: true, autoplay: true, preload: "auto" });
-    video.src = src;
-    return video;
-  }
-  const img = new Image();
-  img.src = src;
-  return img;
 }

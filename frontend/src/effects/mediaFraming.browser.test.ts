@@ -28,7 +28,7 @@ async function render(params: Record<string, unknown>) {
     surfaces: [{ id: 1, polygon: SQUARE, area: 576, effect: "media", params: { src: stripes(), ...params } }],
   };
   r.setShow(show);
-  await r.whenMediaLoaded();
+  await r.media.whenLoaded();
   r.draw(0);
   expect(errors).toEqual([]);
   return (x: number, y: number) => {

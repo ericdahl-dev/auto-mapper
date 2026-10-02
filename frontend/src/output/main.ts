@@ -38,7 +38,7 @@ function loop() {
       type: "output_stats",
       fps: (frames * 1000) / (now - statsFrom),
       sound: sound.status(),
-      video_sound_blocked: showRenderer.soundBlocked(),
+      video_sound_blocked: showRenderer.media.soundBlocked(),
       sound_output_error: soundOutputError,
     });
     frames = 0;
@@ -52,11 +52,11 @@ function applyShow(msg: ShowMessage) {
   const changedScan = !show || show.scan_rev !== msg.scan_rev;
   show = msg;
   showRenderer.setShow(msg);
-  void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(showRenderer.audibleVideos()));
+  void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(showRenderer.media.audibleVideos()));
   const output = msg.sound?.output ?? null;
   if (output !== soundOutput) {
     soundOutput = output; // both paths: plain video elements, and video sound routed through Web Audio
-    void Promise.all([showRenderer.setOutputDevice(output), setVideoSoundOutput(output)]).then(([a, b]) => {
+    void Promise.all([showRenderer.media.setOutputDevice(output), setVideoSoundOutput(output)]).then(([a, b]) => {
       soundOutputError = a ?? b;
     });
   }
@@ -112,7 +112,7 @@ document.addEventListener("fullscreenchange", syncHint);
 document.addEventListener("click", () => {
   if (!document.fullscreenElement) void document.documentElement.requestFullscreen();
   void sound.resume(); // browsers may hold audio until a click in the page
-  void showRenderer.resumeMedia(); // ...and pause unmuted videos until then
+  void showRenderer.media.resume(); // ...and pause unmuted videos until then
 });
 syncHint();
 bindPresentationKeys(() => show?.presentation.mode ?? "edit");

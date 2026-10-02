@@ -35,7 +35,7 @@ async function render(params: Record<string, unknown>) {
     surfaces: [{ id: 1, polygon: SLANT, area: 1120, effect: "media", params }],
   };
   r.setShow(show);
-  await r.whenMediaLoaded();
+  await r.media.whenLoaded();
   r.draw(0);
   const name = (x: number, y: number) => {
     const p = new Uint8Array(4);

@@ -1,4 +1,4 @@
-import type { Effect } from "./types";
+import { type Effect, uniformsFor } from "./types";
 
 /** An uploaded image or video, clipped to the surface's outline. Cover, Stretch, Contain, Original size
  *  and Tile place it in the surface's bounding box; Map to corners warps it onto the surface's four
@@ -40,6 +40,11 @@ export const media: Effect = {
     ] },
     { name: "volume", label: "Volume", type: "number", default: 1, min: 0, max: 1, step: 0.01 },
   ],
+  // Playback reads the same clamped values the shader would get (see effects/types.ts uniformsFor).
+  playback: (params) => {
+    const u = uniformsFor(media, params);
+    return { rate: u.u_speed as number, start: u.u_start as number, sound: u.u_sound === 1, volume: u.u_volume as number };
+  },
   fragment: `
 // Zoom, pan and rotate a point p centered on 0 (-0.5..0.5 across the space), in a space of the given
 // width/height, so rotation doesn't shear. Returns where in that space to sample.

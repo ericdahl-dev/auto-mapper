@@ -17,7 +17,7 @@ async function renderer(msg: ShowMessage) {
   const canvas = Object.assign(document.createElement("canvas"), { width: 32, height: 8 });
   const r = new ShowRenderer(canvas.getContext("webgl2")!, EFFECTS, () => {});
   r.setShow(msg);
-  await r.whenMediaLoaded();
+  await r.media.whenLoaded();
   return r;
 }
 
@@ -26,56 +26,56 @@ const PLAY = { mode: "play", blackout: false } as const;
 describe("video sound", () => {
   it("is off by default: videos stay muted, so existing projects stay silent", async () => {
     const r = await renderer(show(PLAY, {}));
-    expect(r.playback(toneVideo)).toMatchObject({ muted: true });
+    expect(r.media.playback(toneVideo)).toMatchObject({ muted: true });
   });
 
   it("plays at the chosen volume in Play mode when the surface turns sound on", async () => {
     const r = await renderer(show(PLAY, { sound: "on", volume: 0.4 }));
-    expect(r.playback(toneVideo)).toMatchObject({ muted: false, volume: 0.4 });
+    expect(r.media.playback(toneVideo)).toMatchObject({ muted: false, volume: 0.4 });
   });
 
   it("is muted while editing and during blackout", async () => {
     const r = await renderer(show({ mode: "edit", blackout: false }, { sound: "on" }));
-    expect(r.playback(toneVideo)).toMatchObject({ muted: true });
+    expect(r.media.playback(toneVideo)).toMatchObject({ muted: true });
     r.setShow(show({ mode: "play", blackout: true }, { sound: "on" }));
-    expect(r.playback(toneVideo)).toMatchObject({ muted: true });
+    expect(r.media.playback(toneVideo)).toMatchObject({ muted: true });
     r.setShow(show(PLAY, { sound: "on" }));
-    expect(r.playback(toneVideo)).toMatchObject({ muted: false });
+    expect(r.media.playback(toneVideo)).toMatchObject({ muted: false });
   });
 
   it("plays a shared video once, at the loudest volume among the surfaces with sound on", async () => {
     const r = await renderer(show(PLAY, { sound: "on", volume: 0.3 }, { sound: "on", volume: 0.8 }, { volume: 1 }));
-    expect(r.playback(toneVideo)).toMatchObject({ muted: false, volume: 0.8 });
+    expect(r.media.playback(toneVideo)).toMatchObject({ muted: false, volume: 0.8 });
   });
 });
 
 describe("when the browser holds sound back until a click", () => {
   it("reports a video that should be audible but isn't playing, and a click resumes it", async () => {
     const r = await renderer(show(PLAY, { sound: "on" }));
-    expect(r.soundBlocked()).toBe(false);
-    r.mediaElement(toneVideo)!.pause(); // what the browser does to an unmuted autoplay without a click
-    expect(r.soundBlocked()).toBe(true);
-    await r.resumeMedia(); // called from the output window's click handler
-    expect(r.soundBlocked()).toBe(false);
+    expect(r.media.soundBlocked()).toBe(false);
+    r.media.element(toneVideo)!.pause(); // what the browser does to an unmuted autoplay without a click
+    expect(r.media.soundBlocked()).toBe(true);
+    await r.media.resume(); // called from the output window's click handler
+    expect(r.media.soundBlocked()).toBe(false);
   });
 
   it("doesn't count muted videos", async () => {
     const r = await renderer(show(PLAY, {}));
-    r.mediaElement(toneVideo)!.pause();
-    expect(r.soundBlocked()).toBe(false);
+    r.media.element(toneVideo)!.pause();
+    expect(r.media.soundBlocked()).toBe(false);
   });
 });
 
 describe("sound output device", () => {
   it("plays through the system default unless told otherwise", async () => {
     const r = await renderer(show(PLAY, { sound: "on" }));
-    expect(await r.setOutputDevice(null)).toBeNull();
-    expect(r.mediaElement(toneVideo)!.sinkId).toBe("");
+    expect(await r.media.setOutputDevice(null)).toBeNull();
+    expect(r.media.element(toneVideo)!.sinkId).toBe("");
   });
 
   it("reports a device that isn't available and keeps playing through the default", async () => {
     const r = await renderer(show(PLAY, { sound: "on" }));
-    expect(await r.setOutputDevice("no-such-device")).toMatch(/not available/i);
-    expect(r.mediaElement(toneVideo)!.sinkId).toBe("");
+    expect(await r.media.setOutputDevice("no-such-device")).toMatch(/not available/i);
+    expect(r.media.element(toneVideo)!.sinkId).toBe("");
   });
 });

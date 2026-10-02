@@ -24,6 +24,8 @@ export interface Effect {
   id: string;
   name: string;
   params: ParamSchema[];
+  /** For effects that play video: what the surface's settings mean for playback (see output/playback.ts). */
+  playback?: (params: Record<string, unknown>) => { rate: number; start: number; sound: boolean; volume: number };
   /** Fragment shader body. The shared preamble (see compile.ts) is prepended. null = draw nothing. */
   fragment: string | null;
 }
