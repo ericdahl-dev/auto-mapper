@@ -10,6 +10,7 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
+import { movePin, pinHandles } from "./pin";
 import { placeOutput } from "./screens";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
@@ -271,10 +272,63 @@ function renderSurfaces() {
       }
       return parts;
     }),
+    ...pinElements(r),
     ...draftElements(),
   );
   renderPanel();
   renderPresentation();
+}
+
+// Corner pin being dragged: shown from here until the engine's scene update arrives.
+let pinDrag: { id: number; name: string; corners: number[][]; index: number } | null = null;
+
+/** Orange diamonds (and a dashed quad) for the selected surface's corner pin, when its effect uses one.
+ *  Drag a corner to pin it; Alt-click any corner to go back to the outline's own corners. */
+function pinElements(r: number): SVGElement[] {
+  const s = scene?.surfaces.find((x) => x.id === scene?.selected);
+  if (!s) return [];
+  const pin = pinHandles(effectById(s.effect), s.params, s.polygon);
+  if (!pin) return [];
+  const corners = pinDrag?.id === s.id ? pinDrag.corners : pin.corners;
+  const quad = document.createElementNS(SVG_NS, "polygon");
+  quad.classList.add("pin");
+  quad.setAttribute("points", corners.map(([x, y]) => `${x},${y}`).join(" "));
+  const handles = corners.map(([x, y], index) => {
+    const d = document.createElementNS(SVG_NS, "rect");
+    d.classList.add("handle", "pin");
+    Object.entries({ x: x - r, y: y - r, width: 2 * r, height: 2 * r, transform: `rotate(45 ${x} ${y})` })
+      .forEach(([k, v]) => d.setAttribute(k, String(v)));
+    d.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (ev.altKey) patchSurface(s.id, { params: { [pin.name]: null } });
+    });
+    d.addEventListener("pointerdown", (ev) => {
+      if (ev.altKey) return;
+      ev.stopPropagation();
+      d.setPointerCapture(ev.pointerId);
+      pinDrag = { id: s.id, name: pin.name, corners: pin.corners, index };
+    });
+    d.addEventListener("pointermove", (ev) => {
+      if (!pinDrag || pinDrag.index !== index) return;
+      pinDrag.corners = movePin(pinDrag.corners, index, projectorPoint(ev));
+      const { id, name, corners: next } = pinDrag;
+      cancelAnimationFrame(patchFrame); // at most one PATCH per frame, so the projector follows the drag
+      patchFrame = requestAnimationFrame(() => patchSurface(id, { params: { [name]: next } }));
+      renderSurfaces();
+    });
+    d.addEventListener("pointerup", () => {
+      if (!pinDrag) return;
+      patchSurface(pinDrag.id, { params: { [pinDrag.name]: pinDrag.corners } });
+      pinDrag = null;
+      if (pendingScene) {
+        scene = pendingScene;
+        pendingScene = null;
+      }
+      renderSurfaces();
+    });
+    return d;
+  });
+  return [quad, ...handles];
 }
 
 /** Anchor squares, control circles and tangent lines for a Bezier outline. */
@@ -538,7 +592,7 @@ connect({
       render();
       renderScan();
     } else if (msg.type === "scene") {
-      if (dragging) {
+      if (dragging || pinDrag) {
         pendingScene = msg; // don't rebuild the handles under the cursor
         return;
       }

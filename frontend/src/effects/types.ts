@@ -13,7 +13,8 @@ export type ParamSchema =
   // A corner pin: 4 points (TL, TR, BR, BL) in projector pixels, edited on the surface itself, not in the
   // panel. Unset = the outline's own corners. The shader gets `mat3 u_<name>` taking projector pixels
   // (v_pos) to the pinned quad's 0..1 square (divide xy by z).
-  | { name: string; label: string; type: "quad" };
+  // `when` limits the on-surface handles to some values of other params, e.g. { fit: "corners" }.
+  | { name: string; label: string; type: "quad"; when?: Record<string, string> };
 
 export interface Effect {
   id: string;

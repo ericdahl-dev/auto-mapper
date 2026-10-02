@@ -20,7 +20,7 @@ describe("controlsFor", () => {
       { name: "src", label: "Image or video", kind: "media", value: "/api/media/wall-0123456789ab.png" },
       { name: "fit", label: "Fit", kind: "select", value: "cover", options: [
         { value: "cover", label: "Cover" },
-        { value: "stretch", label: "Stretch" },
+        { value: "stretch", label: "Stretch" }, { value: "corners", label: "Map to corners" },
       ] },
     ]);
     expect(controlsFor(effectById("media"), {})[0].value).toBe("");

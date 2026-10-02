@@ -13,7 +13,7 @@ export const media: Effect = {
       { value: "stretch", label: "Stretch" },
       { value: "corners", label: "Map to corners" },
     ] },
-    { name: "corners", label: "Corners", type: "quad" },
+    { name: "corners", label: "Corners", type: "quad", when: { fit: "corners" } },
   ],
   fragment: `
 void main() {
