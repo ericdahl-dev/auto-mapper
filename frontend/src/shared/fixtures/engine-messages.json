@@ -1,0 +1,256 @@
+{
+  "effect_error": {
+    "effect": "fill",
+    "log": "ERROR: 0:1: oops",
+    "surface": 1,
+    "type": "effect_error"
+  },
+  "scan_progress": {
+    "done": 1,
+    "total": 34,
+    "type": "scan_progress"
+  },
+  "scan_reload": {
+    "type": "scan_reload"
+  },
+  "scan_result": {
+    "bit_reliability": {
+      "x": {
+        "0": 0.9999026550826215,
+        "1": 0.9999269913119662,
+        "2": 0.9999026550826215,
+        "3": 0.9999026550826215,
+        "4": 0.9999026550826215,
+        "5": 0.9999026550826215,
+        "6": 0.9999026550826215,
+        "7": 0.9999026550826215
+      },
+      "y": {
+        "0": 0.9999026550826215,
+        "1": 0.9999269913119662,
+        "2": 0.9999026550826215,
+        "3": 0.9999026550826215,
+        "4": 0.9999026550826215,
+        "5": 0.9999026550826215,
+        "6": 0.9999026550826215,
+        "7": 0.9999026550826215
+      }
+    },
+    "coverage": 0.9913194444444444,
+    "height": 144,
+    "image": "/api/scan/latest.png?t=0",
+    "seconds": 0.0,
+    "surfaces": [
+      {
+        "area": 36465.0,
+        "polygon": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            143
+          ],
+          [
+            255,
+            143
+          ],
+          [
+            255,
+            0
+          ]
+        ]
+      },
+      {
+        "area": 2866.0,
+        "polygon": [
+          [
+            184,
+            76
+          ],
+          [
+            171,
+            82
+          ],
+          [
+            172,
+            119
+          ],
+          [
+            176,
+            126
+          ],
+          [
+            208,
+            127
+          ],
+          [
+            231,
+            122
+          ],
+          [
+            232,
+            94
+          ],
+          [
+            227,
+            77
+          ]
+        ]
+      }
+    ],
+    "type": "scan_result",
+    "warnings": [],
+    "width": 256
+  },
+  "scan_started": {
+    "type": "scan_started"
+  },
+  "show": {
+    "height": 144,
+    "presentation": {
+      "blackout": false,
+      "mode": "edit"
+    },
+    "scan_rev": "0",
+    "selected": null,
+    "sound": {
+      "device": null,
+      "enabled": false,
+      "output": null,
+      "source": "mic"
+    },
+    "surfaces": [
+      {
+        "area": 36465.0,
+        "effect": "none",
+        "id": 1,
+        "name": "Surface 1",
+        "params": {},
+        "polygon": [
+          [
+            0,
+            0
+          ],
+          [
+            0,
+            143
+          ],
+          [
+            255,
+            143
+          ],
+          [
+            255,
+            0
+          ]
+        ],
+        "source": "detected"
+      },
+      {
+        "area": 2866.0,
+        "effect": "none",
+        "id": 2,
+        "name": "Surface 2",
+        "params": {},
+        "polygon": [
+          [
+            184,
+            76
+          ],
+          [
+            171,
+            82
+          ],
+          [
+            172,
+            119
+          ],
+          [
+            176,
+            126
+          ],
+          [
+            208,
+            127
+          ],
+          [
+            231,
+            122
+          ],
+          [
+            232,
+            94
+          ],
+          [
+            227,
+            77
+          ]
+        ],
+        "source": "detected"
+      }
+    ],
+    "type": "show",
+    "width": 256
+  },
+  "show_pattern": {
+    "pattern": {
+      "kind": "white"
+    },
+    "seq": 1,
+    "type": "show_pattern"
+  },
+  "show_test_frame": {
+    "kind": "grid",
+    "type": "show_test_frame"
+  },
+  "status": {
+    "camera": {
+      "calibration": null,
+      "selected": "0x2110000f1311306"
+    },
+    "can_scan": false,
+    "hardware": {
+      "cameras": [
+        {
+          "device_type": "external",
+          "name": "Webcam AC410",
+          "unique_id": "0x2110000f1311306"
+        }
+      ],
+      "displays": [
+        {
+          "height": 2234,
+          "key": "Color LCD",
+          "main": true,
+          "name": "Color LCD",
+          "width": 3456
+        },
+        {
+          "height": 144,
+          "key": "AML TV",
+          "main": false,
+          "name": "AML TV",
+          "width": 256
+        }
+      ],
+      "issues": [],
+      "projector": {
+        "height": 144,
+        "key": "AML TV",
+        "name": "AML TV",
+        "width": 256
+      },
+      "projector_missing": null
+    },
+    "output_connected": false,
+    "output_fps": null,
+    "output_resolution": null,
+    "output_sound": null,
+    "output_sound_output_error": null,
+    "output_video_sound_blocked": false,
+    "project": null,
+    "type": "status"
+  }
+}

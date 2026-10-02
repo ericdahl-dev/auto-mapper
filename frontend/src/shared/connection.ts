@@ -1,7 +1,7 @@
-import { type ClientHello, type ServerMessage, parseServerMessage } from "./messages";
+import { type ClientHello, type ClientMessage, type ServerMessage, parseServerMessage } from "./messages";
 
 export interface Connection {
-  send(msg: object): void;
+  send(msg: ClientMessage): void;
 }
 
 /** Connects to the engine WebSocket, sends hello on every (re)connect, and retries forever. */

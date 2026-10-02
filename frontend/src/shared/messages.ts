@@ -146,6 +146,33 @@ export type ClientHello =
   | { type: "hello"; role: "editor" }
   | { type: "hello"; role: "output"; width: number; height: number };
 
+/** Everything the browser sends the engine. Mirrors engine/messages.py (Hello, OutputMessage). */
+export type ClientMessage =
+  | ClientHello
+  | { type: "pattern_shown"; seq: number }
+  | {
+      type: "output_stats";
+      fps?: number;
+      sound?: { level: number; error: string | null };
+      video_sound_blocked?: boolean;
+      sound_output_error?: string | null;
+    }
+  | { type: "effect_error"; surface: number; effect: string; log: string };
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** The fields the Editor and output window read from a status message. */
+function isStatus(m: Record<string, unknown>): boolean {
+  const hw = m.hardware;
+  return typeof m.can_scan === "boolean" && typeof m.output_connected === "boolean" && isObject(m.camera)
+    && isObject(hw) && Array.isArray(hw.cameras) && Array.isArray(hw.displays) && Array.isArray(hw.issues);
+}
+
+function isShowSurface(s: unknown): boolean {
+  return isObject(s) && typeof s.id === "number" && typeof s.effect === "string" && isObject(s.params)
+    && Array.isArray(s.polygon) && s.polygon.every((p) => Array.isArray(p) && p.length === 2);
+}
+
 export function parseServerMessage(raw: string): ServerMessage | null {
   let msg: unknown;
   try {
@@ -157,7 +184,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
   const m = msg as Record<string, unknown>;
   switch (m.type) {
     case "status":
-      return typeof m.can_scan === "boolean" && typeof m.hardware === "object" ? (m as unknown as StatusMessage) : null;
+      return isStatus(m) ? (m as unknown as StatusMessage) : null;
     case "show_test_frame":
       return TEST_FRAME_KINDS.includes(m.kind as TestFrameKind) ? (m as unknown as ShowTestFrameMessage) : null;
     case "show_pattern":
@@ -174,6 +201,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return { type: "scan_canceled" };
     case "show":
       return typeof m.width === "number" && typeof m.height === "number" && Array.isArray(m.surfaces)
+        && m.surfaces.every(isShowSurface) && typeof m.presentation === "object" && m.presentation !== null
         ? (m as unknown as ShowMessage)
         : null;
     case "scan_reload":

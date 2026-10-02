@@ -2,12 +2,18 @@
 
 import asyncio
 import itertools
+import logging
 
 from fastapi import WebSocket
+from pydantic import ValidationError
 
 from engine.cameras import CameraSettings
 from engine.hardware import HardwareSnapshot
+from engine.messages import EngineMessage
 from engine.show import CurrentShow
+
+
+log = logging.getLogger(__name__)
 
 
 class OutputNotResponding(Exception):
@@ -166,6 +172,10 @@ class Hub:
                 self.editors.discard(ws)
 
     async def _send(self, ws: WebSocket, msg: dict) -> bool:
+        try:
+            EngineMessage.validate_python(msg)
+        except ValidationError as e:  # an engine bug; the contract test (test_message_contract) catches it
+            log.error("engine message %r doesn't match its model: %s", msg.get("type"), e.errors()[:2])
         try:
             await ws.send_json(msg)
             return True
