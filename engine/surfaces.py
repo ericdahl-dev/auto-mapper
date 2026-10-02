@@ -17,9 +17,9 @@ DEPTH_JUMP_FACTOR = 3.0  # a camera step this many times the typical one is a de
 DEPTH_JUMP_MIN = 2.5  # camera px; ignore jumps smaller than this whatever the median
 DEPTH_HYSTERESIS = 0.6  # weaker jumps count if connected to a strong one
 FILL_SIGMA = 1.5  # projector px; spreads sparse camera samples across empty projector pixels
-CANNY_LOW, CANNY_HIGH = 30, 90
-BLUR_PX = 5  # smooth speckle before colour edges
-EDGE_DILATE_PX = 3
+CANNY_LOW, CANNY_HIGH = 6, 16  # tuned on the rig: a light box against a light wall is subtle
+BLUR_PX = 3  # smooth speckle before colour edges
+EDGE_DILATE_PX = 7  # tuned on the rig: bridges gaps in faint colour edges
 MIN_AREA_FRACTION = 0.003  # of the projector area
 SIMPLIFY_FRACTION = 0.005  # polygon tolerance, as a fraction of its perimeter
 
@@ -42,6 +42,8 @@ def depth_edges(decoded: DecodeResult) -> np.ndarray:
     den = cv2.GaussianBlur(counts, (0, 0), FILL_SIGMA)
     seen = den > 0.2
     cam = [np.where(seen, cv2.GaussianBlur(sums[i], (0, 0), FILL_SIGMA) / np.maximum(den, 1e-6), 0) for i in (0, 1)]
+    # Isolated decode errors look like jumps too; a median removes them but keeps real steps.
+    cam = [cv2.medianBlur(c.astype(np.float32), 5) for c in cam]
 
     step = np.zeros((h, w), np.float32)
     ok = np.zeros((h, w), bool)
