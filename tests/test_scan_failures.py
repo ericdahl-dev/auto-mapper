@@ -139,3 +139,27 @@ def test_good_scan_has_no_warnings_and_serves_a_coverage_mask(tmp_path):
     img = cv2.imdecode(np.frombuffer(mask.content, np.uint8), cv2.IMREAD_GRAYSCALE)
     assert img.shape == (H, W)
     assert (img > 0).mean() > 0.9  # white where decoded
+
+
+def test_averaging_frames_per_pattern_reads_a_noisy_scene_better(tmp_path):
+    def mean_reliability(frames, d):
+        # Dim, like the rig at its light limit: the stripe signal is close to the noise.
+        scene, uvc, hw, cams = make_rig(power=0.15, noise=8.0)
+        with engine(hw, data_dir=d, camera_factory=cams, uvc_factory=lambda a: uvc,
+                    scan_frames_per_pattern=frames) as client, editor(client) as ed, output(client, W, H) as out:
+            client.app.state.hub.settings.save_calibration(AC410["unique_id"], {"exposure": 200, "gain": 0, "p99": 200})
+            client.post("/api/scan")
+            while True:
+                msg = out.receive_json()
+                if msg["type"] == "show_test_frame" and msg["kind"] == "black":
+                    break
+                if msg["type"] == "show_pattern":
+                    scene.pattern = msg["pattern"]
+                    out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+            done = until_done(ed)
+        bits = done["bit_reliability"]
+        return np.mean([v for axis in bits.values() for v in axis.values()])
+
+    single = mean_reliability(1, tmp_path / "one")
+    averaged = mean_reliability(4, tmp_path / "four")
+    assert averaged > single + 0.03

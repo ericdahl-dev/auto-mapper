@@ -96,7 +96,7 @@ describe("project label", () => {
 
 describe("calibration at the camera's limit", () => {
   it("says so when exposure and gain are both maxed out", () => {
-    const view = describeStatus(status({ camera: { selected: AC410.unique_id, calibration: { exposure: 330, gain: 15, p99: 120 } } }));
-    expect(view.calibration).toBe("Exposure 330, gain 15 (white frame peak 120) - camera at its light limit");
+    const view = describeStatus(status({ camera: { selected: AC410.unique_id, calibration: { exposure: 1000, gain: 15, p99: 120 } } }));
+    expect(view.calibration).toBe("Exposure 1000, gain 15 (white frame peak 120) - camera at its light limit");
   });
 });

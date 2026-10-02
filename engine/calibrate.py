@@ -6,9 +6,10 @@ import numpy as np
 
 from engine.camera_lock import Uvc
 
-# Exposure is in 100 µs units. Longer than one frame (~33 ms at 30 fps) can stall or be
-# clamped by the camera, so the search stays within one frame period.
-MAX_EXPOSURE = 330
+# Exposure is in 100 µs units. Exposures longer than a frame slow the camera down (100 ms
+# ~ 10 fps) but brighten without the noise that gain adds; scans don't need speed.
+# Measured on the AC410 at 4K: 100 ms at gain 0 was as bright as 33 ms at gain 15.
+MAX_EXPOSURE = 1000
 CLIP_LEVEL = 250  # 99th-percentile brightness at or above this counts as clipped
 MIN_RESPONSE = 10  # brightness must move at least this much across the exposure range
 STALE_FRAMES = 2  # frames captured before the new exposure took effect

@@ -54,6 +54,7 @@ def create_app(
     # patterns (coverage 0.61 vs 0.88 with these values, same scene).
     scan_settle_seconds: float = 0.2,
     scan_drop_frames: int = 5,
+    scan_frames_per_pattern: int = 3,  # quality over speed: average out sensor noise
     ack_timeout: float = 2.0,
     capture_size: tuple[int, int] = CAPTURE_SIZE,
 ) -> FastAPI:
@@ -204,6 +205,7 @@ def create_app(
                     settle_seconds=scan_settle_seconds,
                     drop_frames=scan_drop_frames,
                     cancelled=cancel_scan.is_set,
+                    frames_per_pattern=scan_frames_per_pattern,
                 )
 
             try:
