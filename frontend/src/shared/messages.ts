@@ -5,8 +5,13 @@ export const TEST_FRAME_KINDS: readonly TestFrameKind[] = ["white", "black", "gr
 
 export interface Projector {
   name: string;
+  key: string;
   width: number;
   height: number;
+}
+
+export interface DisplayInfo extends Projector {
+  main: boolean;
 }
 
 export type HardwareIssue = "no_projector" | "no_camera";
@@ -25,7 +30,14 @@ export interface Calibration {
 
 export interface StatusMessage {
   type: "status";
-  hardware: { projector: Projector | null; cameras: CameraInfo[]; issues: HardwareIssue[] };
+  hardware: {
+    projector: Projector | null;
+    /** Name of the chosen projector when it isn't plugged in (another display is used). */
+    projector_missing: string | null;
+    displays: DisplayInfo[];
+    cameras: CameraInfo[];
+    issues: HardwareIssue[];
+  };
   output_connected: boolean;
   output_resolution: { width: number; height: number } | null;
   output_fps?: number | null;

@@ -10,11 +10,11 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
-import { cameraOptions, describeStatus } from "./statusView";
+import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const banners = $("banners");
-const projector = $("projector");
+const projectorSelect = $<HTMLSelectElement>("projector-select");
 const output = $("output");
 const cameras = $("cameras");
 const scan = $<HTMLButtonElement>("scan");
@@ -502,7 +502,9 @@ function render() {
   banners.replaceChildren(
     ...view.banners.map((text) => Object.assign(document.createElement("div"), { className: "banner", textContent: text })),
   );
-  projector.textContent = view.projector;
+  projectorSelect.replaceChildren(
+    ...projectorOptions(status).map((o) => Object.assign(document.createElement("option"), o)),
+  );
   output.textContent = view.output;
   output.className = status?.output_connected ? "ok" : "bad";
   cameras.textContent = view.cameras;
@@ -599,6 +601,14 @@ projectSave.addEventListener("click", async () => {
   notice(r.ok ? `Saved "${name}".` : `Cannot save: ${(await r.json()).detail}`);
   void refreshProjects();
 });
+
+projectorSelect.addEventListener("change", () =>
+  void fetch("/api/projector", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key: projectorSelect.value }),
+  }),
+);
 
 cameraSelect.addEventListener("change", () =>
   void fetch("/api/camera", {

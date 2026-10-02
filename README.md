@@ -29,7 +29,7 @@ Once the scan is done, everything lives in projector coordinates, so playback an
 | Part | Requirement |
 |------|-------------|
 | Computer | A Mac. The hardware probe uses `system_profiler` and AVFoundation (through pyobjc), and camera control uses `uvc-util`, so it is macOS-only today. |
-| Projector | Any projector connected as an **extended** display, not mirrored. The engine treats the first non-main display as the projector. |
+| Projector | Any projector connected as an **extended** display, not mirrored. By default the first non-main display is the projector; with several monitors, pick it in the editor's **Projector** dropdown. |
 | Camera | A **UVC USB webcam** that allows manual exposure, white balance and focus. |
 
 **UVC** (USB Video Class) is the standard protocol most USB webcams speak, and it lets software set the camera's exposure, gain, white balance and focus directly.
@@ -91,7 +91,7 @@ Everything is plain files under `~/.auto-mapper/`:
 
 ```
 ~/.auto-mapper/
-├── settings.json          selected camera, plus each camera's exposure calibration
+├── settings.json          selected camera and projector, plus each camera's exposure calibration
 ├── active-project.json    name and slug of the project last saved or opened
 ├── camera-restore.json    only while calibration or a scan has the camera locked (or after one
 │                          crashed): the camera's original settings, restored automatically
@@ -113,7 +113,7 @@ Everything is plain files under `~/.auto-mapper/`:
 
 Click **Open output window** in the editor. Drag the new window onto the projector and click inside it to go fullscreen (browsers only allow fullscreen from a click, so the app can't do this for you). The setup hint ("Drag this window onto the projector, then click to go fullscreen.") disappears once the window fills the screen, so it is never projected over the patterns.
 
-The editor's **Hardware** panel shows the projector, the cameras, whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
+The editor's **Hardware** panel shows the projector (a dropdown: with more than one external monitor, pick the one that is the projector; the choice is remembered, and if that display is unplugged the editor says so and falls back to the first non-main display), the cameras, whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
 
 The **Test frame** buttons (Grid, White, Black) put a test image on the projector, which helps with aiming and focusing.
 
@@ -374,7 +374,6 @@ Effect ids are stored in each project's `scene.json`, so don't rename an existin
 
 - **macOS only.** Hardware detection and camera control depend on `system_profiler`, AVFoundation and `uvc-util`.
 - **One projector.** A scene maps a single projector.
-- **Multi-monitor setups may pick the wrong display.** The first non-main display is assumed to be the projector ([#40](https://github.com/ericdahl-dev/auto-mapper/issues/40)).
 - **iPhone LiDAR depth** as an extra source for plane-based surface detection is an open idea ([#22](https://github.com/ericdahl-dev/auto-mapper/issues/22)).
 - **Real-rig validation** of scanning and detection, with a committed scan check and fixture, is in progress ([#15](https://github.com/ericdahl-dev/auto-mapper/issues/15)).
 

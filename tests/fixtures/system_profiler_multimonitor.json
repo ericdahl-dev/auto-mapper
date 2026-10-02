@@ -1,0 +1,34 @@
+{
+  "SPDisplaysDataType": [
+    {
+      "_name": "Apple M2 Max",
+      "spdisplays_ndrvs": [
+        {
+          "_name": "Thunderbolt Display",
+          "_spdisplays_display-product-id": "9227",
+          "_spdisplays_display-serial-number": "16200ddf",
+          "_spdisplays_display-vendor-id": "610",
+          "_spdisplays_pixels": "2560 x 1440",
+          "_spdisplays_resolution": "2560 x 1440 @ 60.00Hz",
+          "spdisplays_main": "spdisplays_yes"
+        },
+        {
+          "_name": "Color LCD",
+          "_spdisplays_display-product-id": "a050",
+          "_spdisplays_display-serial-number": "fd626d62",
+          "_spdisplays_display-vendor-id": "610",
+          "_spdisplays_pixels": "3456 x 2234",
+          "_spdisplays_resolution": "1728 x 1117 @ 120.00Hz"
+        },
+        {
+          "_name": "P24q-10",
+          "_spdisplays_display-product-id": "61a5",
+          "_spdisplays_display-serial-number": "1010101",
+          "_spdisplays_display-vendor-id": "30ae",
+          "_spdisplays_pixels": "1440 x 2560",
+          "_spdisplays_resolution": "1440 x 2560 @ 60.00Hz"
+        }
+      ]
+    }
+  ]
+}

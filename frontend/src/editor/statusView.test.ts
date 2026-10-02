@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CameraInfo, StatusMessage } from "../shared/messages";
-import { cameraOptions, describeStatus } from "./statusView";
+import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
 const AC410: CameraInfo = { name: "Webcam AC410", unique_id: "0x2110000f1311306", device_type: "external" };
 const FACETIME: CameraInfo = { name: "FaceTime HD Camera", unique_id: "3F45E80A", device_type: "builtin" };
@@ -9,7 +9,12 @@ function status(over: Partial<StatusMessage> = {}, issues: StatusMessage["hardwa
   return {
     type: "status",
     hardware: {
-      projector: issues.includes("no_projector") ? null : { name: "AML TV", width: 1920, height: 1080 },
+      projector: issues.includes("no_projector") ? null : { name: "AML TV", key: "aml", width: 1920, height: 1080 },
+      projector_missing: null,
+      displays: [
+        { name: "Color LCD", key: "lcd", width: 3456, height: 2234, main: true },
+        { name: "AML TV", key: "aml", width: 1920, height: 1080, main: false },
+      ],
       cameras: issues.includes("no_camera") ? [] : [FACETIME, AC410],
       issues,
     },
@@ -105,5 +110,22 @@ describe("camera list", () => {
   it("names the cameras rather than printing objects", () => {
     expect(describeStatus(status()).cameras).toBe("FaceTime HD Camera, Webcam AC410");
     expect(describeStatus(status({}, ["no_camera"])).cameras).toBe("None");
+  });
+});
+
+describe("projectorOptions", () => {
+  it("lists every display with its size, the current projector selected", () => {
+    expect(projectorOptions(status())).toEqual([
+      { value: "lcd", label: "Color LCD (3456×2234, main)", selected: false },
+      { value: "aml", label: "AML TV (1920×1080)", selected: true },
+    ]);
+  });
+});
+
+describe("a chosen projector that is unplugged", () => {
+  it("says which display is being used instead", () => {
+    const s = status();
+    s.hardware.projector_missing = "P24q-10";
+    expect(describeStatus(s).banners).toContain("P24q-10 (your chosen projector) is not connected. Using AML TV for now.");
   });
 });

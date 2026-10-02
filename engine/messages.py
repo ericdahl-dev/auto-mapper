@@ -30,6 +30,10 @@ class CameraSelectRequest(BaseModel):
     unique_id: str
 
 
+class ProjectorSelectRequest(BaseModel):
+    key: str
+
+
 Point = Annotated[list[float], Field(min_length=2, max_length=2)]
 
 
