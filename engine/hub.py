@@ -13,14 +13,23 @@ class Hub:
         self.output_resolution: dict | None = None
 
     def status(self) -> dict:
-        connected = self.output is not None
         return {
             "type": "status",
             "hardware": self.hardware.to_dict(),
-            "output_connected": connected,
+            "output_connected": self.output is not None,
             "output_resolution": self.output_resolution,
-            "can_scan": connected and not self.hardware.issues,
+            "can_scan": self._output_fills_projector() and not self.hardware.issues,
         }
+
+    def _output_fills_projector(self) -> bool:
+        # Patterns are generated at projector resolution, so the output window must be
+        # fullscreen on the projector or the scan decodes garbage.
+        projector = self.hardware.projector
+        return (
+            self.output_resolution is not None
+            and projector is not None
+            and self.output_resolution == {"width": projector["width"], "height": projector["height"]}
+        )
 
     async def add_editor(self, ws: WebSocket) -> None:
         self.editors.add(ws)

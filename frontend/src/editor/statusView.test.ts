@@ -46,8 +46,9 @@ describe("describeStatus", () => {
   });
 
   it("warns when the output window size does not match the projector", () => {
-    const view = describeStatus(status({ output_resolution: { width: 1280, height: 720 } }));
+    const view = describeStatus(status({ output_resolution: { width: 1280, height: 720 }, can_scan: false }));
     expect(view.banners).toContain("Output window is 1280×720 but the projector is 1920×1080. Make it fullscreen on the projector.");
+    expect(view.scanEnabled).toBe(false);
   });
 
   it("reports a lost engine connection", () => {

@@ -146,3 +146,14 @@ def test_output_resize_updates_resolution_for_editor(rig):
             out.send_json({"type": "hello", "role": "output", "width": 1920, "height": 1080})
 
             assert ed.receive_json()["output_resolution"] == {"width": 1920, "height": 1080}
+
+
+def test_scan_blocked_until_output_matches_projector_resolution(rig):
+    with engine(rig) as client, editor(client) as ed:
+        ed.receive_json()
+        with output(client, width=3456, height=1882) as out:
+            assert ed.receive_json()["can_scan"] is False
+
+            out.send_json({"type": "hello", "role": "output", "width": 1920, "height": 1080})
+
+            assert ed.receive_json()["can_scan"] is True
