@@ -122,3 +122,52 @@ def test_latest_scan_is_404_before_any_scan(rig, tmp_path):
     scene, uvc, hw, cams = rig
     with engine(hw, data_dir=tmp_path, camera_factory=cams) as client:
         assert client.get("/api/scan/latest").status_code == 404
+
+
+def test_a_lamp_in_view_does_not_fail_the_scan(tmp_path):
+    """Bright spots saturated in every frame must not hide that the projector works."""
+    scene = Scene(proj_w=W, proj_h=H, lamp=True)
+    uvc = FakeUvc(DEFAULTS)
+
+    def frame():
+        scene.exposure_gain = int(uvc.values["exposure-time-abs"]) / 200
+        return scene.frame()
+
+    hw = FakeHardware(displays=[LAPTOP, SMALL_PROJECTOR], cameras=[AC410])
+    with engine(hw, data_dir=tmp_path, camera_factory=FakeCameraFactory(frame=frame),
+                uvc_factory=lambda a: uvc) as client, editor(client) as ed, output(client, W, H) as out:
+        # Pre-calibrated, as on the rig, so the scan goes straight to patterns.
+        client.app.state.hub.settings.save_calibration(AC410["unique_id"], {"exposure": 160, "gain": 0, "p99": 200})
+        client.post("/api/scan")
+        play_output(out, scene)
+        msg = ed.receive_json()
+        while msg["type"] not in ("scan_result", "scan_failed"):
+            msg = ed.receive_json()
+
+    assert msg["type"] == "scan_result", msg
+
+
+def test_second_scan_click_is_refused_while_one_is_starting(rig, tmp_path):
+    scene, uvc, hw, cams = rig
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            output(client, W, H) as out:
+        first = client.post("/api/scan")
+        second = client.post("/api/scan")  # double click: before the first scan takes its lock
+        play_output(out, scene)
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+
+
+def test_releasing_the_camera_during_a_scan_is_refused(rig, tmp_path):
+    scene, uvc, hw, cams = rig
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            output(client, W, H) as out:
+        client.post("/api/scan")
+        msg = out.receive_json()  # first pattern is up, the scan holds the camera
+        released = client.post("/api/camera/release")
+        out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+        scene.pattern = msg["pattern"]
+        play_output(out, scene)
+
+    assert released.status_code == 409
