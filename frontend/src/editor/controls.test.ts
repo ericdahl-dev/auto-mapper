@@ -28,6 +28,12 @@ describe("controlsFor", () => {
     expect(controlsFor(effectById("media"), {})[0].value).toBe("");
   });
 
+  it("offers a text box for the text effect's text, showing the saved text", () => {
+    const controls = controlsFor(effectById("text"), { text: "Happy\nBirthday" });
+    expect(controls[0]).toEqual({ name: "text", label: "Text", kind: "text", value: "Happy\nBirthday" });
+    expect(controlsFor(effectById("text"), {})[0].value).toBe("Hello");
+  });
+
   it("has no controls for an effect without params", () => {
     expect(controlsFor(effectById("none"), {})).toEqual([]);
   });

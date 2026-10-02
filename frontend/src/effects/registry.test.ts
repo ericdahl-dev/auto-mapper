@@ -122,7 +122,7 @@ describe("quad params (corner pin)", () => {
 
 describe("built-in registry", () => {
   it("has the built-in effects, all valid, with unique ids", () => {
-    expect(EFFECTS.map((e) => e.id)).toEqual(["none", "fill", "outline", "noise", "tint", "edgeglow", "posterize", "media"]);
+    expect(EFFECTS.map((e) => e.id)).toEqual(["none", "fill", "outline", "noise", "tint", "edgeglow", "posterize", "media", "text"]);
     for (const e of EFFECTS) expect(validateEffect(e), e.id).toEqual([]);
   });
 

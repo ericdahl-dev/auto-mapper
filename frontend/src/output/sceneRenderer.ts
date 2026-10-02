@@ -2,7 +2,8 @@ import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
 import { type AudioValues, SILENT } from "../audio/analysis";
-import { mediaSources, type UniformValue, uniformsFor } from "../effects/types";
+import { drawText, TEXT_KEY } from "../effects/textTexture";
+import { mediaSources, textSources, type UniformValue, uniformsFor } from "../effects/types";
 import type { SceneMessage } from "../shared/messages";
 
 export interface EffectError {
@@ -126,7 +127,7 @@ export class SceneRenderer {
         fillCount: fillVerts.length / 2,
         outline: this.vao(lineVerts),
         outlineCount: lineVerts.length / 2,
-        media: Object.entries(mediaSources(effect, s.params)),
+        media: [...Object.entries(mediaSources(effect, s.params)), ...Object.entries(textSources(effect, s.params))],
         uniforms: uniformsFor(effect, s.params, outline), // once per scene update, not per frame
       };
     });
@@ -186,6 +187,14 @@ export class SceneRenderer {
     const texture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    if (src.startsWith(TEXT_KEY)) {
+      // Text: drawn now, no loading.
+      const canvas = drawText(src);
+      const m: MediaTexture = { texture, size: [canvas.width, canvas.height], video: null, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
+      gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT); // not unit 0: that holds the scan
+      this.upload(m, canvas);
+      return m;
+    }
     const el = createMediaElement(src);
     const video = el instanceof HTMLVideoElement ? el : null;
     const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };

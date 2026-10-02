@@ -1,4 +1,5 @@
 import { autoCorners, homography } from "./homography";
+import { textKey, type TextStyle } from "./textTexture";
 
 // An effect is one GLSL fragment shader plus the schema of its parameters.
 // The editor builds controls from the schema; the output passes params as `u_<name>` uniforms.
@@ -10,6 +11,9 @@ export type ParamSchema =
   | { name: string; label: string; type: "choice"; default: string; options: { value: string; label: string }[] }
   // An uploaded image or video (its URL). The shader gets `sampler2D u_<name>` and its pixel size `vec2 u_<name>Size`.
   | { name: string; label: string; type: "media"; default: string }
+  // Text, drawn to a texture (white on black) in the effect's "font" and "align" params if it has them.
+  // The shader gets `sampler2D u_<name>` (use .r as a mask) and its pixel size `vec2 u_<name>Size`.
+  | { name: string; label: string; type: "text"; default: string }
   // A corner pin: 4 points (TL, TR, BR, BL) in projector pixels, edited on the surface itself, not in the
   // panel. Unset = the outline's own corners. The shader gets `mat3 u_<name>` taking projector pixels
   // (v_pos) to the pinned quad's 0..1 square (divide xy by z).
@@ -69,7 +73,7 @@ export function uniformsFor(effect: Effect, params: Record<string, unknown>, out
   const out: Record<string, UniformValue> = {};
   for (const p of effect.params) {
     const v = params[p.name];
-    if (p.type === "media") continue;
+    if (p.type === "media" || p.type === "text") continue;
     if (p.type === "quad") {
       const h = (isQuad(v) && homography(v, UNIT_SQUARE)) || (outline.length >= 3 && homography(autoCorners(outline), UNIT_SQUARE));
       // Row-major H to GLSL's column-major mat3; an unusable outline gets all zeros (draws the image's corner).
@@ -85,6 +89,23 @@ export function uniformsFor(effect: Effect, params: Record<string, unknown>, out
       const n = typeof v === "number" && Number.isFinite(v) ? v : p.default;
       out[`u_${p.name}`] = Math.min(p.max ?? Infinity, Math.max(p.min ?? -Infinity, n));
     }
+  }
+  return out;
+}
+
+/** Texture keys for a surface's text params, by param name. */
+export function textSources(effect: Effect, params: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  const choice = (name: string, fallback: string) => {
+    const p = effect.params.find((x) => x.name === name);
+    const v = params[name];
+    return p?.type === "choice" ? (p.options.some((o) => o.value === v) ? (v as string) : p.default) : fallback;
+  };
+  for (const p of effect.params) {
+    if (p.type !== "text") continue;
+    const v = params[p.name];
+    const text = typeof v === "string" ? v.slice(0, 2000) : p.default;
+    out[p.name] = textKey({ text, font: choice("font", "sans"), align: choice("align", "center") as TextStyle["align"] });
   }
   return out;
 }
