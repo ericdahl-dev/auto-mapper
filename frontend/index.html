@@ -21,6 +21,8 @@
       button:disabled { opacity: 0.4; cursor: not-allowed; }
       button.primary { background: #2563eb; border-color: #2563eb; }
       .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+      select { width: 100%; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
+      #preview { width: 100%; border: 1px solid var(--line); margin-bottom: 12px; }
       h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
     </style>
   </head>
@@ -41,6 +43,14 @@
           <dt>Cameras</dt><dd id="cameras">…</dd>
           <dt>Output</dt><dd id="output">…</dd>
         </dl>
+        <h2>Camera</h2>
+        <div class="row"><select id="camera-select"></select></div>
+        <div class="row">
+          <button id="preview-toggle">Show preview</button>
+          <button id="calibrate">Calibrate exposure</button>
+        </div>
+        <dl><dt>Exposure</dt><dd id="calibration">…</dd></dl>
+        <img id="preview" alt="Camera preview" hidden />
         <h2>Test frame</h2>
         <div class="row">
           <button data-test-frame="grid">Grid</button>

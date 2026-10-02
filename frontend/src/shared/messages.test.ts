@@ -3,9 +3,10 @@ import { parseServerMessage } from "./messages";
 
 const status = {
   type: "status",
-  hardware: { projector: { name: "AML TV", width: 1920, height: 1080 }, cameras: ["Webcam AC410"], issues: [] },
+  hardware: { projector: { name: "AML TV", width: 1920, height: 1080 }, cameras: [{ name: "Webcam AC410", unique_id: "0x2110000f1311306", device_type: "external" }], issues: [] },
   output_connected: true,
   output_resolution: { width: 1920, height: 1080 },
+  camera: { selected: "0x2110000f1311306", calibration: null },
   can_scan: true,
 };
 

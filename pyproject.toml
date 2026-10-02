@@ -7,6 +7,9 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "pydantic>=2.7",
+    "opencv-contrib-python>=5.0.0.93",
+    "numpy>=2.5.3",
+    "pyobjc-framework-avfoundation>=12.2.2 ; sys_platform == 'darwin'",
 ]
 
 [dependency-groups]

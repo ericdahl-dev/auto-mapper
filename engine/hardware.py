@@ -10,7 +10,7 @@ from typing import Protocol
 @dataclass
 class HardwareSnapshot:
     displays: list[dict] = field(default_factory=list)
-    cameras: list[str] = field(default_factory=list)
+    cameras: list[dict] = field(default_factory=list)
 
     @property
     def projector(self) -> dict | None:
@@ -40,7 +40,7 @@ class HardwareProbe(Protocol):
 class FakeHardware:
     """Test probe. Edit `displays`/`cameras` to simulate plugging hardware in or out."""
 
-    def __init__(self, displays: list[dict], cameras: list[str]):
+    def __init__(self, displays: list[dict], cameras: list[dict]):
         self.displays = list(displays)
         self.cameras = list(cameras)
 
@@ -49,14 +49,37 @@ class FakeHardware:
 
 
 class MacHardware:
-    """Reads displays and cameras from system_profiler (about 1.5 s per call)."""
+    """Displays from system_profiler (about 1.5 s); cameras from AVFoundation metadata.
+
+    Listing AVFoundation devices reads metadata only; it never turns a camera on.
+    """
 
     def probe(self) -> HardwareSnapshot:
         out = subprocess.run(
-            ["system_profiler", "SPDisplaysDataType", "SPCameraDataType", "-json"],
+            ["system_profiler", "SPDisplaysDataType", "-json"],
             capture_output=True, text=True, timeout=15, check=True,
         ).stdout
-        return parse_system_profiler(json.loads(out))
+        snapshot = parse_system_profiler(json.loads(out))
+        snapshot.cameras = list_avfoundation_cameras()
+        return snapshot
+
+
+def list_avfoundation_cameras() -> list[dict]:
+    import AVFoundation as AV  # macOS only; imported lazily so tests never load it
+
+    kinds = {
+        AV.AVCaptureDeviceTypeBuiltInWideAngleCamera: "builtin",
+        AV.AVCaptureDeviceTypeExternal: "external",
+    }
+    if hasattr(AV, "AVCaptureDeviceTypeContinuityCamera"):
+        kinds[AV.AVCaptureDeviceTypeContinuityCamera] = "continuity"
+    session = AV.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_(
+        list(kinds), AV.AVMediaTypeVideo, AV.AVCaptureDevicePositionUnspecified,
+    )
+    return [
+        {"name": str(d.localizedName()), "unique_id": str(d.uniqueID()), "device_type": kinds.get(d.deviceType(), "other")}
+        for d in session.devices()
+    ]
 
 
 def parse_system_profiler(data: dict) -> HardwareSnapshot:
@@ -72,5 +95,4 @@ def parse_system_profiler(data: dict) -> HardwareSnapshot:
                 "height": int(m.group(2)),
                 "main": d.get("spdisplays_main") == "spdisplays_yes",
             })
-    cameras = [c["_name"] for c in data.get("SPCameraDataType", [])]
-    return HardwareSnapshot(displays=displays, cameras=cameras)
+    return HardwareSnapshot(displays=displays)

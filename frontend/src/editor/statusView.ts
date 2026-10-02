@@ -1,10 +1,17 @@
-import type { HardwareIssue, StatusMessage } from "../shared/messages";
+import type { Calibration, CameraInfo, HardwareIssue, StatusMessage } from "../shared/messages";
 
 export interface StatusView {
   banners: string[];
   scanEnabled: boolean;
   projector: string;
   output: string;
+  calibration: string;
+}
+
+export interface CameraOption {
+  value: string;
+  label: string;
+  selected: boolean;
 }
 
 const ISSUE_TEXT: Record<HardwareIssue, string> = {
@@ -22,6 +29,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
       scanEnabled: false,
       projector: "Unknown",
       output: "Unknown",
+      calibration: "Unknown",
     };
   }
 
@@ -40,5 +48,25 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     scanEnabled: status.can_scan,
     projector: projector ? `${projector.name} (${size(projector)})` : "None",
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
+    calibration: describeCalibration(status.camera.calibration),
   };
+}
+
+function describeCalibration(c: Calibration | null): string {
+  return c ? `Exposure ${c.exposure} (white frame peak ${Math.round(c.p99)})` : "Not calibrated";
+}
+
+// USB webcams have uniqueIDs like 0x2110000f1311306 (location + vendor + product).
+const isUsb = (uniqueId: string) => /^0x[0-9a-f]{9,}$/i.test(uniqueId);
+const KIND_LABEL: Record<CameraInfo["device_type"], string> = {
+  builtin: "built-in", external: "external", continuity: "phone", other: "other",
+};
+
+export function cameraOptions(status: StatusMessage | null): CameraOption[] {
+  if (!status) return [];
+  return status.hardware.cameras.map((c) => ({
+    value: c.unique_id,
+    label: `${c.name} (${isUsb(c.unique_id) ? "USB" : KIND_LABEL[c.device_type]})`,
+    selected: c.unique_id === status.camera.selected,
+  }));
 }
