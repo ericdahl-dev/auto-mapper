@@ -25,9 +25,12 @@ BLUR_PX = 3  # smooth speckle before colour edges
 EDGE_DILATE_PX = 7  # tuned on the rig: bridges gaps in faint colour edges
 MIN_AREA_FRACTION = 0.003  # of the projector area
 SIMPLIFY_FRACTION = 0.015  # polygon tolerance, as a fraction of its perimeter
-NOTCH_CLOSE_FRACTION = 0.06  # notch filling, as a fraction of the region's typical size
-NOTCH_CLOSE_MIN, NOTCH_CLOSE_MAX = 9, 41  # px
-HULL_SOLIDITY = 0.9  # regions at least this convex are outlined by their convex hull
+SLIT_CLOSE_PX = 15  # gaps narrower than this inside a region are sealed; wider bends are kept
+HULL_SOLIDITY = 0.97  # only truly convex regions are outlined by their hull (keeps inward curves)
+CURVE_PX = 3.0  # a side whose smoothed deviation from straight exceeds this is a curve
+CURVE_FIT = 0.15  # ...and a cubic explains it: leftover below this share of the bend (real edges meander)
+CURVE_SMOOTH_PX = 2.0  # smoothing along a curved run before simplifying it
+CURVE_EPS_PX = 1.5  # simplification tolerance on curved runs
 
 
 def depth_edges(decoded: DecodeResult) -> np.ndarray:
@@ -117,24 +120,82 @@ def detect_surfaces(decoded: DecodeResult, view: tuple[np.ndarray, np.ndarray]) 
 
 
 def outline_polygon(mask: np.ndarray) -> list[list[int]]:
-    """Outline of a region as a polygon with few, straight sides.
+    """Outline of a region: straight sides stay single lines, curved sides follow the curve.
 
-    Edge detection leaves notches along real straight edges. A closing sized to the
-    region fills them (closing keeps convex corners sharp), then a coarse simplification
-    turns each straight run into a single side.
+    A coarse simplification gives the region's main sides. For each side, the true contour's
+    deviation from the straight side is smoothed over a tenth of the side's length: edge
+    noise and notches average out, a real bend does not. Sides that still bend by more than
+    CURVE_PX are replaced by the finely simplified contour.
     """
-    mask = mask.astype(np.uint8)
-    size = int(np.sqrt(max(int(mask.sum()), 1)) * NOTCH_CLOSE_FRACTION)
-    size = int(np.clip(size, NOTCH_CLOSE_MIN, NOTCH_CLOSE_MAX)) | 1
-    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
-    padded = cv2.copyMakeBorder(mask, size, size, size, size, cv2.BORDER_CONSTANT, value=0)
-    closed = cv2.morphologyEx(padded, cv2.MORPH_CLOSE, k)[size:-size, size:-size]
-    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    if not contours:
+    # Seal narrow slits (grooves widened by edge dilation) without flattening wide curves.
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (SLIT_CLOSE_PX, SLIT_CLOSE_PX))
+    pad = SLIT_CLOSE_PX
+    padded = cv2.copyMakeBorder(mask.astype(np.uint8), pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+    mask = cv2.morphologyEx(padded, cv2.MORPH_CLOSE, k)[pad:-pad, pad:-pad]
+    contour = _largest_contour(mask)
+    if contour is None:
         return []
-    contour = max(contours, key=cv2.contourArea)
     hull = cv2.convexHull(contour)
     if cv2.contourArea(contour) >= HULL_SOLIDITY * cv2.contourArea(hull):
-        contour = hull  # nearly convex: the dents are noise, not shape
+        # Truly convex: dents are noise. Re-trace the hull densely so curves can still be followed.
+        filled = np.zeros_like(mask)
+        cv2.fillPoly(filled, [hull], 1)
+        contour = _largest_contour(filled)
+    pts = contour.reshape(-1, 2)
+    n = len(pts)
     eps = max(1.5, SIMPLIFY_FRACTION * cv2.arcLength(contour, True))
-    return cv2.approxPolyDP(contour, eps, True).reshape(-1, 2).tolist()
+    corners = cv2.approxPolyDP(contour, eps, True).reshape(-1, 2)
+    index = {}
+    for i, (x, y) in enumerate(pts):
+        index.setdefault((int(x), int(y)), i)
+    idx = sorted(index[(int(x), int(y))] for x, y in corners)
+
+    out: list[list[int]] = []
+    for a, b in zip(idx, idx[1:] + [idx[0] + n]):
+        side = pts[[i % n for i in range(a, b + 1)]].astype(np.float64)
+        out.append(side[0].round().astype(int).tolist())
+        if len(side) > 4 and _bends(side):
+            smooth = _smooth_open(side, CURVE_SMOOTH_PX)
+            fine = cv2.approxPolyDP(smooth.astype(np.float32).reshape(-1, 1, 2), CURVE_EPS_PX, False).reshape(-1, 2)
+            out.extend(p.round().astype(int).tolist() for p in fine[1:-1])
+    return out
+
+
+def _largest_contour(mask: np.ndarray):
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    return max(contours, key=cv2.contourArea) if contours else None
+
+
+def _bends(side: np.ndarray) -> bool:
+    """True if a contour run between two corners is a real curve, not noise on a straight side.
+
+    A curve's offset from the straight side follows a smooth arc that a cubic explains
+    almost exactly; notches and wobble are spikes a cubic can't follow. Offsets are taken
+    once per pixel along the side, so a notch's wrapped-round contour doesn't outvote it.
+    """
+    a, b = side[0], side[-1]
+    d = b - a
+    length = float(np.hypot(*d))
+    if length < 8:
+        return False
+    deviation = ((side[:, 0] - a[0]) * d[1] - (side[:, 1] - a[1]) * d[0]) / length
+    along = ((side[:, 0] - a[0]) * d[0] + (side[:, 1] - a[1]) * d[1]) / length
+    bins = np.clip(along.round().astype(int), 0, int(length))
+    total = np.bincount(bins, weights=deviation, minlength=int(length) + 1)
+    count = np.bincount(bins, minlength=int(length) + 1)
+    x = np.nonzero(count)[0]
+    y = total[x] / count[x]
+    fit = np.polyval(np.polyfit(x / length, y, 3), x / length)
+    bend = float(np.abs(fit).max())
+    leftover = float(np.sqrt(np.mean((y - fit) ** 2)))
+    return bend > CURVE_PX and leftover < CURVE_FIT * bend
+
+
+def _smooth_open(side: np.ndarray, sigma: float) -> np.ndarray:
+    """Gaussian smoothing along a contour run, keeping its two end corners fixed."""
+    smooth = np.column_stack([
+        cv2.GaussianBlur(side[:, i].reshape(-1, 1), (1, 0), sigma, borderType=cv2.BORDER_REPLICATE).ravel()
+        for i in (0, 1)
+    ])
+    smooth[0], smooth[-1] = side[0], side[-1]
+    return smooth

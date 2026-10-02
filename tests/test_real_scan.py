@@ -59,7 +59,8 @@ def test_large_surfaces_have_straight_sides(room1):
     big = [s for s in surfaces if s["area"] > 0.03 * 1920 * 1080]
     assert big
     for s in big:
-        assert len(s["polygon"]) <= 8, f"{len(s['polygon'])} corners on a {int(s['area'])} px surface"
+        # No squiggles. Not "a box": the door panels legitimately have a groove inlet (~16 corners).
+        assert len(s["polygon"]) <= 20, f"{len(s['polygon'])} corners on a {int(s['area'])} px surface"
 
 
 def test_pillar_shaft_has_parallel_sides(room1):
@@ -74,3 +75,11 @@ def test_pillar_shaft_has_parallel_sides(room1):
     shaft = range(int(rows.min() + 0.4 * np.ptp(rows)), int(rows.max()) - 5)
     widths = [np.ptp(np.nonzero(mask[y])[0]) for y in shaft]
     assert np.ptp(widths) < 0.15 * np.median(widths)  # constant width: parallel sides
+
+
+def test_left_corbel_keeps_its_curved_scroll_edge(room1):
+    """#31: curves are followed, not collapsed into a few straight sides."""
+    surfaces, _ = room1
+    corbel = [s for s, c in zip(surfaces, centroids(surfaces)) if 420 <= c[0] <= 560 and 330 <= c[1] <= 470]
+    assert len(corbel) == 1
+    assert len(corbel[0]["polygon"]) >= 12
