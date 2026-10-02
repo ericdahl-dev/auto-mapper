@@ -5,7 +5,8 @@ import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
 import { applyPlan } from "./applyEffect";
 import { controlsFor, mediaLabel, parseControlValue } from "./controls";
-import { curveEdge, handleIndices, moveOnRun, nearestEdge } from "./curves";
+import { type Bezier, curveBezierEdge, flatten, fromPolygon, insertAnchor, moveAnchor, moveControl, removeAnchor } from "./bezier";
+import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
@@ -84,7 +85,7 @@ const deleteButton = $<HTMLButtonElement>("delete-surface");
 const mergeButton = $<HTMLButtonElement>("merge-surfaces");
 const applyButton = $<HTMLButtonElement>("apply-effect");
 const multi = new Set<number>(); // shift-click selection for merging
-let dragging: { id: number; index: number; polygon: number[][] } | null = null;
+let dragging: { id: number; index: number; polygon: number[][]; bezier?: Bezier } | null = null;
 let pendingScene: SceneMessage | null = null; // scene updates held back while dragging
 
 function projectorPoint(ev: MouseEvent): number[] {
@@ -93,11 +94,14 @@ function projectorPoint(ev: MouseEvent): number[] {
 }
 
 let patchFrame = 0;
-function patchPolygonSoon(id: number, polygon: number[][]) {
+function patchPolygonSoon(id: number, polygon: number[][], bezier?: Bezier) {
   // At most one PATCH per animation frame while dragging.
   cancelAnimationFrame(patchFrame);
-  patchFrame = requestAnimationFrame(() => patchSurface(id, { polygon }));
+  patchFrame = requestAnimationFrame(() => patchSurface(id, bezier ? { polygon, bezier } : { polygon }));
 }
+
+/** Saves a Bezier outline: the engine stores it with its flattened polygon. */
+const patchBezier = (id: number, bezier: Bezier) => patchSurface(id, { polygon: flatten(bezier), bezier });
 
 const select = (id: number | null) =>
   void fetch("/api/scene/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
@@ -144,8 +148,9 @@ surfacesSvg.addEventListener("click", (ev) => {
   ev.stopPropagation();
   const surface = scene?.surfaces.find((x) => x.id === scene?.selected);
   if (surface) {
-    const edge = nearestEdge(surface.polygon, projectorPoint(ev));
-    patchSurface(surface.id, { polygon: curveEdge(surface.polygon, edge) });
+    const bezier = surface.bezier ?? fromPolygon(surface.polygon);
+    const edge = nearestEdge(bezier.anchors, projectorPoint(ev));
+    patchBezier(surface.id, curveBezierEdge(bezier, edge));
   }
   setCurving(false);
 }, true);
@@ -193,6 +198,7 @@ function renderSurfaces() {
   const r = (7 * width) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
   surfacesSvg.replaceChildren(
     ...surfaces.flatMap((s) => {
+      const bezier = dragging?.id === s.id && dragging.bezier ? dragging.bezier : s.bezier;
       const polygon = dragging?.id === s.id ? dragging.polygon : s.polygon;
       const poly = document.createElementNS(SVG_NS, "polygon");
       poly.setAttribute("points", polygon.map(([x, y]) => `${x},${y}`).join(" "));
@@ -213,7 +219,8 @@ function renderSurfaces() {
       poly.addEventListener("dblclick", (ev) => {
         if (s.id !== scene?.selected) return;
         ev.stopPropagation();
-        patchSurface(s.id, { polygon: insertVertex(s.polygon, projectorPoint(ev)) });
+        if (s.bezier) patchBezier(s.id, insertAnchor(s.bezier, projectorPoint(ev)));
+        else patchSurface(s.id, { polygon: insertVertex(s.polygon, projectorPoint(ev)) });
       });
       const [x, y] = polygon[0];
       const label = document.createElementNS(SVG_NS, "text");
@@ -221,7 +228,9 @@ function renderSurfaces() {
       label.setAttribute("y", String(y + 34));
       label.textContent = String(s.id);
       const parts: SVGElement[] = [poly, label];
-      if (s.id === scene?.selected) {
+      if (s.id === scene?.selected && bezier) {
+        parts.push(...bezierHandles(s.id, bezier, r));
+      } else if (s.id === scene?.selected) {
         // Handles on corners and a few along curves; a curve isn't dozens of tiny handles.
         handleIndices(polygon).forEach((index) => {
           const [hx, hy] = polygon[index];
@@ -265,6 +274,70 @@ function renderSurfaces() {
   );
   renderPanel();
   renderPresentation();
+}
+
+/** Anchor squares, control circles and tangent lines for a Bezier outline. */
+function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
+  const n = bezier.anchors.length;
+  const out: SVGElement[] = [];
+  const line = (a: number[], b: number[]) => {
+    const l = document.createElementNS(SVG_NS, "line");
+    l.classList.add("tangent");
+    Object.entries({ x1: a[0], y1: a[1], x2: b[0], y2: b[1] }).forEach(([k, v]) => l.setAttribute(k, String(v)));
+    return l;
+  };
+  // Drag a handle: `update` computes the new Bezier from the pointer position.
+  const draggable = (el: SVGElement, index: number, update: (b: Bezier, p: number[]) => Bezier) => {
+    el.addEventListener("pointerdown", (ev) => {
+      if ((ev as PointerEvent).altKey) return;
+      ev.stopPropagation();
+      el.setPointerCapture((ev as PointerEvent).pointerId);
+      dragging = { id, index, polygon: flatten(bezier), bezier };
+    });
+    el.addEventListener("pointermove", (ev) => {
+      if (!dragging || dragging.id !== id || dragging.index !== index || !dragging.bezier) return;
+      dragging.bezier = update(dragging.bezier, projectorPoint(ev as MouseEvent));
+      dragging.polygon = flatten(dragging.bezier);
+      patchPolygonSoon(id, dragging.polygon, dragging.bezier);
+      renderSurfaces();
+    });
+    el.addEventListener("pointerup", () => {
+      if (!dragging?.bezier) return;
+      patchBezier(id, dragging.bezier);
+      dragging = null;
+      if (pendingScene) {
+        scene = pendingScene;
+        pendingScene = null;
+      }
+      renderSurfaces();
+    });
+  };
+  Object.entries(bezier.controls).forEach(([key, [c1, c2]]) => {
+    const edge = Number(key);
+    const a = bezier.anchors[edge];
+    const b = bezier.anchors[(edge + 1) % n];
+    out.push(line(a, c1), line(b, c2));
+    ([c1, c2] as number[][]).forEach((c, which) => {
+      const dot = document.createElementNS(SVG_NS, "circle");
+      dot.classList.add("handle", "control");
+      Object.entries({ cx: c[0], cy: c[1], r: r * 0.8 }).forEach(([k, v]) => dot.setAttribute(k, String(v)));
+      // Control handles get indices after the anchors so drags don't mix them up.
+      draggable(dot, n + edge * 2 + which, (bz, p) => moveControl(bz, edge, which as 0 | 1, p));
+      out.push(dot);
+    });
+  });
+  bezier.anchors.forEach(([x, y], index) => {
+    const sq = document.createElementNS(SVG_NS, "rect");
+    sq.classList.add("handle", "anchor");
+    Object.entries({ x: x - r, y: y - r, width: 2 * r, height: 2 * r }).forEach(([k, v]) => sq.setAttribute(k, String(v)));
+    sq.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (ev.altKey) patchBezier(id, removeAnchor(bezier, index));
+    });
+    draggable(sq, index, (bz, p) => moveAnchor(bz, index, p));
+    out.push(sq);
+  });
+  return out;
 }
 
 const playButton = $<HTMLButtonElement>("play");

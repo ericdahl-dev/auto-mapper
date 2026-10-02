@@ -38,6 +38,7 @@ class SurfaceUpdate(BaseModel):
     params: dict | None = None
     polygon: Annotated[list[Point], Field(min_length=3)] | None = None
     name: Annotated[str, Field(max_length=80)] | None = None
+    bezier: dict | None = None  # editor-only curve data; sent together with its flattened polygon
 
 
 class MergeRequest(BaseModel):
