@@ -22,6 +22,10 @@
       #surfaces polygon { fill: rgba(37, 99, 235, 0.18); stroke: #60a5fa; stroke-width: 2; }
       #surfaces polygon.selected { fill: rgba(255, 255, 255, 0.25); stroke: #fff; stroke-width: 3; }
       #surfaces polygon.error { stroke: #f87171; stroke-width: 3; }
+      #surfaces polygon.multi { stroke: #fbbf24; stroke-width: 3; }
+      #surfaces circle.handle { fill: #fff; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
+      #surface-name { width: 100%; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
+      .hint { font-size: 12px; margin: 0 0 8px; }
       #surfaces text { pointer-events: none; fill: #fff; font: 600 28px system-ui, sans-serif; paint-order: stroke; stroke: #000; stroke-width: 4px; }
       .muted { color: var(--muted); margin: 8px 0 0; }
       .stage { aspect-ratio: 16 / 9; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
@@ -76,6 +80,12 @@
         <img id="preview" alt="Camera preview" hidden />
         <section id="surface-panel" hidden>
           <h2 id="surface-title">Surface</h2>
+          <div class="row"><input id="surface-name" type="text" placeholder="Name" /></div>
+          <div class="row">
+            <button id="delete-surface">Delete</button>
+            <button id="merge-surfaces" hidden>Merge selected</button>
+          </div>
+          <p class="muted hint">Drag corners to adjust. Double-click an edge to add a corner, Alt-click a corner to remove it. Shift-click surfaces to merge them.</p>
           <div class="row"><select id="effect-select"></select></div>
           <div id="effect-controls"></div>
           <pre id="effect-error" hidden></pre>

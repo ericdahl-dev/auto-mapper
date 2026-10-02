@@ -71,6 +71,7 @@ export type ScanMessage =
 
 export interface SceneSurface {
   id: number;
+  name?: string;
   polygon: number[][];
   area: number;
   effect: string;
