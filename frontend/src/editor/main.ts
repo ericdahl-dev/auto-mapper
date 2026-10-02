@@ -5,8 +5,9 @@ import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
 import { applyPlan } from "./applyEffect";
 import { controlsFor, parseControlValue } from "./controls";
+import { handleIndices, moveOnRun } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
-import { insertVertex, moveVertex, removeVertex, toProjector } from "./polygonEdit";
+import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
 import { cameraOptions, describeStatus } from "./statusView";
 
@@ -199,7 +200,9 @@ function renderSurfaces() {
       label.textContent = String(s.id);
       const parts: SVGElement[] = [poly, label];
       if (s.id === scene?.selected) {
-        polygon.forEach(([hx, hy], index) => {
+        // Handles on corners and a few along curves; a curve isn't dozens of tiny handles.
+        handleIndices(polygon).forEach((index) => {
+          const [hx, hy] = polygon[index];
           const handle = document.createElementNS(SVG_NS, "circle");
           handle.classList.add("handle");
           handle.setAttribute("cx", String(hx));
@@ -217,7 +220,7 @@ function renderSurfaces() {
           });
           handle.addEventListener("pointermove", (ev) => {
             if (!dragging || dragging.index !== index) return;
-            dragging.polygon = moveVertex(dragging.polygon, index, projectorPoint(ev));
+            dragging.polygon = moveOnRun(dragging.polygon, index, projectorPoint(ev));
             patchPolygonSoon(s.id, dragging.polygon);
             renderSurfaces();
           });

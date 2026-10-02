@@ -79,7 +79,7 @@ export class SceneRenderer {
       const fillVerts = new Float32Array(tris.flatMap((i) => [flat[2 * i], flat[2 * i + 1]]));
       // Lines are rasterised through pixel centres; nudge inward so edges land on the polygon.
       const lineVerts = new Float32Array(s.polygon.flatMap(([x, y]) => [x + 0.5, y + 0.5]));
-      const outline = limitVertices(s.polygon, MAX_POLY);
+      const outline = resampleOutline(s.polygon, MAX_POLY);
       const poly = new Float32Array(MAX_POLY * 2);
       poly.set(outline.flat());
       const perimeter = outline.reduce((sum, [x, y], i) => {
@@ -194,9 +194,23 @@ export class SceneRenderer {
   }
 }
 
-/** Keeps every k-th vertex so the outline fits the shader's fixed-size array. */
-export function limitVertices(polygon: number[][], max: number): number[][] {
+/** Fits an outline into the shader's fixed-size array by resampling it at even spacing
+ *  along its length, so curves keep their shape wherever the source points were dense. */
+export function resampleOutline(polygon: number[][], max: number): number[][] {
   if (polygon.length <= max) return polygon;
-  const step = polygon.length / max;
-  return Array.from({ length: max }, (_, i) => polygon[Math.floor(i * step)]);
+  const n = polygon.length;
+  const seg = polygon.map((p, i) => Math.hypot(polygon[(i + 1) % n][0] - p[0], polygon[(i + 1) % n][1] - p[1]));
+  const total = seg.reduce((a, b) => a + b, 0);
+  const out: number[][] = [];
+  let i = 0;
+  let walked = 0; // length of the outline before vertex i
+  for (let k = 0; k < max; k++) {
+    const target = (k * total) / max;
+    while (walked + seg[i] < target && i < n - 1) walked += seg[i++];
+    const t = seg[i] > 0 ? (target - walked) / seg[i] : 0;
+    const a = polygon[i];
+    const b = polygon[(i + 1) % n];
+    out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  }
+  return out;
 }
