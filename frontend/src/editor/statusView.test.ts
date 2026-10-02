@@ -138,3 +138,10 @@ describe("video sound waiting for a click", () => {
     expect(describeStatus(status({ output_video_sound_blocked: false })).banners).toEqual([]);
   });
 });
+
+describe("sound output errors", () => {
+  it("shows why the chosen sound output isn't used", () => {
+    expect(describeStatus(status({ output_sound_output_error: "That sound output is not available. Pick another output." })).banners)
+      .toContain("That sound output is not available. Pick another output.");
+  });
+});

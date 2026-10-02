@@ -11,7 +11,25 @@ export interface SoundSettings {
 
 // A video element can be routed into Web Audio only once, and only into one context, for good. So
 // video taps live in one shared context; each tap keeps playing to the speakers through it.
-let videoContext: AudioContext | null = null;
+// Chrome 110+ lets an AudioContext pick its output device; TypeScript's DOM types don't have it yet.
+type SinkAudioContext = AudioContext & { setSinkId(id: string): Promise<void> };
+let videoContext: SinkAudioContext | null = null;
+let videoSink = ""; // output device for video sound routed through Web Audio; "" = the system default
+
+/** Where video sound routed through Web Audio plays (null = system default). Returns an error
+ *  message if the device can't be used; it then stays on the default. */
+export async function setVideoSoundOutput(id: string | null): Promise<string | null> {
+  videoSink = id ?? "";
+  if (!videoContext) return null; // applied when the context is created
+  try {
+    await videoContext.setSinkId(videoSink);
+    return null;
+  } catch {
+    videoSink = "";
+    await videoContext.setSinkId("").catch(() => {});
+    return "That sound output is not available. Pick another output.";
+  }
+}
 const taps = new WeakMap<HTMLVideoElement, MediaElementAudioSourceNode>();
 
 export class SoundInput {
@@ -35,7 +53,7 @@ export class SoundInput {
     if (!settings.enabled) return;
     if (settings.source === "video") {
       this.videoMode = true;
-      videoContext ??= new AudioContext();
+      videoContext ??= new AudioContext(videoSink ? ({ sinkId: videoSink } as AudioContextOptions) : {}) as SinkAudioContext;
       this.ctx = videoContext;
       this.node = this.ctx.createAnalyser();
       this.node.fftSize = 2048;

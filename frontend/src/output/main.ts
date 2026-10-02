@@ -2,7 +2,7 @@ import { EFFECTS } from "../effects/index";
 import { connect } from "../shared/connection";
 import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys } from "../shared/presentation";
-import { SoundInput } from "../audio/mic";
+import { SoundInput, setVideoSoundOutput } from "../audio/mic";
 import { SceneRenderer } from "./sceneRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
@@ -19,6 +19,8 @@ let raf = 0;
 const sceneRenderer = new SceneRenderer(renderer.gl, EFFECTS, (e) => conn.send({ type: "effect_error", ...e }));
 const started = performance.now();
 const sound = new SoundInput();
+let soundOutput: string | null = null;
+let soundOutputError: string | null = null;
 let lastFrame = performance.now();
 
 let frames = 0;
@@ -37,6 +39,7 @@ function loop() {
       fps: (frames * 1000) / (now - statsFrom),
       sound: sound.status(),
       video_sound_blocked: sceneRenderer.soundBlocked(),
+      sound_output_error: soundOutputError,
     });
     frames = 0;
     statsFrom = now;
@@ -50,6 +53,13 @@ function showScene(msg: SceneMessage) {
   scene = msg;
   sceneRenderer.setScene(msg);
   void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(sceneRenderer.audibleVideos()));
+  const output = msg.sound?.output ?? null;
+  if (output !== soundOutput) {
+    soundOutput = output; // both paths: plain video elements, and video sound routed through Web Audio
+    void Promise.all([sceneRenderer.setOutputDevice(output), setVideoSoundOutput(output)]).then(([a, b]) => {
+      soundOutputError = a ?? b;
+    });
+  }
   if (changedScan) {
     const img = new Image();
     img.onload = () => sceneRenderer.setScanImage(img);

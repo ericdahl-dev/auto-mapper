@@ -30,7 +30,8 @@ class SceneStore:
         self.presentation = {"mode": "edit", "blackout": False}
         # Sound-reactive effects: whether the output listens, and to which input (a browser device id).
         # source: "mic", or "video" to react to the playing videos' own sound (no mic, no feedback).
-        self.sound = {"enabled": False, "device": None, "source": "mic"}
+        # output: a browser audio output device id for video sound; None = the system default.
+        self.sound = {"enabled": False, "device": None, "source": "mic", "output": None}
 
     def _load(self) -> dict | None:
         saved = self.scan_dir / "scene.json"
@@ -227,7 +228,11 @@ class SceneStore:
         if blackout is not None:
             self.presentation["blackout"] = blackout
 
-    def set_sound(self, enabled: bool | None = None, device: str | None = None, source: str | None = None) -> None:
+    def set_sound(
+        self, enabled: bool | None = None, device: str | None = None, source: str | None = None, output: str | None = None
+    ) -> None:
+        if output is not None:
+            self.sound["output"] = output or None  # "" = back to the system default
         if source is not None:
             self.sound["source"] = source
         if enabled is not None:

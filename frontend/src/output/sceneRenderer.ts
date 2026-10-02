@@ -64,6 +64,7 @@ export class SceneRenderer {
   private media = new Map<string, MediaTexture>();
   private frame = 0;
   private audio: AudioValues = SILENT;
+  private sinkId = ""; // audio output device for video sound; "" = the system default
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -171,6 +172,21 @@ export class SceneRenderer {
     this.audio = values;
   }
 
+  /** Sends video sound to an audio output device (null = the system default). Returns an error
+   *  message if that device can't be used; video sound then stays on the default. */
+  async setOutputDevice(id: string | null): Promise<string | null> {
+    this.sinkId = id ?? "";
+    const videos = [...this.media.values()].flatMap((m) => (m.video ? [m.video] : []));
+    try {
+      await Promise.all(videos.map((v) => v.setSinkId(this.sinkId)));
+      return null;
+    } catch {
+      this.sinkId = "";
+      await Promise.all(videos.map((v) => v.setSinkId("").catch(() => {})));
+      return "That sound output is not available. Pick another output.";
+    }
+  }
+
   /** The videos currently playing with sound (for reacting to the video's sound). */
   audibleVideos(): HTMLVideoElement[] {
     return [...this.media.values()].flatMap((m) => (m.video && !m.video.muted ? [m.video] : []));
@@ -233,6 +249,7 @@ export class SceneRenderer {
     }
     const el = createMediaElement(src);
     const video = el instanceof HTMLVideoElement ? el : null;
+    if (video && this.sinkId) void video.setSinkId(this.sinkId).catch(() => {});
     const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
     m.ready = new Promise<void>((settle) => {
       el.addEventListener("error", () => settle(), { once: true });

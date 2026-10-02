@@ -44,6 +44,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     banners.push(`${status.hardware.projector_missing} (your chosen projector) is not connected. Using ${projector.name} for now.`);
   }
 
+  if (status.output_sound_output_error) banners.push(status.output_sound_output_error);
   if (status.output_video_sound_blocked) {
     banners.push("Video sound is waiting: click the output window once to allow it.");
   }

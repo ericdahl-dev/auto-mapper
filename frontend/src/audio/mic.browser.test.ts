@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SoundInput } from "./mic";
+import { SoundInput, setVideoSoundOutput } from "./mic";
 
 /** Runs frames for up to `ms`, returning the loudest level seen. */
 async function listen(s: SoundInput, ms: number): Promise<number> {
@@ -60,5 +60,12 @@ describe("SoundInput reacting to video sound", () => {
     await s.set({ enabled: true, device: null, source: "video" });
     s.setVideos([]);
     expect(s.status().error).toMatch(/turn on video sound/i);
+  });
+});
+
+describe("video sound output when reacting to it", () => {
+  it("follows the chosen device, and reports one that isn't available", async () => {
+    expect(await setVideoSoundOutput(null)).toBeNull();
+    expect(await setVideoSoundOutput("no-such-device")).toMatch(/not available/i);
   });
 });

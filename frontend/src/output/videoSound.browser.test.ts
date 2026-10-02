@@ -65,3 +65,17 @@ describe("when the browser holds sound back until a click", () => {
     expect(r.soundBlocked()).toBe(false);
   });
 });
+
+describe("sound output device", () => {
+  it("plays through the system default unless told otherwise", async () => {
+    const r = await renderer(scene(PLAY, { sound: "on" }));
+    expect(await r.setOutputDevice(null)).toBeNull();
+    expect(r.mediaElement(toneVideo)!.sinkId).toBe("");
+  });
+
+  it("reports a device that isn't available and keeps playing through the default", async () => {
+    const r = await renderer(scene(PLAY, { sound: "on" }));
+    expect(await r.setOutputDevice("no-such-device")).toMatch(/not available/i);
+    expect(r.mediaElement(toneVideo)!.sinkId).toBe("");
+  });
+});

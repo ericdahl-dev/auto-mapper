@@ -385,7 +385,7 @@ def create_app(
 
     @app.post("/api/sound")
     async def set_sound(req: SoundRequest):
-        scene.set_sound(req.enabled, req.device, req.source)
+        scene.set_sound(req.enabled, req.device, req.source, req.output)
         await app.state.hub.broadcast_scene()
         return scene.sound
 
@@ -472,6 +472,9 @@ def create_app(
                     fps = msg.get("fps")
                     if isinstance(fps, (int, float)):
                         hub.output_fps = round(float(fps), 1)
+                    if "sound_output_error" in msg:
+                        error = msg.get("sound_output_error")
+                        hub.output_sound_output_error = str(error)[:200] if error else None
                     if isinstance(msg.get("video_sound_blocked"), bool):
                         hub.output_video_sound_blocked = msg["video_sound_blocked"]
                     sound = msg.get("sound")

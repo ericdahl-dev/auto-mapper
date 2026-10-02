@@ -53,7 +53,7 @@ Routes that name a surface return 404 for an unknown surface id.
 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
-| POST | `/api/sound` | `{"enabled"?: bool, "device"?: "...", "source"?: "mic" \| "video"}` | Sound-reactive effects on or off, the browser input device id, and whether they follow the microphone or the videos' own sound; pushed to the output in the scene's `sound` field. Returns the sound settings |
+| POST | `/api/sound` | `{"enabled"?: bool, "device"?: "...", "source"?: "mic" \| "video", "output"?: "..."}` | Sound-reactive effects on or off, the browser input device id, whether they follow the microphone or the videos' own sound, and the audio output device for video sound (`""` = the Mac's default); pushed to the output in the scene's `sound` field. Returns the sound settings |
 | POST | `/api/presentation` | `{"mode"?: "edit" \| "play", "blackout"?: bool}` | The presentation state |
 | POST | `/api/presentation/blackout/toggle` | | The presentation state |
 
@@ -87,4 +87,4 @@ The first message from a client must be a hello; otherwise the engine closes the
 
 **Engine to output:** `scene`, `show_test_frame` (`kind`), `show_pattern` (`seq`, `pattern`).
 
-**Output to engine:** `pattern_shown` (`seq`, the ack for `show_pattern`), `output_stats` (`fps`, and `sound` {`level`, `error`}; every 2 seconds, or 4 times a second while listening; relayed to editors as `output_sound` in status; plus `video_sound_blocked`, relayed as `output_video_sound_blocked`), `effect_error` (forwarded to editors), and `hello` on resize.
+**Output to engine:** `pattern_shown` (`seq`, the ack for `show_pattern`), `output_stats` (`fps`, and `sound` {`level`, `error`}; every 2 seconds, or 4 times a second while listening; relayed to editors as `output_sound` in status; plus `video_sound_blocked` and `sound_output_error`, relayed as `output_video_sound_blocked` and `output_sound_output_error`), `effect_error` (forwarded to editors), and `hello` on resize.

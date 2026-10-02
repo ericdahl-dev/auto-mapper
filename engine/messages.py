@@ -60,6 +60,7 @@ class ProjectSaveRequest(BaseModel):
 class SoundRequest(BaseModel):
     enabled: bool | None = None
     source: Literal["mic", "video"] | None = None
+    output: Annotated[str, Field(max_length=200)] | None = None  # "" = the system default
     device: Annotated[str, Field(max_length=200)] | None = None
 
 

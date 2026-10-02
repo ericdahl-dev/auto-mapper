@@ -643,9 +643,19 @@ soundInput.addEventListener("change", () => postSound({ device: soundInput.value
 const soundSource = $<HTMLSelectElement>("sound-source");
 // Video sound: effects follow the videos playing with sound (no mic, no feedback from the speakers).
 soundSource.addEventListener("change", () => postSound({ source: soundSource.value }));
+const soundOutputSelect = $<HTMLSelectElement>("sound-output");
+soundOutputSelect.addEventListener("change", () => postSound({ output: soundOutputSelect.value }));
 async function refreshSoundInputs() {
   // Same origin as the output window, so device ids match; labels appear once the mic is allowed.
-  const inputs = (await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? []).filter((d) => d.kind === "audioinput");
+  const devices = await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? [];
+  const outputs = devices.filter((d) => d.kind === "audiooutput" && d.deviceId && d.deviceId !== "default");
+  const chosenOutput = scene?.sound?.output ?? "";
+  soundOutputSelect.replaceChildren(
+    Object.assign(document.createElement("option"), { value: "", textContent: "Sound output: Mac default", selected: !chosenOutput }),
+    ...outputs.map((d, i) =>
+      Object.assign(document.createElement("option"), { value: d.deviceId, textContent: `Sound output: ${d.label || `Output ${i + 1}`}`, selected: d.deviceId === chosenOutput })),
+  );
+  const inputs = devices.filter((d) => d.kind === "audioinput");
   const chosen = scene?.sound?.device ?? "";
   soundInput.replaceChildren(
     Object.assign(document.createElement("option"), { value: "", textContent: "Default input", selected: !chosen }),
