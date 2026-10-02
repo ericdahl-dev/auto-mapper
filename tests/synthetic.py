@@ -17,7 +17,7 @@ def homography(src, dst) -> np.ndarray:
 
 class Scene:
     def __init__(self, proj_w=256, proj_h=144, cam_w=320, cam_h=240, unresolved_bits=0, noise=2.0, seed=0,
-                 box=True, box_albedo=0.9, wall_albedo=0.75):
+                 box=True, box_albedo=0.9, wall_albedo=0.75, lamp=False):
         self.proj_w, self.proj_h, self.cam_w, self.cam_h = proj_w, proj_h, cam_w, cam_h
         self.unresolved_bits = unresolved_bits
         self.noise = noise
@@ -55,6 +55,10 @@ class Scene:
         self.true_x = np.where(self.lit, np.floor(x), -1).astype(np.int32)
         self.true_y = np.where(self.lit, np.floor(y), -1).astype(np.int32)
         self.albedo = np.where(self.box_region, box_albedo, wall_albedo)
+        # A light source in view: saturated whatever the projector shows.
+        self.lamp = np.zeros(self.lit.shape, bool)
+        if lamp:
+            self.lamp[2:42, 2:62] = True  # ~3% of the frame, like a lit appliance
 
     def box_projector_quad(self) -> np.ndarray:
         """The box's outline in projector pixels (4 x 2)."""
@@ -87,5 +91,6 @@ class Scene:
         light = self.projector_value(pattern or self.pattern)
         level = 12 + 200 * self.exposure_gain * self.albedo * light
         level = level + self.rng.normal(0, self.noise, level.shape)
+        level[self.lamp] = 255
         gray = np.clip(level, 0, 255).astype(np.uint8)
         return np.dstack([gray, gray, gray])

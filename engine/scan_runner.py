@@ -46,7 +46,10 @@ def capture_scan(
             frame = read_frame()
             decoder.add(pattern, frame)
             if pattern["kind"] == "black":
-                spread = np.percentile(decoder.white, 99) - np.percentile(frame, 99)
+                # Per-pixel difference: lamps or windows saturated in both frames must not
+                # mask a projector that is working everywhere else.
+                diff = decoder.white.astype(np.int16) - frame.astype(np.int16)
+                spread = np.percentile(diff, 99)
                 if spread < MIN_RESPONSE:
                     raise ScanError(
                         "White and black frames look the same to the camera. Check the camera "

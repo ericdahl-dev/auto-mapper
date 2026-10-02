@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -37,6 +38,7 @@ from engine.messages import (
 
 
 DEFAULT_DATA_DIR = Path.home() / ".auto-mapper"
+log = logging.getLogger("auto-mapper")
 
 
 def create_app(
@@ -56,6 +58,10 @@ def create_app(
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
     scan_dir = data_path / "scans" / "latest"
     scanning = asyncio.Lock()
+
+    def scan_busy() -> bool:
+        task = getattr(app, "state", None) and getattr(app.state, "scan_task", None)
+        return scanning.locked() or (task is not None and not task.done())
     scene = SceneStore(scan_dir)
     projects = ProjectStore(data_path, scan_dir, scene)
 
@@ -102,7 +108,7 @@ def create_app(
         selected = settings.selected(hub.hardware.cameras)
         if selected is None:
             raise HTTPException(409, "No camera selected")
-        if scanning.locked():
+        if scan_busy():
             raise HTTPException(409, "Camera is busy scanning")
         frame = await asyncio.to_thread(session.read, hub.hardware.cameras, selected)
         ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -110,6 +116,8 @@ def create_app(
 
     @app.post("/api/camera/release")
     async def release_camera():
+        if scan_busy():
+            raise HTTPException(409, "Camera is busy scanning")
         await asyncio.to_thread(session.close)
         return {"ok": True}
 
@@ -147,8 +155,9 @@ def create_app(
         address = usb_address(selected)
         if address is None:
             raise HTTPException(409, "Scanning needs a USB webcam with UVC controls")
-        if scanning.locked():
+        if scan_busy():
             raise HTTPException(409, "A scan is already running")
+        # Claim the scan before the task starts, so a double click can't start two.
         app.state.scan_task = asyncio.create_task(run_scan(hub, selected, address))
         return {"started": True}
 
@@ -197,6 +206,7 @@ def create_app(
                 scene.reset_from_scan(summary)
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except (ScanError, CalibrationError, OutputNotResponding) as e:
+                log.warning("scan failed: %s", e)
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})
             except Exception as e:  # never leave the editor waiting on a dead scan
                 await hub.broadcast({"type": "scan_failed", "error": f"Scan crashed: {e}"})
@@ -302,7 +312,7 @@ def create_app(
 
     @app.post("/api/projects/{slug}/open")
     async def open_project(slug: str):
-        if scanning.locked():
+        if scan_busy():
             raise HTTPException(409, "A scan is running")
         try:
             info = await asyncio.to_thread(projects.open, slug)
