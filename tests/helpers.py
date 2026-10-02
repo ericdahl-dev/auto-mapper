@@ -44,3 +44,20 @@ def output(client, width=1920, height=1080):
     with client.websocket_connect("/ws") as ws:
         ws.send_json({"type": "hello", "role": "output", "width": width, "height": height})
         yield ws
+
+
+def play_output(out, scene, ack=True, on_pattern=None):
+    """Acts as the output window during a scan: shows each pattern on the synthetic scene and acks it,
+    until the engine blanks the projector at the end. on_pattern(n) runs as the n-th pattern arrives."""
+    shown = []
+    while True:
+        msg = out.receive_json()
+        if msg["type"] == "show_test_frame" and msg["kind"] == "black":
+            return shown
+        if msg["type"] == "show_pattern":
+            shown.append(msg["pattern"])
+            if on_pattern:
+                on_pattern(len(shown))
+            scene.pattern = msg["pattern"]
+            if ack:
+                out.send_json({"type": "pattern_shown", "seq": msg["seq"]})

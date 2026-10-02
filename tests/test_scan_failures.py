@@ -4,7 +4,7 @@ import pytest
 from engine.camera_device import FakeCameraFactory
 from engine.camera_lock import FakeUvc
 from engine.hardware import FakeHardware
-from tests.helpers import AC410, LAPTOP, editor, engine, output
+from tests.helpers import AC410, editor, engine, LAPTOP, output, play_output
 from tests.synthetic import Scene
 
 DEFAULTS = {
@@ -40,17 +40,11 @@ def test_cancel_stops_the_scan_and_restores_the_camera(tmp_path):
     with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
             editor(client) as ed, output(client, W, H) as out:
         client.post("/api/scan")
-        shown = 0
-        while True:
-            msg = out.receive_json()
-            if msg["type"] == "show_test_frame" and msg["kind"] == "black":
-                break
-            if msg["type"] == "show_pattern":
-                shown += 1
-                if shown == 5:
-                    assert client.post("/api/scan/cancel").status_code == 200
-                scene.pattern = msg["pattern"]
-                out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+        def cancel_at_fifth(n):
+            if n == 5:
+                assert client.post("/api/scan/cancel").status_code == 200
+
+        shown = len(play_output(out, scene, on_pattern=cancel_at_fifth))
         done = until_done(ed)
 
     assert done["type"] == "scan_canceled"
@@ -97,13 +91,7 @@ def scan_once(scene, uvc, hw, cams, tmp_path):
             editor(client) as ed, output(client, W, H) as out:
         client.app.state.hub.settings.save_calibration(AC410["unique_id"], {"exposure": 200, "gain": 0, "p99": 200})
         client.post("/api/scan")
-        while True:
-            msg = out.receive_json()
-            if msg["type"] == "show_test_frame" and msg["kind"] == "black":
-                break
-            if msg["type"] == "show_pattern":
-                scene.pattern = msg["pattern"]
-                out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+        play_output(out, scene)
         done = until_done(ed)
         mask = client.get("/api/scan/latest-mask.png")
     return done, mask
@@ -149,13 +137,7 @@ def test_averaging_frames_per_pattern_reads_a_noisy_scene_better(tmp_path):
                     scan_frames_per_pattern=frames) as client, editor(client) as ed, output(client, W, H) as out:
             client.app.state.hub.settings.save_calibration(AC410["unique_id"], {"exposure": 200, "gain": 0, "p99": 200})
             client.post("/api/scan")
-            while True:
-                msg = out.receive_json()
-                if msg["type"] == "show_test_frame" and msg["kind"] == "black":
-                    break
-                if msg["type"] == "show_pattern":
-                    scene.pattern = msg["pattern"]
-                    out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+            play_output(out, scene)
             done = until_done(ed)
         bits = done["bit_reliability"]
         return np.mean([v for axis in bits.values() for v in axis.values()])
@@ -186,11 +168,5 @@ def test_scan_data_is_not_touched_while_a_scan_runs(tmp_path):
 
         out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
         scene.pattern = msg["pattern"]
-        while True:
-            m = out.receive_json()
-            if m["type"] == "show_test_frame" and m["kind"] == "black":
-                break
-            if m["type"] == "show_pattern":
-                scene.pattern = m["pattern"]
-                out.send_json({"type": "pattern_shown", "seq": m["seq"]})
+        play_output(out, scene)
         until_done(ed)

@@ -297,14 +297,16 @@ Shaders write to `out vec4 color`. Compile errors are reported back to the edito
 | Module | Role |
 |--------|------|
 | `__main__.py` | Entry point: reads the environment variables, serves on 127.0.0.1:8765 |
-| `app.py` | FastAPI app: all HTTP routes and the `/ws` WebSocket, scan orchestration (see [docs/http-api.md](docs/http-api.md)) |
+| `app.py` | FastAPI app: all HTTP routes and the `/ws` WebSocket (see [docs/http-api.md](docs/http-api.md)) |
 | `hub.py` | Tracks the editors and the output window, pushes status and scene, pattern acks |
 | `hardware.py` | Finds displays (`system_profiler`) and cameras (AVFoundation metadata; never opens a camera) |
 | `cameras.py` | Camera catalog, USB address parsing, default camera choice, `settings.json` |
 | `camera_device.py` | Opens and reads the selected camera through OpenCV, one at a time |
 | `camera_lock.py` | Locks and restores UVC controls with `uvc-util`; crash recovery |
 | `calibrate.py` | Exposure and gain search on a white frame |
-| `scan_runner.py` | Runs a scan: pattern loop, frame dropping and averaging, sanity checks |
+| `scan_job.py` | Runs scans one at a time: cancel, progress and outcome messages, capture → decode → scan image → coverage → detection; other work holds it with `exclusive()` |
+| `scan_runner.py` | The capture part of a scan: pattern loop, frame dropping and averaging, sanity checks |
+| `scan_folder.py` | A saved scan on disk (scan image, mask, map, summary, its show, media): save, read, redetect, copy |
 | `scan.py` | Gray-code patterns, decoding, projector-space image, coverage, low-coverage hints |
 | `surfaces.py` | Surface detection and curve-aware outlines |
 | `scene.py` | The scene: surfaces, effects, edits, merges, redetect merging, play/blackout state |

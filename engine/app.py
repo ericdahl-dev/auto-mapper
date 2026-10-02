@@ -1,31 +1,25 @@
 import asyncio
-import json
 import logging
-import threading
-import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable
 
 import cv2
-import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import ValidationError
 
 from engine.camera_device import CAPTURE_SIZE, CameraFactory, CameraSession, OpenCVCameraFactory
 from engine.calibrate import CalibrationError, calibrate_exposure
 from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
-from engine.files import write_text_atomic
 from engine.hardware import HardwareProbe, MacHardware
-from engine.hub import Hub, OutputNotResponding
+from engine.hub import Hub
 from engine import media
-from engine.scan import DecodeResult, block_coverage, diagnose, projector_space_image
-from engine.scan_runner import ScanCanceled, ScanError, capture_scan
+from engine.scan_folder import ScanFolder
+from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
-from engine.surfaces import detect_surfaces
 from engine.messages import (
     ApplyEffectRequest,
     CameraSelectRequest,
@@ -68,15 +62,14 @@ def create_app(
     session = CameraSession(camera_factory or OpenCVCameraFactory(), capture_size)
     make_uvc = uvc_factory or (lambda address: UvcUtil(address.location))
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
-    scan_dir = data_path / "scans" / "latest"
-    scanning = asyncio.Lock()
-    cancel_scan = threading.Event()  # set by POST /api/scan/cancel, read by the capture thread
-
-    def scan_busy() -> bool:
-        task = getattr(app, "state", None) and getattr(app.state, "scan_task", None)
-        return scanning.locked() or (task is not None and not task.done())
-    scene = SceneStore(scan_dir)
-    projects = ProjectStore(data_path, scan_dir, scene)
+    latest = ScanFolder(data_path / "scans" / "latest")  # the working scan and its show
+    scene = SceneStore(latest)
+    projects = ProjectStore(data_path, latest, scene)
+    job = ScanJob(  # one scan at a time; other work on the working scan holds it with job.exclusive()
+        session=session, settings=settings, latest=latest, scene=scene, make_uvc=make_uvc, data_dir=data_path,
+        settle_seconds=scan_settle_seconds, drop_frames=scan_drop_frames,
+        frames_per_pattern=scan_frames_per_pattern, ack_timeout=ack_timeout,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -94,6 +87,10 @@ def create_app(
             session.close()
 
     app = FastAPI(title="auto-mapper engine", lifespan=lifespan)
+
+    @app.exception_handler(ScanBusy)
+    async def scan_busy(_request: Request, exc: ScanBusy):  # e.g. a scan started just as other work began
+        return JSONResponse({"detail": str(exc)}, status_code=409)
 
     @app.get("/api/status")
     async def status():
@@ -132,7 +129,7 @@ def create_app(
         selected = settings.selected(hub.hardware.cameras)
         if selected is None:
             raise HTTPException(409, "No camera selected")
-        if scan_busy():
+        if job.busy:
             raise HTTPException(409, "Camera is busy scanning")
         frame = await asyncio.to_thread(session.read, hub.hardware.cameras, selected)
         if frame.shape[1] > PREVIEW_WIDTH:  # 4K frames are slow to encode and to send
@@ -143,7 +140,7 @@ def create_app(
 
     @app.post("/api/camera/release")
     async def release_camera():
-        if scan_busy():
+        if job.busy:
             raise HTTPException(409, "Camera is busy scanning")
         await asyncio.to_thread(session.close)
         return {"ok": True}
@@ -182,113 +179,38 @@ def create_app(
         address = usb_address(selected)
         if address is None:
             raise HTTPException(409, "Scanning needs a USB webcam with UVC controls")
-        if scan_busy():
+        try:
+            job.start(hub, hub.hardware.cameras, selected, address)
+        except ScanBusy:
             raise HTTPException(409, "A scan is already running")
-        cancel_scan.clear()
-        # Claim the scan before the task starts, so a double click can't start two.
-        app.state.scan_task = asyncio.create_task(run_scan(hub, selected, address))
         return {"started": True}
 
     @app.post("/api/scan/cancel")
     async def cancel():
-        if not scan_busy():
+        try:
+            job.cancel()
+        except ScanNotRunning:
             raise HTTPException(409, "No scan is running")
-        cancel_scan.set()
         return {"canceling": True}
-
-    async def run_scan(hub: Hub, selected: str, address: UsbAddress) -> None:
-        async with scanning:
-            loop = asyncio.get_running_loop()
-            cameras = hub.hardware.cameras
-            res = hub.output_resolution
-            await hub.broadcast({"type": "scan_started"})
-
-            def call(coro):  # run an engine coroutine from the capture thread and wait for it
-                return asyncio.run_coroutine_threadsafe(coro, loop).result()
-
-            def capture():
-                return capture_scan(
-                    show=lambda p: call(hub.show_pattern(p, ack_timeout)),
-                    read_frame=lambda: session.read(cameras, selected),
-                    uvc=make_uvc(address),
-                    data_dir=data_path,
-                    width=res["width"],
-                    height=res["height"],
-                    calibration=settings.calibration(selected),
-                    progress=lambda done, total: call(
-                        hub.broadcast({"type": "scan_progress", "done": done, "total": total})
-                    ),
-                    settle_seconds=scan_settle_seconds,
-                    drop_frames=scan_drop_frames,
-                    canceled=cancel_scan.is_set,
-                    frames_per_pattern=scan_frames_per_pattern,
-                )
-
-            try:
-                started = time.monotonic()
-                decoded, calibration = await asyncio.to_thread(capture)
-                settings.save_calibration(selected, calibration)
-                image, covered = await asyncio.to_thread(projector_space_image, decoded)
-                coverage = block_coverage(covered)
-                surfaces = await asyncio.to_thread(detect_surfaces, decoded, (image, covered))
-                summary = {
-                    "width": decoded.width,
-                    "height": decoded.height,
-                    "coverage": coverage,
-                    "seconds": round(time.monotonic() - started, 1),
-                    "bit_reliability": decoded.bit_reliability,
-                    "surfaces": surfaces,
-                    "warnings": diagnose(decoded, coverage),
-                }
-                await asyncio.to_thread(save_scan, decoded, image, covered, summary)
-                scene.apply_detection(summary)  # keeps drawn/edited surfaces and carries effects
-                await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
-            except ScanCanceled:
-                await hub.broadcast({"type": "scan_canceled"})
-            except (ScanError, CalibrationError, OutputNotResponding) as e:
-                log.warning("scan failed: %s", e)
-                await hub.broadcast({"type": "scan_failed", "error": str(e)})
-            except Exception as e:  # never leave the editor waiting on a dead scan
-                log.exception("scan crashed")
-                await hub.broadcast({"type": "scan_failed", "error": f"Scan crashed: {e}"})
-                raise
-            finally:
-                await asyncio.to_thread(session.close)
-                await hub.send_to_output({"type": "show_test_frame", "kind": "black"})
-                await hub.broadcast_scene()  # back to the projected scene
-                await hub.broadcast_status()
-
-    def save_scan(decoded, image, covered, summary: dict) -> None:
-        scan_dir.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(scan_dir / "scan.png"), image)
-        cv2.imwrite(str(scan_dir / "mask.png"), covered.astype(np.uint8) * 255)
-        np.savez_compressed(
-            scan_dir / "map.npz", proj_x=decoded.proj_x.astype(np.int16), proj_y=decoded.proj_y.astype(np.int16),
-            valid=decoded.valid, covered=covered,
-        )
-        write_text_atomic(scan_dir / "meta.json", json.dumps(summary, indent=2))
-
-    def latest_image_url() -> str:
-        return f"/api/scan/latest.png?t={int(time.time() * 1000)}"
 
     @app.get("/api/scan/latest")
     async def latest_scan():
-        meta = scan_dir / "meta.json"
-        if not meta.exists():
+        meta = latest.meta()
+        if meta is None:
             raise HTTPException(404, "No scan yet")
-        return {**json.loads(meta.read_text()), "image": latest_image_url()}
+        return {**meta, "image": latest_image_url()}
 
     @app.get("/api/scan/latest-mask.png")
     async def latest_scan_mask():
-        path = scan_dir / "mask.png"
-        if not path.exists():
+        path = latest.mask_path()
+        if path is None:
             raise HTTPException(404, "No scan yet")
         return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
     @app.get("/api/scan/latest.png")
     async def latest_scan_image():
-        path = scan_dir / "scan.png"
-        if not path.exists():
+        path = latest.image_path()
+        if path is None:
             raise HTTPException(404, "No scan yet")
         return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
@@ -326,29 +248,16 @@ def create_app(
 
     @app.post("/api/scene/redetect")
     async def redetect():
-        if scene.scene is None or not (scan_dir / "map.npz").exists():
+        if scene.scene is None or not latest.can_redetect():
             raise HTTPException(404, "No scan yet")
-        if scan_busy():
+        if job.busy:
             raise HTTPException(409, "A scan is running")
-        async with scanning:  # hold scans/latest so a scan can't start halfway through
-            summary = await asyncio.to_thread(detect_saved_scan)
+        async with job.exclusive():  # a scan can't start halfway through
+            summary = await asyncio.to_thread(latest.redetect)
             scene.apply_detection(summary)
         await app.state.hub.broadcast_scene()
         await app.state.hub.broadcast({"type": "scan_reload"})
         return scene.public()
-
-    def detect_saved_scan() -> dict:
-        """Runs surface detection again on the saved scan, e.g. after detection improvements."""
-        m = np.load(scan_dir / "map.npz")
-        meta = json.loads((scan_dir / "meta.json").read_text())
-        decoded = DecodeResult(
-            proj_x=m["proj_x"].astype(np.int32), proj_y=m["proj_y"].astype(np.int32), valid=m["valid"],
-            white=None, black=None, bit_reliability={}, width=meta["width"], height=meta["height"],
-        )
-        image = cv2.imread(str(scan_dir / "scan.png"))
-        meta["surfaces"] = detect_surfaces(decoded, (image, m["covered"]))
-        write_text_atomic(scan_dir / "meta.json", json.dumps(meta, indent=2))
-        return meta
 
     @app.delete("/api/scene/surfaces/{surface_id}")
     async def delete_surface(surface_id: int):
@@ -399,13 +308,13 @@ def create_app(
     async def upload_media(name: str, request: Request):
         """The request body is the file itself; `name` is its original filename."""
         try:
-            return await media.store(scan_dir / "media", name, request.stream())
+            return await media.store(latest.media_dir, name, request.stream())
         except media.MediaError as e:
             raise HTTPException(e.status, str(e))
 
     @app.get("/api/media/{name}")
     async def get_media(name: str):
-        found = media.lookup(scan_dir / "media", name)
+        found = media.lookup(latest.media_dir, name)
         if found is None:
             raise HTTPException(404, "Unknown media")
         path, content_type = found
@@ -417,10 +326,10 @@ def create_app(
 
     @app.post("/api/projects")
     async def save_project(req: ProjectSaveRequest):
-        if scan_busy():
+        if job.busy:
             raise HTTPException(409, "A scan is running: save after it finishes")
         try:
-            async with scanning:  # copy a complete scan, never one being written
+            async with job.exclusive():  # copy a complete scan, never one being written
                 info = await asyncio.to_thread(projects.save, req.name)
         except UnknownProject as e:
             raise HTTPException(409, str(e))
@@ -429,10 +338,10 @@ def create_app(
 
     @app.post("/api/projects/{slug}/open")
     async def open_project(slug: str):
-        if scan_busy():
+        if job.busy:
             raise HTTPException(409, "A scan is running")
         try:
-            async with scanning:  # replacing scans/latest: keep a scan from starting meanwhile
+            async with job.exclusive():  # replacing the working scan: no scan meanwhile
                 info = await asyncio.to_thread(projects.open, slug)
         except UnknownProject:
             raise HTTPException(404, "Unknown project")
