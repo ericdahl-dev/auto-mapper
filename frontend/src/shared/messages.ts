@@ -69,7 +69,36 @@ export type ScanMessage =
     }
   | { type: "scan_failed"; error: string };
 
-export type ServerMessage = StatusMessage | ShowTestFrameMessage | ShowPatternMessage | ScanMessage;
+export interface SceneSurface {
+  id: number;
+  polygon: number[][];
+  area: number;
+  effect: string;
+  params: Record<string, unknown>;
+}
+
+export interface SceneMessage {
+  type: "scene";
+  width: number;
+  height: number;
+  surfaces: SceneSurface[];
+  selected: number | null;
+}
+
+export interface EffectErrorMessage {
+  type: "effect_error";
+  surface: number;
+  effect: string;
+  log: string;
+}
+
+export type ServerMessage =
+  | StatusMessage
+  | ShowTestFrameMessage
+  | ShowPatternMessage
+  | ScanMessage
+  | SceneMessage
+  | EffectErrorMessage;
 
 function isPattern(p: unknown): p is Pattern {
   if (typeof p !== "object" || p === null) return false;
@@ -111,6 +140,12 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return typeof m.coverage === "number" && typeof m.image === "string" ? (m as unknown as ScanMessage) : null;
     case "scan_failed":
       return typeof m.error === "string" ? (m as unknown as ScanMessage) : null;
+    case "scene":
+      return typeof m.width === "number" && typeof m.height === "number" && Array.isArray(m.surfaces)
+        ? (m as unknown as SceneMessage)
+        : null;
+    case "effect_error":
+      return typeof m.surface === "number" && typeof m.log === "string" ? (m as unknown as EffectErrorMessage) : null;
     default:
       return null;
   }

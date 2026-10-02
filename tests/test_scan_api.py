@@ -66,6 +66,8 @@ def test_scan_decodes_the_scene_and_reports_progress(rig, tmp_path):
         latest = client.get("/api/scan/latest").json()
         assert latest["surfaces"] == result["surfaces"]
         assert latest["width"] == W and latest["height"] == H
+        projected = client.get("/api/scene").json()
+        assert [s["effect"] for s in projected["surfaces"]] == ["none", "none"]
         png = client.get(result["image"])
         img = cv2.imdecode(np.frombuffer(png.content, np.uint8), cv2.IMREAD_COLOR)
         assert img.shape == (H, W, 3)

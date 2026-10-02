@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialScan, overlayPolygons, scanLabel, scanReducer } from "./scanState";
+import { initialScan, scanLabel, scanReducer } from "./scanState";
 
 const RESULT = {
   type: "scan_result" as const,
@@ -37,17 +37,3 @@ describe("scanReducer", () => {
   });
 });
 
-describe("overlayPolygons", () => {
-  it("gives SVG points in projector pixels, labelled in detection order", () => {
-    const s = scanReducer(initialScan, RESULT);
-    expect(s.size).toEqual({ width: 1920, height: 1080 });
-    expect(overlayPolygons(s)).toEqual([
-      { id: 1, points: "0,0 1920,0 1920,1080 0,1080" },
-      { id: 2, points: "1230,880 1540,880 1690,1080 1220,1080" },
-    ]);
-  });
-
-  it("is empty before a scan", () => {
-    expect(overlayPolygons(initialScan)).toEqual([]);
-  });
-});

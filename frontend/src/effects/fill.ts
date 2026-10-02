@@ -1,0 +1,21 @@
+import type { Effect } from "./types";
+
+/** Solid colour, or a linear gradient when the two colours differ. */
+export const fill: Effect = {
+  id: "fill",
+  name: "Fill",
+  params: [
+    { name: "colorA", label: "Colour", type: "color", default: "#2563eb" },
+    { name: "colorB", label: "Gradient to", type: "color", default: "#2563eb" },
+    { name: "angle", label: "Gradient angle", type: "number", default: 90, min: 0, max: 360, step: 1 },
+    { name: "brightness", label: "Brightness", type: "number", default: 1, min: 0, max: 1, step: 0.01 },
+  ],
+  fragment: `
+void main() {
+  float a = radians(u_angle);
+  vec2 dir = vec2(cos(a), sin(a));
+  // Project the surface-local position onto the gradient direction, 0..1 across the surface.
+  float t = clamp(dot(v_uv - 0.5, dir) + 0.5, 0.0, 1.0);
+  color = vec4(mix(u_colorA, u_colorB, t) * u_brightness, 1.0);
+}`,
+};
