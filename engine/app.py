@@ -49,8 +49,10 @@ def create_app(
     camera_factory: CameraFactory | None = None,
     uvc_factory: Callable[[UsbAddress], Uvc] | None = None,
     settle_seconds: float = 0.5,
-    scan_settle_seconds: float = 0.12,
-    scan_drop_frames: int = 2,
+    # At 4K the AC410 delivers ~20 fps and buffers frames; less than this captured stale
+    # patterns (coverage 0.61 vs 0.88 with these values, same scene).
+    scan_settle_seconds: float = 0.2,
+    scan_drop_frames: int = 5,
     ack_timeout: float = 2.0,
     capture_size: tuple[int, int] = CAPTURE_SIZE,
 ) -> FastAPI:
