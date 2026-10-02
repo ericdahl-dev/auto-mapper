@@ -45,9 +45,3 @@ export function scanLabel(s: ScanState): string {
   return "No scan yet";
 }
 
-export function overlayPolygons(s: ScanState): { id: number; points: string }[] {
-  return s.surfaces.map((surface, i) => ({
-    id: i + 1,
-    points: surface.polygon.map(([x, y]) => `${x},${y}`).join(" "),
-  }));
-}
