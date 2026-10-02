@@ -163,3 +163,34 @@ def test_averaging_frames_per_pattern_reads_a_noisy_scene_better(tmp_path):
     single = mean_reliability(1, tmp_path / "one")
     averaged = mean_reliability(4, tmp_path / "four")
     assert averaged > single + 0.03
+
+
+def test_scan_data_is_not_touched_while_a_scan_runs(tmp_path):
+    """Saving, opening or redetecting while a scan writes scans/latest could mix two scans."""
+    import json
+
+    scene, uvc, hw, cams = make_rig()
+    latest = tmp_path / "scans" / "latest"  # an earlier scan exists, so saving would otherwise work
+    latest.mkdir(parents=True)
+    (latest / "meta.json").write_text(json.dumps({"width": W, "height": H, "surfaces": []}))
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        out.receive_json()  # scene on hello
+        client.app.state.hub.settings.save_calibration(AC410["unique_id"], {"exposure": 200, "gain": 0, "p99": 200})
+        client.post("/api/scan")
+        msg = out.receive_json()  # scan running, waiting for the first acknowledgement
+
+        assert client.post("/api/projects", json={"name": "Mid scan"}).status_code == 409
+        assert client.post("/api/projects/anything/open").status_code == 409
+        assert client.post("/api/scene/redetect").status_code in (404, 409)
+
+        out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+        scene.pattern = msg["pattern"]
+        while True:
+            m = out.receive_json()
+            if m["type"] == "show_test_frame" and m["kind"] == "black":
+                break
+            if m["type"] == "show_pattern":
+                scene.pattern = m["pattern"]
+                out.send_json({"type": "pattern_shown", "seq": m["seq"]})
+        until_done(ed)

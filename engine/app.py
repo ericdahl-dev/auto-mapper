@@ -316,8 +316,9 @@ def create_app(
             raise HTTPException(404, "No scan yet")
         if scan_busy():
             raise HTTPException(409, "A scan is running")
-        summary = await asyncio.to_thread(detect_saved_scan)
-        scene.apply_detection(summary)
+        async with scanning:  # hold scans/latest so a scan can't start halfway through
+            summary = await asyncio.to_thread(detect_saved_scan)
+            scene.apply_detection(summary)
         await app.state.hub.broadcast_scene()
         await app.state.hub.broadcast({"type": "scan_reload"})
         return scene.public()
@@ -380,8 +381,11 @@ def create_app(
 
     @app.post("/api/projects")
     async def save_project(req: ProjectSaveRequest):
+        if scan_busy():
+            raise HTTPException(409, "A scan is running: save after it finishes")
         try:
-            info = await asyncio.to_thread(projects.save, req.name)
+            async with scanning:  # copy a complete scan, never one being written
+                info = await asyncio.to_thread(projects.save, req.name)
         except UnknownProject as e:
             raise HTTPException(409, str(e))
         await app.state.hub.broadcast_status()
@@ -392,7 +396,8 @@ def create_app(
         if scan_busy():
             raise HTTPException(409, "A scan is running")
         try:
-            info = await asyncio.to_thread(projects.open, slug)
+            async with scanning:  # replacing scans/latest: keep a scan from starting meanwhile
+                info = await asyncio.to_thread(projects.open, slug)
         except UnknownProject:
             raise HTTPException(404, "Unknown project")
         scene.present(mode="play", blackout=False)  # an opened project is ready to show
