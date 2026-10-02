@@ -29,6 +29,7 @@ export interface StatusMessage {
   output_connected: boolean;
   output_resolution: { width: number; height: number } | null;
   camera: { selected: string | null; calibration: Calibration | null };
+  project: { name: string; slug: string } | null;
   can_scan: boolean;
 }
 
@@ -86,6 +87,10 @@ export interface SceneMessage {
   selected: number | null;
 }
 
+export interface ScanReloadMessage {
+  type: "scan_reload";
+}
+
 export interface EffectErrorMessage {
   type: "effect_error";
   surface: number;
@@ -99,7 +104,8 @@ export type ServerMessage =
   | ShowPatternMessage
   | ScanMessage
   | SceneMessage
-  | EffectErrorMessage;
+  | EffectErrorMessage
+  | ScanReloadMessage;
 
 function isPattern(p: unknown): p is Pattern {
   if (typeof p !== "object" || p === null) return false;
@@ -145,6 +151,8 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return typeof m.width === "number" && typeof m.height === "number" && Array.isArray(m.surfaces)
         ? (m as unknown as SceneMessage)
         : null;
+    case "scan_reload":
+      return { type: "scan_reload" };
     case "effect_error":
       return typeof m.surface === "number" && typeof m.log === "string" ? (m as unknown as EffectErrorMessage) : null;
     default:

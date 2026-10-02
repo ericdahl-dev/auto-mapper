@@ -7,6 +7,7 @@ const status = {
   output_connected: true,
   output_resolution: { width: 1920, height: 1080 },
   camera: { selected: "0x2110000f1311306", calibration: null },
+  project: null,
   can_scan: true,
 };
 
@@ -60,5 +61,9 @@ describe("parseServerMessage", () => {
     const err = { type: "effect_error", surface: 2, effect: "fill", log: "ERROR: 0:3: 'nope' : undeclared identifier" };
     expect(parseServerMessage(JSON.stringify(err))).toEqual(err);
     expect(parseServerMessage('{"type":"scene","width":1920,"height":1080}')).toBeNull();
+  });
+
+  it("accepts the scan reload notice sent when a project opens", () => {
+    expect(parseServerMessage('{"type":"scan_reload"}')).toEqual({ type: "scan_reload" });
   });
 });

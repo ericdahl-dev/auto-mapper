@@ -16,6 +16,7 @@ function status(over: Partial<StatusMessage> = {}, issues: StatusMessage["hardwa
     output_connected: true,
     output_resolution: { width: 1920, height: 1080 },
     camera: { selected: issues.includes("no_camera") ? null : AC410.unique_id, calibration: null },
+    project: null,
     can_scan: issues.length === 0,
     ...over,
   };
@@ -83,5 +84,12 @@ describe("calibration summary", () => {
 
   it("says when the camera is not calibrated", () => {
     expect(describeStatus(status()).calibration).toBe("Not calibrated");
+  });
+});
+
+describe("project label", () => {
+  it("names the open project, or says none is open", () => {
+    expect(describeStatus(status({ project: { name: "Kitchen island", slug: "kitchen-island" } })).project).toBe("Kitchen island");
+    expect(describeStatus(status({ project: null })).project).toBe("Unsaved");
   });
 });

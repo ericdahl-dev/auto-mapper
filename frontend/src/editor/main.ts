@@ -20,6 +20,42 @@ const previewToggle = $<HTMLButtonElement>("preview-toggle");
 const calibrate = $<HTMLButtonElement>("calibrate");
 
 let status: StatusMessage | null = null;
+const projectName = $("project-name");
+const projectSaveName = $<HTMLInputElement>("project-save-name");
+const projectSave = $<HTMLButtonElement>("project-save");
+const projectList = $("project-list");
+
+async function refreshProjects() {
+  const res = await fetch("/api/projects");
+  if (!res.ok) return;
+  const projects: { name: string; slug: string; surfaces: number; saved_at: number }[] = await res.json();
+  projectList.replaceChildren(
+    ...projects.map((p) => {
+      const li = document.createElement("li");
+      li.classList.toggle("active", p.slug === status?.project?.slug);
+      const when = new Date(p.saved_at * 1000).toLocaleString();
+      li.append(
+        Object.assign(document.createElement("span"), { textContent: p.name, title: `${p.surfaces} surfaces, saved ${when}` }),
+        Object.assign(document.createElement("button"), {
+          textContent: "Open",
+          onclick: async () => {
+            const r = await fetch(`/api/projects/${p.slug}/open`, { method: "POST" });
+            if (!r.ok) notice(`Cannot open: ${(await r.json()).detail}`);
+          },
+        }),
+      );
+      return li;
+    }),
+  );
+}
+
+async function reloadScan() {
+  const r = await fetch("/api/scan/latest");
+  if (r.ok) {
+    scanState = scanReducer(initialScan, { type: "scan_result", ...(await r.json()) });
+    renderScan();
+  }
+}
 let scanState: ScanState = initialScan;
 const scanImage = $<HTMLImageElement>("scan-image");
 const scanView = $("scan-view");
@@ -218,6 +254,10 @@ function render() {
   output.className = status?.output_connected ? "ok" : "bad";
   cameras.textContent = status?.hardware.cameras.join(", ") || "None";
   scan.disabled = !view.scanEnabled;
+  projectName.textContent = `· ${view.project}`;
+  if (status?.project && document.activeElement !== projectSaveName && !projectSaveName.value) {
+    projectSaveName.value = status.project.name;
+  }
   calibration.textContent = view.calibration;
   cameraSelect.replaceChildren(
     ...cameraOptions(status).map((o) => Object.assign(document.createElement("option"), o)),
@@ -235,7 +275,9 @@ connect({
   hello: () => ({ type: "hello", role: "editor" }),
   onMessage(msg) {
     if (msg.type === "status") {
+      const projectChanged = msg.project?.slug !== status?.project?.slug;
       status = msg;
+      if (projectChanged) void refreshProjects();
       render();
       renderScan();
     } else if (msg.type === "scene") {
@@ -248,6 +290,9 @@ connect({
       // An error belongs to one effect; switching the surface to another effect clears it.
       for (const s of msg.surfaces) if (effectErrors.get(s.id)?.effect !== s.effect) effectErrors.delete(s.id);
       renderSurfaces();
+    } else if (msg.type === "scan_reload") {
+      void reloadScan();
+      void refreshProjects();
     } else if (msg.type === "effect_error") {
       effectErrors.set(msg.surface, { effect: msg.effect, log: msg.log });
       renderSurfaces();
@@ -282,11 +327,19 @@ scan.addEventListener("click", async () => {
   if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`);
 });
 // Show the last scan, with its surfaces, after a reload.
-void fetch("/api/scan/latest").then(async (r) => {
-  if (r.ok) {
-    scanState = scanReducer(scanState, { type: "scan_result", ...(await r.json()) });
-    renderScan();
-  }
+void reloadScan();
+void refreshProjects();
+
+projectSave.addEventListener("click", async () => {
+  const name = projectSaveName.value.trim();
+  if (!name) return notice("Name the project first.");
+  const r = await fetch("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  notice(r.ok ? `Saved "${name}".` : `Cannot save: ${(await r.json()).detail}`);
+  void refreshProjects();
 });
 
 cameraSelect.addEventListener("change", () =>
