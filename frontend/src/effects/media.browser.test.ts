@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createMediaElement, SceneRenderer } from "../output/sceneRenderer";
 import type { SceneMessage } from "../shared/messages";
 import greenVideo from "./fixtures/green.webm?url"; // 1 s of solid green, 32x16 (ffmpeg lavfi color source)
+import greenThenBlue from "./fixtures/green-then-blue.webm?url";
 import { EFFECTS } from "./index";
 
 const W = 64, H = 32;
@@ -110,5 +111,27 @@ describe("createMediaElement", () => {
     expect([video.loop, video.muted, video.playsInline, video.autoplay]).toEqual([true, true, true, true]);
     expect(createMediaElement("/api/media/clip-0123456789ab.webm?t=1")).toBeInstanceOf(HTMLVideoElement);
     expect(createMediaElement("/api/media/wall-0123456789ab.png")).toBeInstanceOf(HTMLImageElement);
+  });
+});
+
+describe("media effect: video playback", () => {
+  it("starts from the chosen start time", async () => {
+    // 1 s green, then 1 s blue.
+    const { r, pixel } = setup({ src: greenThenBlue, fit: "stretch", start: 1.2 });
+    await r.whenMediaLoaded();
+    expect(r.playback(greenThenBlue)!.time).toBeGreaterThanOrEqual(1.2); // not reachable this fast from 0
+    let shown: number[] = [];
+    for (let i = 0; i < 60 && !(shown[2] > 150); i++) {
+      r.draw(0);
+      shown = pixel(12, 8);
+      await new Promise((f) => requestAnimationFrame(f));
+    }
+    expect(shown[2]).toBeGreaterThan(150); // the blue half
+  });
+
+  it("plays at the chosen speed", async () => {
+    const { r } = setup({ src: greenThenBlue, fit: "stretch", speed: 2 });
+    await r.whenMediaLoaded();
+    expect(r.playback(greenThenBlue)).toMatchObject({ rate: 2, start: 0 });
   });
 });

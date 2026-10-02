@@ -18,7 +18,7 @@ describe("controlsFor", () => {
     const controls = controlsFor(effectById("media"), { src: "/api/media/wall-0123456789ab.png" });
     expect(controls.map((c) => [c.name, c.kind])).toEqual([
       ["src", "media"], ["fit", "select"], ["zoom", "range"], ["panX", "range"], ["panY", "range"],
-      ["rotate", "range"], ["flip", "select"], ["background", "color"],
+      ["rotate", "range"], ["flip", "select"], ["background", "color"], ["start", "range"], ["speed", "range"],
     ]);
     expect(controls[0].value).toBe("/api/media/wall-0123456789ab.png");
     const fit = controls[1];

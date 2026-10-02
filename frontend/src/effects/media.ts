@@ -3,7 +3,7 @@ import type { Effect } from "./types";
 /** An uploaded image or video, clipped to the surface's outline. Cover, Stretch, Contain, Original size
  *  and Tile place it in the surface's bounding box; Map to corners warps it onto the surface's four
  *  corners (a corner pin), so it lies flat on a surface seen at an angle. Zoom, pan and rotate then
- *  frame it; anything outside the image shows the background colour. */
+ *  frame it; anything outside the image shows the background colour. Videos loop from their start time. */
 export const media: Effect = {
   id: "media",
   name: "Image / video",
@@ -30,6 +30,9 @@ export const media: Effect = {
       { value: "both", label: "Both" },
     ] },
     { name: "background", label: "Background", type: "color", default: "#000000" },
+    // Videos only (applied by the renderer to the video element, not the shader).
+    { name: "start", label: "Video start (s)", type: "number", default: 0, min: 0, max: 3600, step: 0.1 },
+    { name: "speed", label: "Video speed", type: "number", default: 1, min: 0.1, max: 4, step: 0.05 },
   ],
   fragment: `
 // Zoom, pan and rotate a point p centred on 0 (-0.5..0.5 across the space), in a space of the given
