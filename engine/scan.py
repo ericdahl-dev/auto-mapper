@@ -28,7 +28,7 @@ def pattern_sequence(width: int, height: int) -> list[dict]:
     return seq
 
 
-MIN_CONTRAST = 20  # white minus black (gray levels) for a camera pixel to count as lit
+MIN_CONTRAST = 10  # white minus black (gray levels) for a camera pixel to count as lit; noise is ~2
 MIN_BIT_DIFF = 6  # pattern minus inverse must exceed this...
 BIT_DIFF_FRACTION = 0.15  # ...and this fraction of the pixel's white-black contrast
 MAX_UNRELIABLE_LOW_BITS = 3  # finest bits the camera may fail to resolve before a pixel is dropped
