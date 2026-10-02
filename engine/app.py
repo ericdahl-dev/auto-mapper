@@ -19,6 +19,7 @@ from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine.scan import block_coverage, projector_space_image
 from engine.scan_runner import ScanError, capture_scan
+from engine.surfaces import detect_surfaces
 from engine.messages import CameraSelectRequest, EditorHello, Hello, OutputHello, TestFrameRequest
 
 
@@ -167,14 +168,17 @@ def create_app(
                 settings.save_calibration(selected, calibration)
                 image, covered = await asyncio.to_thread(projector_space_image, decoded)
                 coverage = block_coverage(covered)
-                await asyncio.to_thread(save_scan, decoded, image, covered, coverage)
-                await hub.broadcast({
-                    "type": "scan_result",
+                surfaces = await asyncio.to_thread(detect_surfaces, decoded, (image, covered))
+                summary = {
+                    "width": decoded.width,
+                    "height": decoded.height,
                     "coverage": coverage,
                     "seconds": round(time.monotonic() - started, 1),
                     "bit_reliability": decoded.bit_reliability,
-                    "image": f"/api/scan/latest.png?t={int(time.time() * 1000)}",
-                })
+                    "surfaces": surfaces,
+                }
+                await asyncio.to_thread(save_scan, decoded, image, covered, summary)
+                await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except (ScanError, CalibrationError, OutputNotResponding) as e:
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})
             except Exception as e:  # never leave the editor waiting on a dead scan
@@ -185,17 +189,24 @@ def create_app(
                 await hub.send_to_output({"type": "show_test_frame", "kind": "black"})
                 await hub.broadcast_status()
 
-    def save_scan(decoded, image, covered, coverage) -> None:
+    def save_scan(decoded, image, covered, summary: dict) -> None:
         scan_dir.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(scan_dir / "scan.png"), image)
         np.savez_compressed(
             scan_dir / "map.npz", proj_x=decoded.proj_x.astype(np.int16), proj_y=decoded.proj_y.astype(np.int16),
             valid=decoded.valid, covered=covered,
         )
-        (scan_dir / "meta.json").write_text(json.dumps({
-            "width": decoded.width, "height": decoded.height, "coverage": coverage,
-            "bit_reliability": decoded.bit_reliability,
-        }, indent=2))
+        (scan_dir / "meta.json").write_text(json.dumps(summary, indent=2))
+
+    def latest_image_url() -> str:
+        return f"/api/scan/latest.png?t={int(time.time() * 1000)}"
+
+    @app.get("/api/scan/latest")
+    async def latest_scan():
+        meta = scan_dir / "meta.json"
+        if not meta.exists():
+            raise HTTPException(404, "No scan yet")
+        return {**json.loads(meta.read_text()), "image": latest_image_url()}
 
     @app.get("/api/scan/latest.png")
     async def latest_scan_image():

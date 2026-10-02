@@ -1,4 +1,4 @@
-import type { ScanMessage } from "../shared/messages";
+import type { ScanMessage, Surface } from "../shared/messages";
 
 export interface ScanState {
   running: boolean;
@@ -8,10 +8,13 @@ export interface ScanState {
   coverage: number | null;
   seconds: number | null;
   error: string | null;
+  size: { width: number; height: number } | null;
+  surfaces: Surface[];
 }
 
 export const initialScan: ScanState = {
   running: false, done: 0, total: 0, image: null, coverage: null, seconds: null, error: null,
+  size: null, surfaces: [],
 };
 
 export function scanReducer(s: ScanState, msg: ScanMessage): ScanState {
@@ -21,7 +24,15 @@ export function scanReducer(s: ScanState, msg: ScanMessage): ScanState {
     case "scan_progress":
       return { ...s, running: true, done: msg.done, total: msg.total };
     case "scan_result":
-      return { ...s, running: false, image: msg.image, coverage: msg.coverage, seconds: msg.seconds };
+      return {
+        ...s,
+        running: false,
+        image: msg.image,
+        coverage: msg.coverage,
+        seconds: msg.seconds,
+        size: { width: msg.width, height: msg.height },
+        surfaces: msg.surfaces,
+      };
     case "scan_failed":
       return { ...s, running: false, error: msg.error };
   }
@@ -32,4 +43,11 @@ export function scanLabel(s: ScanState): string {
   if (s.error) return "Scan failed";
   if (s.coverage !== null) return `Coverage ${Math.round(s.coverage * 100)}% · ${s.seconds} s`;
   return "No scan yet";
+}
+
+export function overlayPolygons(s: ScanState): { id: number; points: string }[] {
+  return s.surfaces.map((surface, i) => ({
+    id: i + 1,
+    points: surface.polygon.map(([x, y]) => `${x},${y}`).join(" "),
+  }));
 }

@@ -16,7 +16,8 @@ def homography(src, dst) -> np.ndarray:
 
 
 class Scene:
-    def __init__(self, proj_w=256, proj_h=144, cam_w=320, cam_h=240, unresolved_bits=0, noise=2.0, seed=0):
+    def __init__(self, proj_w=256, proj_h=144, cam_w=320, cam_h=240, unresolved_bits=0, noise=2.0, seed=0,
+                 box=True, box_albedo=0.9, wall_albedo=0.75):
         self.proj_w, self.proj_h, self.cam_w, self.cam_h = proj_w, proj_h, cam_w, cam_h
         self.unresolved_bits = unresolved_bits
         self.noise = noise
@@ -27,17 +28,41 @@ class Scene:
         # Projection lands inside the camera view with some keystone.
         corners = [(0, 0), (proj_w, 0), (proj_w, proj_h), (0, proj_h)]
         wall = homography([(40, 30), (290, 45), (280, 215), (35, 200)], corners)
-        box = homography([(30, 20), (290, 40), (285, 220), (25, 205)], corners)  # same plane, shifted by depth
+        # The box is nearer the camera: parallax shifts it along the camera-projector
+        # baseline, so its projector coordinates are the wall's, offset in camera space.
+        shift = np.array([[1, 0, 12], [0, 1, 4], [0, 0, 1]], float)
+        box_h = wall @ shift
+        self._box_h = box_h
         v, u = np.mgrid[0:cam_h, 0:cam_w].astype(np.float64)
-        self.box_region = (u >= 190) & (u < 250) & (v >= 130) & (v < 190)
+        self.box_rect = (190, 130, 250, 190)  # camera pixels: u0, v0, u1, v1
+        u0, v0, u1, v1 = self.box_rect
+        inside = (u >= u0) & (u < u1) & (v >= v0) & (v < v1)
+        self.box_region = inside if box else np.zeros(u.shape, bool)
         x, y = self._apply(wall, u, v)
-        bx, by = self._apply(box, u, v)
+        bx, by = self._apply(box_h, u, v)
         x = np.where(self.box_region, bx, x)
         y = np.where(self.box_region, by, y)
         self.lit = (x >= 0) & (x < proj_w) & (y >= 0) & (y < proj_h)
+        if box:
+            # Wall behind the box gets no projector light: the box is in the way (projector shadow).
+            import cv2
+
+            footprint = np.zeros((proj_h, proj_w), np.uint8)
+            cv2.fillPoly(footprint, [np.int32(np.round(self.box_projector_quad()))], 1)
+            xi = np.clip(np.floor(x), 0, proj_w - 1).astype(int)
+            yi = np.clip(np.floor(y), 0, proj_h - 1).astype(int)
+            self.lit &= self.box_region | (footprint[yi, xi] == 0)
         self.true_x = np.where(self.lit, np.floor(x), -1).astype(np.int32)
         self.true_y = np.where(self.lit, np.floor(y), -1).astype(np.int32)
-        self.albedo = np.where(self.box_region, 0.9, 0.75)
+        self.albedo = np.where(self.box_region, box_albedo, wall_albedo)
+
+    def box_projector_quad(self) -> np.ndarray:
+        """The box's outline in projector pixels (4 x 2)."""
+        u0, v0, u1, v1 = self.box_rect
+        u = np.array([u0, u1, u1, u0], float)
+        v = np.array([v0, v0, v1, v1], float)
+        x, y = self._apply(self._box_h, u, v)
+        return np.stack([x, y], axis=1)
 
     @staticmethod
     def _apply(h, u, v):
