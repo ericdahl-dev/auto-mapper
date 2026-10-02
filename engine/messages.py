@@ -24,3 +24,7 @@ Hello = TypeAdapter(Annotated[EditorHello | OutputHello, Field(discriminator="ro
 
 class TestFrameRequest(BaseModel):
     kind: TestFrameKind
+
+
+class CameraSelectRequest(BaseModel):
+    unique_id: str

@@ -1,0 +1,78 @@
+import pytest
+
+from engine.camera_device import FakeCameraFactory
+from engine.camera_lock import FakeUvc
+from engine.hardware import FakeHardware
+from tests.helpers import FACETIME, LAPTOP, PROJECTOR, RIG_CAMERAS, engine, output
+
+DEFAULTS = {
+    "auto-exposure-mode": "8", "exposure-time-abs": "160", "gain": "0",
+    "auto-white-balance-temp": "true", "white-balance-temp": "6500",
+    "auto-focus": "true", "focus-abs": "395",
+}
+
+
+@pytest.fixture
+def rig():
+    return FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=RIG_CAMERAS)
+
+
+def camera_responding_to(uvc, brightness_per_exposure):
+    """Fake camera whose white-frame brightness follows the UVC exposure setting."""
+    return FakeCameraFactory(brightness=lambda: min(255, int(uvc.values["exposure-time-abs"]) * brightness_per_exposure))
+
+
+def test_calibrate_picks_brightest_unclipped_exposure_and_restores_camera(rig, tmp_path):
+    uvc = FakeUvc(DEFAULTS)
+    with engine(rig, data_dir=tmp_path, camera_factory=camera_responding_to(uvc, 2),
+                uvc_factory=lambda address: uvc) as client, output(client) as out:
+        resp = client.post("/api/camera/calibrate")
+        shown = out.receive_json()
+
+        assert resp.status_code == 200, resp.text
+        assert shown == {"type": "show_test_frame", "kind": "white"}
+        # 2 levels per exposure step: 124 -> 248 is the last value below clipping (250).
+        assert resp.json()["exposure"] == 124
+        assert uvc.values == DEFAULTS
+        assert client.get("/api/status").json()["camera"]["calibration"]["exposure"] == 124
+
+
+def test_calibrate_fails_loudly_when_brightness_ignores_exposure(rig, tmp_path):
+    uvc = FakeUvc(DEFAULTS)
+    with engine(rig, data_dir=tmp_path, camera_factory=FakeCameraFactory(brightness=lambda: 128),
+                uvc_factory=lambda address: uvc) as client, output(client):
+        resp = client.post("/api/camera/calibrate")
+
+    assert resp.status_code == 422
+    assert "did not respond to exposure" in resp.json()["detail"]
+    assert uvc.values == DEFAULTS
+
+
+def test_calibrate_needs_the_output_window(rig, tmp_path):
+    uvc = FakeUvc(DEFAULTS)
+    with engine(rig, data_dir=tmp_path, uvc_factory=lambda address: uvc) as client:
+        resp = client.post("/api/camera/calibrate")
+
+    assert resp.status_code == 409
+    assert uvc.writes == []
+
+
+def test_calibrate_needs_a_usb_webcam(rig, tmp_path):
+    with engine(rig, data_dir=tmp_path, uvc_factory=lambda address: FakeUvc(DEFAULTS)) as client, output(client):
+        client.post("/api/camera", json={"unique_id": FACETIME["unique_id"]})
+        resp = client.post("/api/camera/calibrate")
+
+    assert resp.status_code == 409
+    assert "USB" in resp.json()["detail"]
+
+
+def test_engine_start_restores_camera_left_locked_by_a_crash(rig, tmp_path):
+    from engine.camera_lock import locked_camera
+
+    uvc = FakeUvc(DEFAULTS)
+    lock = locked_camera(uvc, tmp_path)
+    lock.__enter__()  # killed mid-scan; keep a reference so GC does not run its finally
+    assert uvc.values["auto-exposure-mode"] == "1"
+
+    with engine(rig, data_dir=tmp_path, uvc_factory=lambda address: uvc):
+        assert uvc.values == DEFAULTS

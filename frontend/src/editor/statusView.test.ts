@@ -1,17 +1,21 @@
 import { describe, expect, it } from "vitest";
-import type { StatusMessage } from "../shared/messages";
-import { describeStatus } from "./statusView";
+import type { CameraInfo, StatusMessage } from "../shared/messages";
+import { cameraOptions, describeStatus } from "./statusView";
+
+const AC410: CameraInfo = { name: "Webcam AC410", unique_id: "0x2110000f1311306", device_type: "external" };
+const FACETIME: CameraInfo = { name: "FaceTime HD Camera", unique_id: "3F45E80A", device_type: "builtin" };
 
 function status(over: Partial<StatusMessage> = {}, issues: StatusMessage["hardware"]["issues"] = []): StatusMessage {
   return {
     type: "status",
     hardware: {
       projector: issues.includes("no_projector") ? null : { name: "AML TV", width: 1920, height: 1080 },
-      cameras: issues.includes("no_camera") ? [] : ["Webcam AC410"],
+      cameras: issues.includes("no_camera") ? [] : [FACETIME, AC410],
       issues,
     },
     output_connected: true,
     output_resolution: { width: 1920, height: 1080 },
+    camera: { selected: issues.includes("no_camera") ? null : AC410.unique_id, calibration: null },
     can_scan: issues.length === 0,
     ...over,
   };
@@ -55,5 +59,29 @@ describe("describeStatus", () => {
     const view = describeStatus(null);
     expect(view.banners).toEqual(["Engine not reachable. Is `make dev` running?"]);
     expect(view.scanEnabled).toBe(false);
+  });
+});
+
+describe("cameraOptions", () => {
+  it("lists cameras, marks the selected one and flags non-USB cameras", () => {
+    expect(cameraOptions(status())).toEqual([
+      { value: "3F45E80A", label: "FaceTime HD Camera (built-in)", selected: false },
+      { value: "0x2110000f1311306", label: "Webcam AC410 (USB)", selected: true },
+    ]);
+  });
+
+  it("is empty when the engine is unreachable", () => {
+    expect(cameraOptions(null)).toEqual([]);
+  });
+});
+
+describe("calibration summary", () => {
+  it("shows the saved exposure for the selected camera", () => {
+    const view = describeStatus(status({ camera: { selected: AC410.unique_id, calibration: { exposure: 124, gain: 0, p99: 248 } } }));
+    expect(view.calibration).toBe("Exposure 124 (white frame peak 248)");
+  });
+
+  it("says when the camera is not calibrated", () => {
+    expect(describeStatus(status()).calibration).toBe("Not calibrated");
   });
 });

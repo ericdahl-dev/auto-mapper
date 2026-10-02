@@ -1,4 +1,5 @@
 import { connect } from "../shared/connection";
+import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
 
 const canvas = document.getElementById("stage") as HTMLCanvasElement;
@@ -16,10 +17,17 @@ const conn = connect({
 window.addEventListener("resize", () => {
   size = renderer.resize();
   conn.send({ type: "hello", role: "output", ...size });
+  syncHint();
 });
 
 // Browsers only allow fullscreen from a user gesture, so the engine can't do it for us.
-const syncHint = () => (hint.hidden = document.fullscreenElement !== null);
+function syncHint() {
+  hint.hidden = !shouldShowHint({
+    pageFullscreen: document.fullscreenElement !== null,
+    window: { width: window.innerWidth, height: window.innerHeight },
+    screen: { width: window.screen.width, height: window.screen.height },
+  });
+}
 document.addEventListener("fullscreenchange", syncHint);
 document.addEventListener("click", () => {
   if (!document.fullscreenElement) void document.documentElement.requestFullscreen();

@@ -11,11 +11,24 @@ export interface Projector {
 
 export type HardwareIssue = "no_projector" | "no_camera";
 
+export interface CameraInfo {
+  name: string;
+  unique_id: string;
+  device_type: "builtin" | "external" | "continuity" | "other";
+}
+
+export interface Calibration {
+  exposure: number;
+  gain: number;
+  p99: number;
+}
+
 export interface StatusMessage {
   type: "status";
-  hardware: { projector: Projector | null; cameras: string[]; issues: HardwareIssue[] };
+  hardware: { projector: Projector | null; cameras: CameraInfo[]; issues: HardwareIssue[] };
   output_connected: boolean;
   output_resolution: { width: number; height: number } | null;
+  camera: { selected: string | null; calibration: Calibration | null };
   can_scan: boolean;
 }
 

@@ -1,38 +1,12 @@
-from contextlib import contextmanager
-
 import pytest
-from fastapi.testclient import TestClient
 
-from engine.app import create_app
 from engine.hardware import FakeHardware
-
-PROJECTOR = {"name": "AML TV", "width": 1920, "height": 1080, "main": False}
-LAPTOP = {"name": "Color LCD", "width": 3456, "height": 2234, "main": True}
+from tests.helpers import AC410, LAPTOP, PROJECTOR, RIG_CAMERAS, editor, engine, output
 
 
 @pytest.fixture
 def rig():
-    return FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=["Webcam AC410"])
-
-
-@contextmanager
-def engine(hardware):
-    with TestClient(create_app(hardware=hardware)) as client:
-        yield client
-
-
-@contextmanager
-def editor(client):
-    with client.websocket_connect("/ws") as ws:
-        ws.send_json({"type": "hello", "role": "editor"})
-        yield ws
-
-
-@contextmanager
-def output(client, width=1920, height=1080):
-    with client.websocket_connect("/ws") as ws:
-        ws.send_json({"type": "hello", "role": "output", "width": width, "height": height})
-        yield ws
+    return FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=RIG_CAMERAS)
 
 
 def test_status_reports_hardware_and_no_output(rig):
@@ -40,7 +14,8 @@ def test_status_reports_hardware_and_no_output(rig):
         status = client.get("/api/status").json()
 
     assert status["hardware"]["projector"] == {"name": "AML TV", "width": 1920, "height": 1080}
-    assert status["hardware"]["cameras"] == ["Webcam AC410"]
+    assert [c["name"] for c in status["hardware"]["cameras"]] == [
+        "OBS Virtual Camera", "FaceTime HD Camera", "Webcam AC410", "erictest Camera"]
     assert status["hardware"]["issues"] == []
     assert status["output_connected"] is False
     assert status["can_scan"] is False
@@ -72,7 +47,7 @@ def test_output_connect_and_disconnect_are_pushed_to_editor(rig):
 
 
 def test_missing_projector_is_an_issue_and_blocks_scan():
-    hw = FakeHardware(displays=[LAPTOP], cameras=["Webcam AC410"])
+    hw = FakeHardware(displays=[LAPTOP], cameras=[AC410])
     with engine(hw) as client, output(client):
         status = client.get("/api/status").json()
 
@@ -114,7 +89,7 @@ def test_unknown_test_frame_kind_is_rejected(rig):
 
 
 def test_hardware_refresh_picks_up_newly_connected_projector():
-    hw = FakeHardware(displays=[LAPTOP], cameras=["Webcam AC410"])
+    hw = FakeHardware(displays=[LAPTOP], cameras=[AC410])
     with engine(hw) as client, editor(client) as ed:
         assert ed.receive_json()["hardware"]["projector"] is None
 

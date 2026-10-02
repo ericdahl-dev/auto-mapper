@@ -2,12 +2,14 @@
 
 from fastapi import WebSocket
 
+from engine.cameras import CameraSettings
 from engine.hardware import HardwareSnapshot
 
 
 class Hub:
-    def __init__(self, hardware: HardwareSnapshot):
+    def __init__(self, hardware: HardwareSnapshot, settings: CameraSettings):
         self.hardware = hardware
+        self.settings = settings
         self.editors: set[WebSocket] = set()
         self.output: WebSocket | None = None
         self.output_resolution: dict | None = None
@@ -18,8 +20,15 @@ class Hub:
             "hardware": self.hardware.to_dict(),
             "output_connected": self.output is not None,
             "output_resolution": self.output_resolution,
-            "can_scan": self._output_fills_projector() and not self.hardware.issues,
+            "camera": self._camera_status(),
+            "can_scan": self._output_fills_projector()
+            and not self.hardware.issues
+            and self.settings.selected(self.hardware.cameras) is not None,
         }
+
+    def _camera_status(self) -> dict:
+        selected = self.settings.selected(self.hardware.cameras)
+        return {"selected": selected, "calibration": self.settings.calibration(selected)}
 
     def _output_fills_projector(self) -> bool:
         # Patterns are generated at projector resolution, so the output window must be
