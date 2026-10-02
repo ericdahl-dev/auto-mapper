@@ -60,3 +60,8 @@ class PresentationRequest(BaseModel):
 class NewSurfaceRequest(BaseModel):
     polygon: Annotated[list[Point], Field(min_length=3)]
     name: Annotated[str, Field(max_length=80)] | None = None
+
+
+class ApplyEffectRequest(BaseModel):
+    from_id: int = Field(alias="from")
+    to: list[int] | None = None  # omitted: every surface

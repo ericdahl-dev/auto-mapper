@@ -3,6 +3,7 @@
 Effect ids and params are opaque here; the frontend effect registry owns their meaning.
 """
 
+import copy
 import json
 from pathlib import Path
 
@@ -119,6 +120,15 @@ class SceneStore:
         self.scene["selected"] = keep["id"]
         self._save()
         return keep["id"]
+
+    def apply_effect(self, from_id: int, to_ids: list[int] | None = None) -> None:
+        """Gives other surfaces (all, by default) a copy of one surface's effect and params."""
+        source = self._surface(from_id)
+        targets = self.scene["surfaces"] if to_ids is None else [self._surface(i) for i in to_ids]
+        for t in targets:
+            t["effect"] = source["effect"]
+            t["params"] = copy.deepcopy(source["params"])  # copies: later edits stay per surface
+        self._save()
 
     def add_manual(self, polygon: list[list[float]], name: str | None = None) -> int:
         """A surface drawn by hand, for areas detection missed."""
