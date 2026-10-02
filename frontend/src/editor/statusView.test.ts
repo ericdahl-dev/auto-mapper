@@ -129,3 +129,12 @@ describe("a chosen projector that is unplugged", () => {
     expect(describeStatus(s).banners).toContain("P24q-10 (your chosen projector) is not connected. Using AML TV for now.");
   });
 });
+
+describe("video sound waiting for a click", () => {
+  it("tells the user to click the output window", () => {
+    expect(describeStatus(status({ output_video_sound_blocked: true })).banners).toContain(
+      "Video sound is waiting: click the output window once to allow it.",
+    );
+    expect(describeStatus(status({ output_video_sound_blocked: false })).banners).toEqual([]);
+  });
+});

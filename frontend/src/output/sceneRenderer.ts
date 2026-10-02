@@ -171,6 +171,22 @@ export class SceneRenderer {
     this.audio = values;
   }
 
+  /** A video element by file (for tests and diagnostics). */
+  mediaElement(src: string): HTMLVideoElement | null {
+    return this.media.get(src)?.video ?? null;
+  }
+
+  /** True when a video should be heard but isn't playing: browsers pause an unmuted video until
+   *  the user clicks in the page. The output window reports this so the editor can say "click". */
+  soundBlocked(): boolean {
+    return [...this.media.values()].some((m) => m.video && !m.video.muted && m.video.paused);
+  }
+
+  /** Restarts paused videos; call from a click handler, which lets the browser allow sound. */
+  async resumeMedia(): Promise<void> {
+    await Promise.all([...this.media.values()].map((m) => m.video?.play().catch(() => {})));
+  }
+
   /** A video's playback settings (for tests and diagnostics); null for images or unknown files. */
   playback(src: string): { rate: number; start: number; time: number; muted: boolean; volume: number } | null {
     const m = this.media.get(src);

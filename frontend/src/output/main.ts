@@ -32,7 +32,12 @@ function loop() {
   // Every 2 s; 4 times a second while listening, so the editor's sound meter moves.
   if (now - statsFrom >= (scene?.sound?.enabled ? 250 : 2000)) {
     // Let the editor see whether the projector keeps up (target: the display's 60 Hz).
-    conn.send({ type: "output_stats", fps: (frames * 1000) / (now - statsFrom), sound: sound.status() });
+    conn.send({
+      type: "output_stats",
+      fps: (frames * 1000) / (now - statsFrom),
+      sound: sound.status(),
+      video_sound_blocked: sceneRenderer.soundBlocked(),
+    });
     frames = 0;
     statsFrom = now;
   }
@@ -97,6 +102,7 @@ document.addEventListener("fullscreenchange", syncHint);
 document.addEventListener("click", () => {
   if (!document.fullscreenElement) void document.documentElement.requestFullscreen();
   void sound.resume(); // browsers may hold audio until a click in the page
+  void sceneRenderer.resumeMedia(); // ...and pause unmuted videos until then
 });
 syncHint();
 bindPresentationKeys(() => scene?.presentation.mode ?? "edit");

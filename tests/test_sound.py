@@ -50,3 +50,16 @@ def test_editors_see_the_outputs_sound_meter_and_errors(rig, scanned):
 
         out.send_json({"type": "output_stats", "fps": 60, "sound": {"level": 0, "error": "Microphone blocked"}})
         assert ed.receive_json()["output_sound"] == {"level": 0, "error": "Microphone blocked"}
+
+
+def test_editors_learn_when_video_sound_waits_for_a_click(rig, scanned):
+    with engine(rig, data_dir=scanned) as client, editor(client) as ed, output(client) as out:
+        ed.receive_json(), ed.receive_json()
+        out.receive_json()
+        ed.receive_json()
+
+        out.send_json({"type": "output_stats", "fps": 60, "video_sound_blocked": True})
+        assert ed.receive_json()["output_video_sound_blocked"] is True
+
+        out.send_json({"type": "output_stats", "fps": 60, "video_sound_blocked": False})
+        assert ed.receive_json()["output_video_sound_blocked"] is False

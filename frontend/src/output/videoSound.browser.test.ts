@@ -48,3 +48,20 @@ describe("video sound", () => {
     expect(r.playback(toneVideo)).toMatchObject({ muted: false, volume: 0.8 });
   });
 });
+
+describe("when the browser holds sound back until a click", () => {
+  it("reports a video that should be audible but isn't playing, and a click resumes it", async () => {
+    const r = await renderer(scene(PLAY, { sound: "on" }));
+    expect(r.soundBlocked()).toBe(false);
+    r.mediaElement(toneVideo)!.pause(); // what the browser does to an unmuted autoplay without a click
+    expect(r.soundBlocked()).toBe(true);
+    await r.resumeMedia(); // called from the output window's click handler
+    expect(r.soundBlocked()).toBe(false);
+  });
+
+  it("doesn't count muted videos", async () => {
+    const r = await renderer(scene(PLAY, {}));
+    r.mediaElement(toneVideo)!.pause();
+    expect(r.soundBlocked()).toBe(false);
+  });
+});

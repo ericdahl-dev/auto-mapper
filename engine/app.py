@@ -472,6 +472,8 @@ def create_app(
                     fps = msg.get("fps")
                     if isinstance(fps, (int, float)):
                         hub.output_fps = round(float(fps), 1)
+                    if isinstance(msg.get("video_sound_blocked"), bool):
+                        hub.output_video_sound_blocked = msg["video_sound_blocked"]
                     sound = msg.get("sound")
                     if isinstance(sound, dict):
                         level, error = sound.get("level"), sound.get("error")

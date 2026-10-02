@@ -42,6 +42,7 @@ export interface StatusMessage {
   output_resolution: { width: number; height: number } | null;
   output_fps?: number | null;
   output_sound?: { level: number; error: string | null } | null;
+  output_video_sound_blocked?: boolean;
   camera: { selected: string | null; calibration: Calibration | null };
   project: { name: string; slug: string } | null;
   can_scan: boolean;
