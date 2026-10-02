@@ -19,8 +19,11 @@ from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine.scan import block_coverage, projector_space_image
 from engine.scan_runner import ScanError, capture_scan
+from engine.scene import SceneStore, UnknownSurface
 from engine.surfaces import detect_surfaces
-from engine.messages import CameraSelectRequest, EditorHello, Hello, OutputHello, TestFrameRequest
+from engine.messages import (
+    CameraSelectRequest, EditorHello, Hello, OutputHello, SelectRequest, SurfaceUpdate, TestFrameRequest,
+)
 
 
 DEFAULT_DATA_DIR = Path.home() / ".auto-mapper"
@@ -43,10 +46,11 @@ def create_app(
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
     scan_dir = data_path / "scans" / "latest"
     scanning = asyncio.Lock()
+    scene = SceneStore(scan_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.hub = Hub(await asyncio.to_thread(probe.probe), settings)
+        app.state.hub = Hub(await asyncio.to_thread(probe.probe), settings, scene)
         # A scan killed mid-way leaves the webcam locked; put its settings back.
         # Assumes the selected camera is the one that was locked.
         selected = settings.selected(app.state.hub.hardware.cameras)
@@ -178,6 +182,7 @@ def create_app(
                     "surfaces": surfaces,
                 }
                 await asyncio.to_thread(save_scan, decoded, image, covered, summary)
+                scene.reset_from_scan(summary)
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except (ScanError, CalibrationError, OutputNotResponding) as e:
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})
@@ -187,6 +192,7 @@ def create_app(
             finally:
                 await asyncio.to_thread(session.close)
                 await hub.send_to_output({"type": "show_test_frame", "kind": "black"})
+                await hub.broadcast_scene()  # back to the projected scene
                 await hub.broadcast_status()
 
     def save_scan(decoded, image, covered, summary: dict) -> None:
@@ -215,6 +221,30 @@ def create_app(
             raise HTTPException(404, "No scan yet")
         return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
+    @app.get("/api/scene")
+    async def get_scene():
+        if scene.scene is None:
+            raise HTTPException(404, "No scan yet")
+        return scene.scene
+
+    @app.patch("/api/scene/surfaces/{surface_id}")
+    async def update_surface(surface_id: int, req: SurfaceUpdate):
+        try:
+            scene.update(surface_id, req.effect, req.params)
+        except UnknownSurface:
+            raise HTTPException(404, "Unknown surface")
+        await app.state.hub.broadcast_scene()
+        return scene.scene
+
+    @app.post("/api/scene/select")
+    async def select_surface(req: SelectRequest):
+        try:
+            scene.select(req.id)
+        except UnknownSurface:
+            raise HTTPException(404, "Unknown surface")
+        await app.state.hub.broadcast_scene()
+        return scene.scene
+
     @app.post("/api/test-frame")
     async def test_frame(req: TestFrameRequest):
         sent = await app.state.hub.send_to_output({"type": "show_test_frame", "kind": req.kind})
@@ -240,6 +270,8 @@ def create_app(
                 msg = await ws.receive_json()
                 if ws is hub.output and msg.get("type") == "pattern_shown":
                     hub.pattern_shown(int(msg.get("seq", -1)))
+                elif ws is hub.output and msg.get("type") == "effect_error":
+                    await hub.broadcast({k: msg.get(k) for k in ("type", "surface", "effect", "log")})
                 elif ws is hub.output and msg.get("type") == "hello":
                     # The output window re-sends hello when resized (e.g. going fullscreen).
                     try:

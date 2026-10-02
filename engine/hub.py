@@ -7,6 +7,7 @@ from fastapi import WebSocket
 
 from engine.cameras import CameraSettings
 from engine.hardware import HardwareSnapshot
+from engine.scene import SceneStore
 
 
 class OutputNotResponding(Exception):
@@ -14,9 +15,10 @@ class OutputNotResponding(Exception):
 
 
 class Hub:
-    def __init__(self, hardware: HardwareSnapshot, settings: CameraSettings):
+    def __init__(self, hardware: HardwareSnapshot, settings: CameraSettings, scene: SceneStore):
         self.hardware = hardware
         self.settings = settings
+        self.scene = scene
         self.editors: set[WebSocket] = set()
         self.output: WebSocket | None = None
         self.output_resolution: dict | None = None
@@ -52,11 +54,16 @@ class Hub:
     async def add_editor(self, ws: WebSocket) -> None:
         self.editors.add(ws)
         await self._send(ws, self.status())
+        if (scene := self.scene.message()) is not None:
+            await self._send(ws, scene)
 
     async def set_output(self, ws: WebSocket, width: int, height: int) -> None:
         # A newer output window replaces the old one; only one owns the projector.
+        first_hello = ws is not self.output
         self.output = ws
         self.output_resolution = {"width": width, "height": height}
+        if first_hello and (scene := self.scene.message()) is not None:
+            await self._send(ws, scene)  # a reconnecting output shows the scene straight away
         await self.broadcast_status()
 
     async def remove(self, ws: WebSocket) -> None:
@@ -89,6 +96,12 @@ class Hub:
         fut = self._acks.get(seq)
         if fut is not None and not fut.done():
             fut.set_result(None)
+
+    async def broadcast_scene(self) -> None:
+        if (scene := self.scene.message()) is None:
+            return
+        await self.send_to_output(scene)
+        await self.broadcast(scene)
 
     async def broadcast(self, msg: dict) -> None:
         for ws in list(self.editors):

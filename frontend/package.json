@@ -8,8 +8,14 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/earcut": "^3.0.0",
+    "@vitest/browser-playwright": "^5.0.3",
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.2",
     "vitest": "^5.0.3"
+  },
+  "dependencies": {
+    "earcut": "^3.2.4"
   }
 }

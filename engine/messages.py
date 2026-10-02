@@ -28,3 +28,12 @@ class TestFrameRequest(BaseModel):
 
 class CameraSelectRequest(BaseModel):
     unique_id: str
+
+
+class SurfaceUpdate(BaseModel):
+    effect: str | None = None
+    params: dict | None = None
+
+
+class SelectRequest(BaseModel):
+    id: int | None
