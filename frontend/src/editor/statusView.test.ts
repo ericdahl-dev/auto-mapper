@@ -79,7 +79,7 @@ describe("cameraOptions", () => {
 describe("calibration summary", () => {
   it("shows the saved exposure for the selected camera", () => {
     const view = describeStatus(status({ camera: { selected: AC410.unique_id, calibration: { exposure: 124, gain: 0, p99: 248 } } }));
-    expect(view.calibration).toBe("Exposure 124 (white frame peak 248)");
+    expect(view.calibration).toBe("Exposure 124, gain 0 (white frame peak 248)");
   });
 
   it("says when the camera is not calibrated", () => {
@@ -91,5 +91,12 @@ describe("project label", () => {
   it("names the open project, or says none is open", () => {
     expect(describeStatus(status({ project: { name: "Kitchen island", slug: "kitchen-island" } })).project).toBe("Kitchen island");
     expect(describeStatus(status({ project: null })).project).toBe("Unsaved");
+  });
+});
+
+describe("calibration at the camera's limit", () => {
+  it("says so when exposure and gain are both maxed out", () => {
+    const view = describeStatus(status({ camera: { selected: AC410.unique_id, calibration: { exposure: 330, gain: 15, p99: 120 } } }));
+    expect(view.calibration).toBe("Exposure 330, gain 15 (white frame peak 120) - camera at its light limit");
   });
 });
