@@ -14,15 +14,16 @@ describe("controlsFor", () => {
     expect(controls[2]).toMatchObject({ label: "Gradient angle", min: 0, max: 360, step: 1 });
   });
 
-  it("offers a media picker and a fit choice for the media effect", () => {
+  it("offers a media picker, fit choice and framing controls for the media effect; the pin has none", () => {
     const controls = controlsFor(effectById("media"), { src: "/api/media/wall-0123456789ab.png" });
-    expect(controls).toEqual([
-      { name: "src", label: "Image or video", kind: "media", value: "/api/media/wall-0123456789ab.png" },
-      { name: "fit", label: "Fit", kind: "select", value: "cover", options: [
-        { value: "cover", label: "Cover" },
-        { value: "stretch", label: "Stretch" },
-      ] },
+    expect(controls.map((c) => [c.name, c.kind])).toEqual([
+      ["src", "media"], ["fit", "select"], ["zoom", "range"], ["panX", "range"], ["panY", "range"],
+      ["rotate", "range"], ["flip", "select"], ["background", "color"], ["start", "range"], ["speed", "range"],
     ]);
+    expect(controls[0].value).toBe("/api/media/wall-0123456789ab.png");
+    const fit = controls[1];
+    expect(fit.kind === "select" && fit.options.map((o) => o.value)).toEqual(["cover", "stretch", "corners", "contain", "original", "tile"]);
+    expect(fit.value).toBe("cover");
     expect(controlsFor(effectById("media"), {})[0].value).toBe("");
   });
 

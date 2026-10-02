@@ -8,19 +8,20 @@ export type Control =
 
 /** One editor control per effect param, showing the surface's saved value or the default. */
 export function controlsFor(effect: Effect, params: Record<string, unknown>): Control[] {
-  return effect.params.map((p) => {
+  return effect.params.flatMap((p): Control[] => {
     const saved = params[p.name];
+    if (p.type === "quad") return []; // edited with handles on the surface, not in the panel
     if (p.type === "color") {
-      return { name: p.name, label: p.label, kind: "color", value: typeof saved === "string" ? saved : p.default };
+      return [{ name: p.name, label: p.label, kind: "color", value: typeof saved === "string" ? saved : p.default }];
     }
     if (p.type === "choice") {
       const value = p.options.some((o) => o.value === saved) ? (saved as string) : p.default;
-      return { name: p.name, label: p.label, kind: "select", value, options: p.options };
+      return [{ name: p.name, label: p.label, kind: "select", value, options: p.options }];
     }
     if (p.type === "media") {
-      return { name: p.name, label: p.label, kind: "media", value: typeof saved === "string" ? saved : p.default };
+      return [{ name: p.name, label: p.label, kind: "media", value: typeof saved === "string" ? saved : p.default }];
     }
-    return {
+    return [{
       name: p.name,
       label: p.label,
       kind: "range",
@@ -28,7 +29,7 @@ export function controlsFor(effect: Effect, params: Record<string, unknown>): Co
       min: p.min ?? 0,
       max: p.max ?? 1,
       step: p.step ?? 0.01,
-    };
+    }];
   });
 }
 

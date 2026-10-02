@@ -4,7 +4,7 @@
 
 Automatic projection mapping with a projector, a USB webcam and a Mac.
 
-auto-mapper is a Lightform-style projection mapper (Lightform, the commercial product it is modelled on, is discontinued). You point a projector and a webcam at a scene and press **Scan**. The app projects structured-light patterns, works out which camera pixel sees which projector pixel, and finds the surfaces in the scene: walls, boxes, cabinet doors, corbels. You give each surface a live shader effect, and the projector plays them back, each one clipped to its surface.
+auto-mapper is a [Lightform](https://lightform.com/)-style projection mapper (Lightform, the commercial product it is modelled on, is discontinued). You point a projector and a webcam at a scene and press **Scan**. The app projects structured-light patterns, works out which camera pixel sees which projector pixel, and finds the surfaces in the scene: walls, boxes, cabinet doors, corbels. You give each surface a live shader effect, and the projector plays them back, each one clipped to its surface.
 
 A session looks like this:
 
@@ -179,9 +179,15 @@ Pick an effect for the selected surface in the surface panel; its controls appea
 | **Tint (scan)** | Recolours the real object while keeping its texture (wood grain, fabric) visible | Colour, Texture, Scan gain |
 | **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Colour, Sensitivity, Line width (1 to 8 px), Base light, Pulse |
 | **Posterize (scan)** | Flattens the real surface into a few bands of colour, like a screen print | Bands (2 to 8), Dark colour, Light colour, Scan gain |
-| **Image / video** | An uploaded image or video, mapped to the surface's bounding box and clipped to its outline | Image or video (file), Fit: Cover (keeps aspect, crops evenly) or Stretch |
+| **Image / video** | An uploaded image or video, clipped to the surface's outline | Image or video (file); Fit: Cover, Stretch, Map to corners, Contain, Original size, Tile; Zoom, Pan, Rotate, Flip, Background; Video start and speed |
 
-The three "(scan)" effects read the scan image, so they react to what is really on the surface. Image / video accepts PNG, JPEG, WebP, GIF, MP4, M4V, MOV and WebM up to 2 GB; videos loop silently.
+The three "(scan)" effects read the scan image, so they react to what is really on the surface. Image / video accepts PNG, JPEG, WebP, GIF, MP4, M4V, MOV and WebM up to 2 GB; videos loop silently from their start time.
+
+**Framing images and video.**
+
+- **Fit:** Cover fills the surface's bounding box and crops evenly; Stretch fills it exactly; Contain shows the whole image, letterboxed in the Background colour; Original size shows one image pixel per projector pixel; Tile repeats the image at original size.
+- **Map to corners** (corner pin) warps the image onto the surface's four corners, so it lies flat on a surface seen at an angle, like a poster, instead of being sheared by the bounding box. Orange diamond handles show the four corners (the outline's own until you drag one): drag to pin, Alt-click to reset.
+- **On the surface:** with the effect selected, drag inside the surface to pan and scroll to zoom. The Zoom, Pan, Rotate and Flip controls set the same values.
 
 **Apply to all N surfaces** copies the selected surface's effect and parameters to every surface. If you have shift-clicked other surfaces, the button becomes **Apply to N selected** and copies to those only. Each surface gets its own copy, so later tweaks stay per surface.
 
@@ -298,6 +304,7 @@ Shaders write to `out vec4 color`. Compile errors are reported back to the edito
 | `editor/statusView.ts`, `scanState.ts` | Turn engine status and scan messages into what the editor shows |
 | `editor/curves.ts`, `bezier.ts`, `polygonEdit.ts`, `drawing.ts` | Outline editing: handles on curves, Bezier edges, corner add/remove, drawing |
 | `editor/controls.ts`, `applyEffect.ts` | Effect controls from the schema; "apply to" targets |
+| `editor/pin.ts`, `framing.ts` | Corner-pin handles; drag-to-pan and scroll-to-zoom framing |
 | `output/main.ts` | The output page (`output.html`): patterns, test frames, the animated scene, fullscreen hint |
 | `output/patterns.ts`, `renderer.ts` | Gray-code stripes (mirrors `engine/scan.py`) and test frames in WebGL2 |
 | `output/sceneRenderer.ts` | Draws every surface with its effect shader, media textures, selection highlight |
@@ -338,6 +345,7 @@ Parameter types:
 | `number` | Slider with optional `min`, `max`, `step` (defaults 0, 1, 0.01) | `float u_<name>`, clamped to the range |
 | `choice` | Dropdown of `options` | `float u_<name>`: the chosen option's index |
 | `media` | File upload | `sampler2D u_<name>` and `vec2 u_<name>Size` (pixel size) |
+| `quad` | Corner handles on the surface (optional `when`, e.g. `{ fit: "corners" }`) | `mat3 u_<name>`: projector pixels to the quad's 0..1 square (`h = u_<name> * vec3(v_pos, 1.0); uv = h.xy / h.z`); unset uses the outline's corners |
 
 Parameter names must be GLSL identifiers and can't reuse a built-in uniform name (`time`, `resolution`, `bounds`, `scan`, `poly`, `polyCount`, `perimeter`).
 

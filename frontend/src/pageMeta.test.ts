@@ -1,12 +1,14 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import indexHtml from "../index.html?raw";
+import outputHtml from "../output.html?raw";
 
-const root = resolve(__dirname, "..");
-const page = (name: string) => readFileSync(resolve(root, name), "utf8");
+// Through Vite rather than node:fs, so the test type-checks with the app's browser-only tsconfig.
+const PUBLIC = Object.keys(import.meta.glob("../public/*"));
+const pages: Record<string, string> = { "index.html": indexHtml, "output.html": outputHtml };
+const page = (name: string) => pages[name];
 const attr = (html: string, selector: RegExp) => html.match(selector)?.[1];
 // Files under public/ are served from the site root.
-const served = (href: string) => existsSync(resolve(root, "public", href.replace(/^\//, "")));
+const served = (href: string) => PUBLIC.includes(`../public/${href.replace(/^\//, "")}`);
 
 describe("editor page", () => {
   const html = page("index.html");

@@ -10,6 +10,8 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
+import { canFrame, panAfterDrag, zoomAfterWheel } from "./framing";
+import { movePin, pinHandles } from "./pin";
 import { placeOutput } from "./screens";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
@@ -206,8 +208,13 @@ function renderSurfaces() {
       poly.classList.toggle("selected", s.id === scene?.selected);
       poly.classList.toggle("multi", multi.has(s.id));
       poly.classList.toggle("error", effectErrors.has(s.id));
+      if (s.id === scene?.selected && canFrame(effectById(s.effect))) bindFraming(poly, s);
       poly.addEventListener("click", (ev) => {
         ev.stopPropagation();
+        if (framedJustNow) {
+          framedJustNow = false; // the click that ends a framing drag isn't a selection click
+          return;
+        }
         if (ev.shiftKey) {
           multi.has(s.id) ? multi.delete(s.id) : multi.add(s.id);
           if (scene?.selected != null) multi.add(scene.selected);
@@ -271,10 +278,103 @@ function renderSurfaces() {
       }
       return parts;
     }),
+    ...pinElements(r),
     ...draftElements(),
   );
   renderPanel();
   renderPresentation();
+}
+
+// Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
+let framedJustNow = false;
+let framing = false; // a pan drag is in progress: hold scene updates so the SVG isn't rebuilt under it
+function bindFraming(poly: SVGPolygonElement, s: SceneMessage["surfaces"][number]) {
+  const num = (name: string, fallback: number) => (typeof s.params[name] === "number" ? (s.params[name] as number) : fallback);
+  let drag: { start: number[]; moved: boolean } | null = null;
+  poly.addEventListener("pointerdown", (ev) => {
+    if (ev.altKey || ev.shiftKey || ev.button !== 0) return;
+    drag = { start: projectorPoint(ev), moved: false };
+    framing = true;
+    poly.setPointerCapture(ev.pointerId);
+  });
+  poly.addEventListener("pointermove", (ev) => {
+    if (!drag) return;
+    const p = projectorPoint(ev);
+    const delta = [p[0] - drag.start[0], p[1] - drag.start[1]];
+    if (!drag.moved && Math.hypot(delta[0], delta[1]) < 4) return; // still a click
+    drag.moved = true;
+    const pan = panAfterDrag({ panX: num("panX", 0), panY: num("panY", 0) }, delta, s.polygon);
+    cancelAnimationFrame(patchFrame);
+    patchFrame = requestAnimationFrame(() => patchSurface(s.id, { params: pan }));
+  });
+  poly.addEventListener("pointerup", () => {
+    framedJustNow = !!drag?.moved;
+    drag = null;
+    framing = false;
+    if (pendingScene) {
+      scene = pendingScene;
+      pendingScene = null;
+      renderSurfaces();
+    }
+  });
+  poly.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const zoom = zoomAfterWheel(num("zoom", 1), ev.deltaY);
+    cancelAnimationFrame(patchFrame);
+    patchFrame = requestAnimationFrame(() => patchSurface(s.id, { params: { zoom } }));
+  }, { passive: false });
+}
+
+// Corner pin being dragged: shown from here until the engine's scene update arrives.
+let pinDrag: { id: number; name: string; corners: number[][]; index: number } | null = null;
+
+/** Orange diamonds (and a dashed quad) for the selected surface's corner pin, when its effect uses one.
+ *  Drag a corner to pin it; Alt-click any corner to go back to the outline's own corners. */
+function pinElements(r: number): SVGElement[] {
+  const s = scene?.surfaces.find((x) => x.id === scene?.selected);
+  if (!s) return [];
+  const pin = pinHandles(effectById(s.effect), s.params, s.polygon);
+  if (!pin) return [];
+  const corners = pinDrag?.id === s.id ? pinDrag.corners : pin.corners;
+  const quad = document.createElementNS(SVG_NS, "polygon");
+  quad.classList.add("pin");
+  quad.setAttribute("points", corners.map(([x, y]) => `${x},${y}`).join(" "));
+  const handles = corners.map(([x, y], index) => {
+    const d = document.createElementNS(SVG_NS, "rect");
+    d.classList.add("handle", "pin");
+    Object.entries({ x: x - r, y: y - r, width: 2 * r, height: 2 * r, transform: `rotate(45 ${x} ${y})` })
+      .forEach(([k, v]) => d.setAttribute(k, String(v)));
+    d.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      if (ev.altKey) patchSurface(s.id, { params: { [pin.name]: null } });
+    });
+    d.addEventListener("pointerdown", (ev) => {
+      if (ev.altKey) return;
+      ev.stopPropagation();
+      d.setPointerCapture(ev.pointerId);
+      pinDrag = { id: s.id, name: pin.name, corners: pin.corners, index };
+    });
+    d.addEventListener("pointermove", (ev) => {
+      if (!pinDrag || pinDrag.index !== index) return;
+      pinDrag.corners = movePin(pinDrag.corners, index, projectorPoint(ev));
+      const { id, name, corners: next } = pinDrag;
+      cancelAnimationFrame(patchFrame); // at most one PATCH per frame, so the projector follows the drag
+      patchFrame = requestAnimationFrame(() => patchSurface(id, { params: { [name]: next } }));
+      renderSurfaces();
+    });
+    d.addEventListener("pointerup", () => {
+      if (!pinDrag) return;
+      patchSurface(pinDrag.id, { params: { [pinDrag.name]: pinDrag.corners } });
+      pinDrag = null;
+      if (pendingScene) {
+        scene = pendingScene;
+        pendingScene = null;
+      }
+      renderSurfaces();
+    });
+    return d;
+  });
+  return [quad, ...handles];
 }
 
 /** Anchor squares, control circles and tangent lines for a Bezier outline. */
@@ -538,7 +638,7 @@ connect({
       render();
       renderScan();
     } else if (msg.type === "scene") {
-      if (dragging) {
+      if (dragging || pinDrag || framing) {
         pendingScene = msg; // don't rebuild the handles under the cursor
         return;
       }

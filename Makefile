@@ -16,7 +16,7 @@ frontend:
 
 test:
 	uv run pytest -q
-	cd frontend && npx vitest run
+	cd frontend && npx tsc --noEmit && npx vitest run
 
 build:
 	cd frontend && npm run build

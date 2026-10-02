@@ -1,7 +1,7 @@
 import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
-import { mediaSources, uniformsFor } from "../effects/types";
+import { mediaSources, type UniformValue, uniformsFor } from "../effects/types";
 import type { SceneMessage } from "../shared/messages";
 
 export interface EffectError {
@@ -23,6 +23,7 @@ interface PreparedSurface {
   outline: WebGLVertexArrayObject; // line loop through pixel centres
   outlineCount: number;
   media: [string, string][]; // [param name, src] for each media param that has a file
+  uniforms: Record<string, UniformValue>;
 }
 
 /** An image or video shown on surfaces; one texture per file, shared by every surface showing it. */
@@ -32,6 +33,7 @@ interface MediaTexture {
   video: HTMLVideoElement | null;
   uploadedFrame: number; // videos: the draw() that last uploaded a frame
   ready: Promise<void>; // settles on load or on error
+  start: number; // videos: seconds to start from and loop back to
 }
 
 // Texture unit 0 is the scan; media params take the units after it.
@@ -123,12 +125,36 @@ export class SceneRenderer {
         outline: this.vao(lineVerts),
         outlineCount: lineVerts.length / 2,
         media: Object.entries(mediaSources(effect, s.params)),
+        uniforms: uniformsFor(effect, s.params, outline), // once per scene update, not per frame
       };
     });
     this.syncMedia(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
+    // Video playback settings. One element per file is shared by every surface showing it, so the
+    // first surface's speed and start win.
+    const seen = new Set<string>();
+    for (const s of this.surfaces) {
+      for (const [, src] of s.media) {
+        const m = this.media.get(src);
+        if (!m?.video || seen.has(src)) continue;
+        seen.add(src);
+        const speed = typeof s.uniforms.u_speed === "number" ? s.uniforms.u_speed : 1;
+        const start = typeof s.uniforms.u_start === "number" ? s.uniforms.u_start : 0;
+        m.video.playbackRate = speed;
+        if (start !== m.start) {
+          m.start = start;
+          if (m.video.readyState >= m.video.HAVE_METADATA) m.video.currentTime = start;
+        }
+      }
+    }
   }
 
   /** Resolves once every media file the scene uses has loaded (or failed to). */
+  /** A video's playback settings (for tests and diagnostics); null for images or unknown files. */
+  playback(src: string): { rate: number; start: number; time: number } | null {
+    const m = this.media.get(src);
+    return m?.video ? { rate: m.video.playbackRate, start: m.start, time: m.video.currentTime } : null;
+  }
+
   async whenMediaLoaded(): Promise<void> {
     await Promise.all([...this.media.values()].map((m) => m.ready));
   }
@@ -155,13 +181,21 @@ export class SceneRenderer {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
     const el = createMediaElement(src);
     const video = el instanceof HTMLVideoElement ? el : null;
-    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve() };
+    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
     m.ready = new Promise<void>((settle) => {
       el.addEventListener("error", () => settle(), { once: true });
       if (video) {
+        // Looping wraps to 0: jump to the start instead (also covers a start set before loading).
+        video.addEventListener("timeupdate", () => {
+          if (m.start > 0 && video.currentTime < m.start - 0.05) video.currentTime = m.start;
+        });
         video.addEventListener("loadeddata", () => {
           m.size = [video.videoWidth, video.videoHeight];
-          settle();
+          if (m.start > 0) {
+            // Loaded means showing the start frame: wait for the seek.
+            video.addEventListener("seeked", () => settle(), { once: true });
+            video.currentTime = m.start;
+          } else settle();
         }, { once: true });
         void video.play().catch(() => {}); // muted, so autoplay is allowed
       } else {
@@ -271,9 +305,10 @@ export class SceneRenderer {
       gl.bindTexture(gl.TEXTURE_2D, this.scanTexture);
       gl.uniform1i(gl.getUniformLocation(p, "u_scan"), 0);
       this.bindMedia(p, s);
-      for (const [name, value] of Object.entries(uniformsFor(s.effect, s.params))) {
+      for (const [name, value] of Object.entries(s.uniforms)) {
         const loc = gl.getUniformLocation(p, name);
-        if (Array.isArray(value)) gl.uniform3f(loc, ...value);
+        if (Array.isArray(value) && value.length === 9) gl.uniformMatrix3fv(loc, false, value);
+        else if (Array.isArray(value)) gl.uniform3f(loc, value[0], value[1], value[2]);
         else gl.uniform1f(loc, value);
       }
       gl.bindVertexArray(s.fill);

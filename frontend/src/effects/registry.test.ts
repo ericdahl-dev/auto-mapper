@@ -82,6 +82,44 @@ describe("media and choice params", () => {
   });
 });
 
+describe("quad params (corner pin)", () => {
+  const pinned: Effect = {
+    id: "pinned",
+    name: "Pinned",
+    params: [{ name: "corners", label: "Corners", type: "quad" }],
+    fragment: "void main() { color = vec4(1.0); }",
+  };
+  const DOOR = [[100, 120], [420, 80], [440, 500], [90, 430]];
+  // GLSL mat3 is column-major: undo that to apply it as H · [x, y, 1].
+  const apply = (m: number[], [x, y]: number[]) => {
+    const w = m[2] * x + m[5] * y + m[8];
+    return [(m[0] * x + m[3] * y + m[6]) / w, (m[1] * x + m[4] * y + m[7]) / w];
+  };
+
+  it("gives the shader a mat3 taking projector pixels to the image's 0..1 square", () => {
+    const m = uniformsFor(pinned, { corners: DOOR }, []).u_corners as number[];
+    expect(m).toHaveLength(9);
+    [[0, 0], [1, 0], [1, 1], [0, 1]].forEach((uv, i) => {
+      const [u, v] = apply(m, DOOR[i]);
+      expect(u).toBeCloseTo(uv[0], 6);
+      expect(v).toBeCloseTo(uv[1], 6);
+    });
+  });
+
+  it("uses the outline's own corners until the user pins some", () => {
+    const outline = [[260, 100], [420, 80], [440, 500], [90, 430], [100, 120]];
+    const [u, v] = apply(uniformsFor(pinned, {}, outline).u_corners as number[], [420, 80]);
+    expect([u, v].map((n) => Math.round(n * 1e6) / 1e6)).toEqual([1, 0]);
+  });
+
+  it("falls back to the outline's corners for a malformed or degenerate pin", () => {
+    const outline = DOOR;
+    const fromOutline = uniformsFor(pinned, {}, outline).u_corners;
+    expect(uniformsFor(pinned, { corners: [[0, 0], [5, 0]] }, outline).u_corners).toEqual(fromOutline);
+    expect(uniformsFor(pinned, { corners: [[0, 0], [5, 0], [10, 0], [0, 10]] }, outline).u_corners).toEqual(fromOutline);
+  });
+});
+
 describe("built-in registry", () => {
   it("has the built-in effects, all valid, with unique ids", () => {
     expect(EFFECTS.map((e) => e.id)).toEqual(["none", "fill", "outline", "noise", "tint", "edgeglow", "posterize", "media"]);
