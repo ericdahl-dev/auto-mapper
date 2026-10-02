@@ -21,7 +21,9 @@ class Hub:
             "output_connected": self.output is not None,
             "output_resolution": self.output_resolution,
             "camera": self._camera_status(),
-            "can_scan": self._output_fills_projector() and not self.hardware.issues,
+            "can_scan": self._output_fills_projector()
+            and not self.hardware.issues
+            and self.settings.selected(self.hardware.cameras) is not None,
         }
 
     def _camera_status(self) -> dict:

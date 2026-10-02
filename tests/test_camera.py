@@ -4,7 +4,7 @@ import pytest
 
 from engine.camera_device import FakeCameraFactory
 from engine.hardware import FakeHardware
-from tests.helpers import FACETIME, LAPTOP, PROJECTOR, RIG_CAMERAS, editor, engine
+from tests.helpers import FACETIME, LAPTOP, PROJECTOR, RIG_CAMERAS, editor, engine, output
 
 
 @pytest.fixture
@@ -88,3 +88,13 @@ def test_releasing_the_camera_closes_it(rig, tmp_path):
 
         assert resp.status_code == 200
         assert cams.open_now == []
+
+
+def test_scan_needs_a_selected_camera(tmp_path):
+    hw = FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=[FACETIME])
+    with engine(hw, data_dir=tmp_path) as client, output(client):
+        assert client.get("/api/status").json()["can_scan"] is False
+
+        client.post("/api/camera", json={"unique_id": FACETIME["unique_id"]})
+
+        assert client.get("/api/status").json()["can_scan"] is True
