@@ -73,6 +73,18 @@ describe("EditSession saving", () => {
   });
 });
 
+describe("EditSession surface edge", () => {
+  it("shows an edge change at once and saves the latest one per frame", () => {
+    const { session, sent, frame } = setup();
+    session.receive(show());
+    session.edit(1, { edge: -2 });
+    session.edit(1, { edge: -4 });
+    expect(session.surface(1)?.edge).toBe(-4);
+    frame();
+    expect(sent).toEqual([[1, { edge: -4 }]]);
+  });
+});
+
 describe("EditSession local view", () => {
   it("shows edits straight away, so the next edit builds on them (e.g. fast wheel zoom)", () => {
     const { session } = setup();

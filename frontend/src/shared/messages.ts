@@ -93,6 +93,7 @@ export interface ShowSurface {
   name?: string;
   source?: "detected" | "edited" | "drawn";
   bezier?: { anchors: number[][]; controls: Record<number, [number[], number[]]> };
+  edge?: number; // grow (+) or shrink (-) the lit area past the outline, in projector pixels
   polygon: number[][];
   area: number;
   effect: string;
