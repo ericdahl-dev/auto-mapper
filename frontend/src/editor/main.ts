@@ -128,7 +128,7 @@ const redetectButton = $<HTMLButtonElement>("redetect");
 const SOURCE_TEXT: Record<string, string> = {
   detected: "Detected automatically",
   edited: "Detected, then edited by you (kept on redetect)",
-  manual: "Drawn by you (kept on redetect)",
+  drawn: "Drawn by you (kept on redetect)",
 };
 
 function drawEvent(ev: DrawEvent) {

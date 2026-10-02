@@ -71,6 +71,7 @@ class ProjectStore:
             raise UnknownProject(slug)
         self.folder.replace_with(ScanFolder(folder))
         self.scene.reload()
+        self.scene.present(mode="play", blackout=False)  # an opened project is ready to show
         info = json.loads((folder / "project.json").read_text())
         self._set_active(info)
         return info

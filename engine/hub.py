@@ -37,6 +37,10 @@ class Hub:
         self.output_sound_output_error: str | None = None  # the chosen sound output couldn't be used
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
+        # Every change to the show is announced to editors and the output window from here.
+        self._loop = asyncio.get_running_loop()
+        self._scene_queued = False
+        scene.subscribe(self._scene_changed)
 
     @property
     def hardware(self) -> HardwareSnapshot:
@@ -131,6 +135,18 @@ class Hub:
         fut = self._acks.get(seq)
         if fut is not None and not fut.done():
             fut.set_result(None)
+
+    def _scene_changed(self) -> None:
+        """The show changed (possibly on a worker thread): send it once, soon, on the event loop.
+        Several changes in a row coalesce into one message."""
+        if self._scene_queued:
+            return
+        self._scene_queued = True
+        self._loop.call_soon_threadsafe(self._send_scene_soon)
+
+    def _send_scene_soon(self) -> None:
+        self._scene_queued = False
+        asyncio.ensure_future(self.broadcast_scene())
 
     async def broadcast_scene(self) -> None:
         if (scene := self.scene.message()) is None:

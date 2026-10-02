@@ -91,7 +91,7 @@ export type ScanMessage =
 export interface SceneSurface {
   id: number;
   name?: string;
-  source?: "detected" | "edited" | "manual";
+  source?: "detected" | "edited" | "drawn";
   bezier?: { anchors: number[][]; controls: Record<number, [number[], number[]]> };
   polygon: number[][];
   area: number;

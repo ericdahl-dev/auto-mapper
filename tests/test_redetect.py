@@ -44,7 +44,7 @@ def surfaces(client):
     return client.get("/api/scene").json()["surfaces"]
 
 
-def test_drawing_a_surface_adds_a_manual_one(rig, scanned):
+def test_drawing_a_surface_adds_a_drawn_one(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         out.receive_json()
         resp = client.post("/api/scene/surfaces", json={"polygon": MANUAL})
@@ -52,7 +52,7 @@ def test_drawing_a_surface_adds_a_manual_one(rig, scanned):
         assert resp.status_code == 200
         pushed = out.receive_json()
     new = pushed["surfaces"][-1]
-    assert new["polygon"] == MANUAL and new["source"] == "manual" and new["effect"] == "none"
+    assert new["polygon"] == MANUAL and new["source"] == "drawn" and new["effect"] == "none"
     assert new["id"] == max(s["id"] for s in pushed["surfaces"])
     assert pushed["selected"] == new["id"]
 

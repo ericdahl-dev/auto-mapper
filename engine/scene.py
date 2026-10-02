@@ -6,6 +6,7 @@ Effect ids and params are opaque here; the frontend effect registry owns their m
 import copy
 import json
 from pathlib import Path
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -27,6 +28,8 @@ class SceneStore:
         self.folder = folder  # the scan this show is mapped on, and where the show is saved
         self.scene: dict | None = self._load()
         self.scan_rev = self._scan_rev()
+        self.selected: int | None = None  # the editor's selected surface: session state, not saved
+        self._listeners: list[Callable[[], None]] = []
         # How the output presents the scene. Session state: not saved with the scene.
         self.presentation = {"mode": "edit", "blackout": False}
         # Sound-reactive effects: whether the output listens, and to which input (a browser device id).
@@ -37,9 +40,12 @@ class SceneStore:
     def _load(self) -> dict | None:
         scene = _read_json(self.folder.show_file)
         if scene is not None:
+            scene.pop("selected", None)  # older files saved the selection; it's session state now
             for surface in scene["surfaces"]:
                 surface.setdefault("name", f"Surface {surface['id']}")
                 surface.setdefault("source", "detected")
+                if surface["source"] == "manual":
+                    surface["source"] = "drawn"  # older name for surfaces made by hand
             return scene
         meta = self.folder.meta()
         return self._from_scan(meta) if meta is not None else None
@@ -60,12 +66,21 @@ class SceneStore:
                  "params": {}, "source": "detected"}
                 for i, s in enumerate(summary.get("surfaces", []), 1)
             ],
-            "selected": None,
         }
+
+    def subscribe(self, listener: Callable[[], None]) -> None:
+        """Called after every change, so editors and the output window can be told (see Hub)."""
+        self._listeners.append(listener)
+
+    def _changed(self) -> None:
+        for listener in self._listeners:
+            listener()
 
     def reload(self) -> None:
         self.scene = self._load()
         self.scan_rev = self._scan_rev()
+        self.selected = None
+        self._changed()
 
     def save(self) -> None:
         if self.scene is not None:
@@ -74,7 +89,9 @@ class SceneStore:
     def reset_from_scan(self, summary: dict) -> None:
         self.scene = self._from_scan(summary)
         self.scan_rev = self._scan_rev()
+        self.selected = None
         self._save()
+        self._changed()
 
     def _surface(self, surface_id: int) -> dict:
         for s in (self.scene or {}).get("surfaces", []):
@@ -100,8 +117,7 @@ class SceneStore:
                 surface.pop("bezier", None)
             surface["polygon"] = self._clamp(polygon)
             surface["area"] = polygon_area(surface["polygon"])
-            if surface["source"] == "detected":
-                surface["source"] = "edited"  # redetect must not overwrite the user's shape
+            _reshaped(surface)
         if name is not None:
             surface["name"] = name.strip() or surface["name"]
         if effect is not None and effect != surface["effect"]:
@@ -109,13 +125,15 @@ class SceneStore:
         if params:
             surface["params"].update(params)
         self._save()
+        self._changed()
 
     def delete(self, surface_id: int) -> None:
         surface = self._surface(surface_id)
         self.scene["surfaces"].remove(surface)
-        if self.scene["selected"] == surface_id:
-            self.scene["selected"] = None
+        if self.selected == surface_id:
+            self.selected = None
         self._save()
+        self._changed()
 
     def merge(self, ids: list[int]) -> int:
         """Replaces the surfaces with one covering all of them; keeps the first one's id and effect."""
@@ -132,13 +150,13 @@ class SceneStore:
         keep = surfaces[0]
         keep["polygon"] = outline.tolist()
         keep.pop("bezier", None)  # the merged outline is new; its old curves don't apply
-        if keep["source"] == "detected":
-            keep["source"] = "edited"
+        _reshaped(keep)
         keep["area"] = polygon_area(keep["polygon"])
         for s in surfaces[1:]:
             self.scene["surfaces"].remove(s)
-        self.scene["selected"] = keep["id"]
+        self.selected = keep["id"]
         self._save()
+        self._changed()
         return keep["id"]
 
     def apply_effect(self, from_id: int, to_ids: list[int] | None = None) -> None:
@@ -149,6 +167,7 @@ class SceneStore:
             t["effect"] = source["effect"]
             t["params"] = copy.deepcopy(source["params"])  # copies: later edits stay per surface
         self._save()
+        self._changed()
 
     def add_manual(self, polygon: list[list[float]], name: str | None = None) -> int:
         """A surface drawn by hand, for areas detection missed."""
@@ -156,10 +175,11 @@ class SceneStore:
         poly = self._clamp(polygon)
         self.scene["surfaces"].append({
             "id": new_id, "name": name or f"Surface {new_id}", "polygon": poly, "area": polygon_area(poly),
-            "effect": "none", "params": {}, "source": "manual",
+            "effect": "none", "params": {}, "source": "drawn",
         })
-        self.scene["selected"] = new_id
+        self.selected = new_id
         self._save()
+        self._changed()
         return new_id
 
     def apply_detection(self, summary: dict) -> None:
@@ -204,9 +224,10 @@ class SceneStore:
         result.sort(key=lambda s: s["area"], reverse=True)  # smaller surfaces draw on top
         self.scan_rev = self._scan_rev()
         self.scene["surfaces"] = result
-        if not any(s["id"] == self.scene["selected"] for s in result):
-            self.scene["selected"] = None
+        if not any(s["id"] == self.selected for s in result):
+            self.selected = None
         self._save()
+        self._changed()
 
     def _next_id(self) -> int:
         return max((s["id"] for s in self.scene["surfaces"]), default=0) + 1
@@ -219,14 +240,15 @@ class SceneStore:
         if surface_id is not None:
             self._surface(surface_id)
         if self.scene is not None:
-            self.scene["selected"] = surface_id
-            self._save()
+            self.selected = surface_id  # not saved: selection is the editor's session state
+            self._changed()
 
     def present(self, mode: str | None = None, blackout: bool | None = None) -> None:
         if mode is not None:
             self.presentation["mode"] = mode
         if blackout is not None:
             self.presentation["blackout"] = blackout
+        self._changed()
 
     def set_sound(
         self, enabled: bool | None = None, device: str | None = None, source: str | None = None, output: str | None = None
@@ -239,11 +261,13 @@ class SceneStore:
             self.sound["enabled"] = enabled
         if device is not None:
             self.sound["device"] = device
+        self._changed()
 
     def public(self) -> dict | None:
         if not self.scene:
             return None
-        return {**self.scene, "presentation": dict(self.presentation), "sound": dict(self.sound), "scan_rev": self.scan_rev}
+        return {**self.scene, "selected": self.selected, "presentation": dict(self.presentation),
+                "sound": dict(self.sound), "scan_rev": self.scan_rev}
 
     def message(self) -> dict | None:
         return {"type": "scene", **self.public()} if self.scene else None
@@ -251,6 +275,12 @@ class SceneStore:
     def _save(self) -> None:
         self.folder.path.mkdir(parents=True, exist_ok=True)
         write_text_atomic(self.folder.show_file, json.dumps(self.scene, indent=2))
+
+
+def _reshaped(surface: dict) -> None:
+    """A detected surface reshaped by hand becomes edited, so redetecting won't overwrite it."""
+    if surface["source"] == "detected":
+        surface["source"] = "edited"
 
 
 def polygon_area(polygon: list[list[float]]) -> float:
