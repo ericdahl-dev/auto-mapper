@@ -337,7 +337,7 @@ Parameter types:
 | `choice` | Dropdown of `options` | `float u_<name>`: the chosen option's index |
 | `media` | File upload | `sampler2D u_<name>` and `vec2 u_<name>Size` (pixel size) |
 
-Parameter names must be GLSL identifiers and can't reuse a built-in uniform name (`time`, `resolution`, `bounds`, `scan`, `highlight`, `poly`, `polyCount`, `perimeter`).
+Parameter names must be GLSL identifiers and can't reuse a built-in uniform name (`time`, `resolution`, `bounds`, `scan`, `poly`, `polyCount`, `perimeter`).
 
 A minimal example:
 
