@@ -33,6 +33,10 @@ uniform vec2 u_poly[MAX_POLY];
 uniform int u_polyCount;
 uniform float u_perimeter;
 
+// The scan image (the real scene as the projector sees it) at a projector pixel.
+vec3 scanAt(vec2 px) { return texture(u_scan, px / u_resolution).rgb; }
+float luminance(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
 // Distance from p to the surface's outline; 'along' = how far round the outline the nearest point is.
 float polyEdge(vec2 p, out float along) {
   float best = 1e9, walked = 0.0;
