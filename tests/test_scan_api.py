@@ -96,3 +96,16 @@ def test_scan_refused_when_rig_not_ready(rig, tmp_path):
 
     assert resp.status_code == 409
     assert uvc.writes == []
+
+
+def test_preview_is_refused_while_scanning(rig, tmp_path):
+    scene, uvc, hw, cams = rig
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        client.post("/api/scan")
+        msg = out.receive_json()  # first pattern is on screen, engine is waiting for the ack
+        assert client.get("/api/camera/preview.jpg").status_code == 409
+
+        out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+        scene.pattern = msg["pattern"]
+        play_output(out, scene)

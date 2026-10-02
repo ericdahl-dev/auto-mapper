@@ -85,6 +85,8 @@ def create_app(
         selected = settings.selected(hub.hardware.cameras)
         if selected is None:
             raise HTTPException(409, "No camera selected")
+        if scanning.locked():
+            raise HTTPException(409, "Camera is busy scanning")
         frame = await asyncio.to_thread(session.read, hub.hardware.cameras, selected)
         ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         return Response(jpg.tobytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})

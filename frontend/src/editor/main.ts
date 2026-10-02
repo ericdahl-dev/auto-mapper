@@ -1,5 +1,6 @@
 import { connect } from "../shared/connection";
 import type { StatusMessage, TestFrameKind } from "../shared/messages";
+import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
 import { cameraOptions, describeStatus } from "./statusView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -15,6 +16,19 @@ const previewToggle = $<HTMLButtonElement>("preview-toggle");
 const calibrate = $<HTMLButtonElement>("calibrate");
 
 let status: StatusMessage | null = null;
+let scanState: ScanState = initialScan;
+const scanImage = $<HTMLImageElement>("scan-image");
+const stageEmpty = $("stage-empty");
+const scanText = $("scan-label");
+
+function renderScan() {
+  scanText.textContent = scanLabel(scanState);
+  if (scanState.image && scanImage.getAttribute("src") !== scanState.image) scanImage.src = scanState.image;
+  scanImage.hidden = !scanState.image;
+  stageEmpty.hidden = !!scanState.image;
+  scan.textContent = scanState.running ? "Scanning…" : "Scan";
+  if (scanState.running) scan.disabled = true;
+}
 
 function render() {
   const view = describeStatus(status);
@@ -45,6 +59,11 @@ connect({
     if (msg.type === "status") {
       status = msg;
       render();
+      renderScan();
+    } else if (msg.type.startsWith("scan_")) {
+      scanState = scanReducer(scanState, msg as Parameters<typeof scanReducer>[1]);
+      if (msg.type === "scan_failed") notice(`Scan failed: ${msg.error}`);
+      renderScan();
     }
   },
   onOpenChange(open) {
@@ -66,8 +85,18 @@ for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-test-frame
     }),
   );
 }
-// Placeholder until the scan pipeline lands (#4); a silent enabled button is misleading.
-scan.addEventListener("click", () => notice("Scanning is not built yet (issue #4). The button shows when the rig is ready."));
+scan.addEventListener("click", async () => {
+  if (previewTimer !== undefined) previewToggle.click(); // the scan needs the camera to itself
+  const res = await fetch("/api/scan", { method: "POST" });
+  if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`);
+});
+// Show the last scan after a reload.
+void fetch("/api/scan/latest.png").then((r) => {
+  if (r.ok) {
+    scanState = { ...scanState, image: `/api/scan/latest.png?t=${Date.now()}` };
+    renderScan();
+  }
+});
 
 cameraSelect.addEventListener("change", () =>
   void fetch("/api/camera", {
