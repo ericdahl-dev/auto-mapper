@@ -55,8 +55,14 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   };
 }
 
+// Mirrors engine/calibrate.py: longest exposure within one frame, and the AC410's gain range.
+const MAX_EXPOSURE = 330;
+const MAX_GAIN = 15;
+
 function describeCalibration(c: Calibration | null): string {
-  return c ? `Exposure ${c.exposure} (white frame peak ${Math.round(c.p99)})` : "Not calibrated";
+  if (!c) return "Not calibrated";
+  const text = `Exposure ${c.exposure}, gain ${c.gain} (white frame peak ${Math.round(c.p99)})`;
+  return c.exposure >= MAX_EXPOSURE && c.gain >= MAX_GAIN ? `${text} - camera at its light limit` : text;
 }
 
 // USB webcams have uniqueIDs like 0x2110000f1311306 (location + vendor + product).
