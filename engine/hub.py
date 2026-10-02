@@ -23,6 +23,7 @@ class Hub:
         self.editors: set[WebSocket] = set()
         self.output: WebSocket | None = None
         self.output_resolution: dict | None = None
+        self.output_fps: float | None = None
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
 
@@ -32,6 +33,7 @@ class Hub:
             "hardware": self.hardware.to_dict(),
             "output_connected": self.output is not None,
             "output_resolution": self.output_resolution,
+            "output_fps": self.output_fps,
             "camera": self._camera_status(),
             "project": self.projects.active() if self.projects else None,
             "can_scan": self._output_fills_projector()
@@ -73,6 +75,7 @@ class Hub:
         if ws is self.output:
             self.output = None
             self.output_resolution = None
+            self.output_fps = None
             await self.broadcast_status()
 
     async def send_to_output(self, msg: dict) -> bool:
