@@ -32,6 +32,7 @@ def capture_scan(
     settle_seconds: float,
     drop_frames: int,
     cancelled: Callable[[], bool] = lambda: False,
+    frames_per_pattern: int = 1,
 ) -> tuple[DecodeResult, dict]:
     seq = pattern_sequence(width, height)
     decoder = GrayDecoder(width, height)
@@ -50,7 +51,8 @@ def capture_scan(
             time.sleep(settle_seconds)  # projector input lag beyond the browser's frame
             for _ in range(drop_frames):  # frames already buffered before the pattern changed
                 read_frame()
-            frame = read_frame()
+            # Averaging several frames of the same pattern cuts sensor noise (~1/sqrt(n)).
+            frame = np.mean([read_frame().astype(np.float32) for _ in range(frames_per_pattern)], axis=0)
             decoder.add(pattern, frame)
             if pattern["kind"] == "black":
                 # Per-pixel difference: lamps or windows saturated in both frames must not

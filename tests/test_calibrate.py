@@ -83,15 +83,35 @@ def test_dim_surface_raises_gain_once_exposure_is_maxed(rig, tmp_path):
     uvc = FakeUvc(DEFAULTS)
 
     def brightness():
-        level = int(uvc.values["exposure-time-abs"]) * 0.25 * (1 + int(uvc.values["gain"]) * 0.25)
+        # Dim even at the longest exposure: 1000 x 0.12 = 120.
+        level = int(uvc.values["exposure-time-abs"]) * 0.12 * (1 + int(uvc.values["gain"]) * 0.25)
         return min(255, int(level))
 
     with engine(rig, data_dir=tmp_path, camera_factory=FakeCameraFactory(brightness=brightness),
                 uvc_factory=lambda address: uvc) as client, output(client):
         result = client.post("/api/camera/calibrate").json()
 
-    assert result["exposure"] == 330
-    assert result["gain"] > 0
+    from engine.calibrate import MAX_EXPOSURE
+
+    assert result["exposure"] == MAX_EXPOSURE  # all the exposure first...
+    assert result["gain"] > 0  # ...then gain
     assert result["p99"] >= 150  # bright enough to separate lit from unlit
     assert result["p99"] < 250  # but still not clipped
     assert uvc.values == DEFAULTS
+
+
+def test_longer_exposure_is_used_before_any_gain(rig, tmp_path):
+    """Long exposure brightens without the noise gain adds (measured on the rig: 100 ms at
+    gain 0 matched 33 ms at gain 15)."""
+    uvc = FakeUvc(DEFAULTS)
+
+    def brightness():
+        level = int(uvc.values["exposure-time-abs"]) * 0.3 * (1 + int(uvc.values["gain"]) * 0.25)
+        return min(255, int(level))
+
+    with engine(rig, data_dir=tmp_path, camera_factory=FakeCameraFactory(brightness=brightness),
+                uvc_factory=lambda address: uvc) as client, output(client):
+        result = client.post("/api/camera/calibrate").json()
+
+    assert result["gain"] == 0
+    assert 800 <= result["exposure"] <= 840  # clips at ~833 (0.3 x 833 = 250)

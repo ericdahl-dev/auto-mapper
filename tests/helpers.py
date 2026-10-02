@@ -27,6 +27,7 @@ def engine(hardware, **kwargs):
         kwargs.setdefault("settle_seconds", 0)
         kwargs.setdefault("scan_settle_seconds", 0)
         kwargs.setdefault("scan_drop_frames", 0)
+        kwargs.setdefault("scan_frames_per_pattern", 1)
         with TestClient(create_app(hardware=hardware, **kwargs)) as client:
             yield client
 

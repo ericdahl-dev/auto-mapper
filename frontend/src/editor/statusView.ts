@@ -55,8 +55,8 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   };
 }
 
-// Mirrors engine/calibrate.py: longest exposure within one frame, and the AC410's gain range.
-const MAX_EXPOSURE = 330;
+// Mirrors engine/calibrate.py: longest allowed exposure (100 ms), and the AC410's gain range.
+const MAX_EXPOSURE = 1000;
 const MAX_GAIN = 15;
 
 function describeCalibration(c: Calibration | null): string {
