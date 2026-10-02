@@ -30,9 +30,18 @@ class CameraSelectRequest(BaseModel):
     unique_id: str
 
 
+Point = Annotated[list[float], Field(min_length=2, max_length=2)]
+
+
 class SurfaceUpdate(BaseModel):
     effect: str | None = None
     params: dict | None = None
+    polygon: Annotated[list[Point], Field(min_length=3)] | None = None
+    name: Annotated[str, Field(max_length=80)] | None = None
+
+
+class MergeRequest(BaseModel):
+    ids: Annotated[list[int], Field(min_length=2)]
 
 
 class SelectRequest(BaseModel):
