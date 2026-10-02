@@ -61,6 +61,11 @@ def test_scan_decodes_the_scene_and_reports_progress(rig, tmp_path):
         assert progress[-1]["done"] == progress[-1]["total"] == 2 + 2 * (8 + 8)
 
         assert result["coverage"] > 0.9
+        assert len(result["surfaces"]) == 2  # wall + box, largest first
+        assert result["surfaces"][0]["area"] > result["surfaces"][1]["area"]
+        latest = client.get("/api/scan/latest").json()
+        assert latest["surfaces"] == result["surfaces"]
+        assert latest["width"] == W and latest["height"] == H
         png = client.get(result["image"])
         img = cv2.imdecode(np.frombuffer(png.content, np.uint8), cv2.IMREAD_COLOR)
         assert img.shape == (H, W, 3)
@@ -109,3 +114,9 @@ def test_preview_is_refused_while_scanning(rig, tmp_path):
         out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
         scene.pattern = msg["pattern"]
         play_output(out, scene)
+
+
+def test_latest_scan_is_404_before_any_scan(rig, tmp_path):
+    scene, uvc, hw, cams = rig
+    with engine(hw, data_dir=tmp_path, camera_factory=cams) as client:
+        assert client.get("/api/scan/latest").status_code == 404

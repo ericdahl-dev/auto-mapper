@@ -48,6 +48,12 @@ export interface ShowPatternMessage {
   pattern: Pattern;
 }
 
+/** A detected surface: polygon vertices in projector pixels. */
+export interface Surface {
+  polygon: [number, number][] | number[][];
+  area: number;
+}
+
 export type ScanMessage =
   | { type: "scan_started" }
   | { type: "scan_progress"; done: number; total: number }
@@ -57,6 +63,9 @@ export type ScanMessage =
       seconds: number;
       bit_reliability: Record<string, Record<string, number>>;
       image: string;
+      width: number;
+      height: number;
+      surfaces: Surface[];
     }
   | { type: "scan_failed"; error: string };
 

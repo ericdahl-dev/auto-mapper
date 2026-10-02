@@ -1,6 +1,6 @@
 import { connect } from "../shared/connection";
 import type { StatusMessage, TestFrameKind } from "../shared/messages";
-import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
+import { initialScan, overlayPolygons, scanLabel, scanReducer, type ScanState } from "./scanState";
 import { cameraOptions, describeStatus } from "./statusView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -18,14 +18,34 @@ const calibrate = $<HTMLButtonElement>("calibrate");
 let status: StatusMessage | null = null;
 let scanState: ScanState = initialScan;
 const scanImage = $<HTMLImageElement>("scan-image");
+const scanView = $("scan-view");
+const surfacesSvg = document.getElementById("surfaces") as unknown as SVGSVGElement;
+const SVG_NS = "http://www.w3.org/2000/svg";
 const stageEmpty = $("stage-empty");
 const scanText = $("scan-label");
 
 function renderScan() {
   scanText.textContent = scanLabel(scanState);
   if (scanState.image && scanImage.getAttribute("src") !== scanState.image) scanImage.src = scanState.image;
-  scanImage.hidden = !scanState.image;
+  scanView.hidden = !scanState.image;
   stageEmpty.hidden = !!scanState.image;
+  if (scanState.size) {
+    const { width, height } = scanState.size;
+    scanView.style.aspectRatio = `${width} / ${height}`;
+    surfacesSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  }
+  surfacesSvg.replaceChildren(
+    ...overlayPolygons(scanState).flatMap(({ id, points }) => {
+      const poly = document.createElementNS(SVG_NS, "polygon");
+      poly.setAttribute("points", points);
+      const [x, y] = points.split(" ")[0].split(",");
+      const label = document.createElementNS(SVG_NS, "text");
+      label.setAttribute("x", String(Number(x) + 12));
+      label.setAttribute("y", String(Number(y) + 34));
+      label.textContent = String(id);
+      return [poly, label];
+    }),
+  );
   scan.textContent = scanState.running ? "Scanning…" : "Scan";
   if (scanState.running) scan.disabled = true;
 }
@@ -90,10 +110,10 @@ scan.addEventListener("click", async () => {
   const res = await fetch("/api/scan", { method: "POST" });
   if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`);
 });
-// Show the last scan after a reload.
-void fetch("/api/scan/latest.png").then((r) => {
+// Show the last scan, with its surfaces, after a reload.
+void fetch("/api/scan/latest").then(async (r) => {
   if (r.ok) {
-    scanState = { ...scanState, image: `/api/scan/latest.png?t=${Date.now()}` };
+    scanState = scanReducer(scanState, { type: "scan_result", ...(await r.json()) });
     renderScan();
   }
 });
