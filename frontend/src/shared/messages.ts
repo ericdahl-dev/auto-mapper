@@ -28,6 +28,7 @@ export interface StatusMessage {
   hardware: { projector: Projector | null; cameras: CameraInfo[]; issues: HardwareIssue[] };
   output_connected: boolean;
   output_resolution: { width: number; height: number } | null;
+  output_fps?: number | null;
   camera: { selected: string | null; calibration: Calibration | null };
   project: { name: string; slug: string } | null;
   can_scan: boolean;
@@ -85,6 +86,7 @@ export interface SceneMessage {
   height: number;
   surfaces: SceneSurface[];
   selected: number | null;
+  presentation: { mode: "edit" | "play"; blackout: boolean };
 }
 
 export interface ScanReloadMessage {

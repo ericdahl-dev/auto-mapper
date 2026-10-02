@@ -130,7 +130,8 @@ export class SceneRenderer {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    if (!this.scene) return;
+    if (!this.scene || this.scene.presentation?.blackout) return;
+    const editing = this.scene.presentation?.mode !== "play";
     const res: [number, number] = [this.scene.width, this.scene.height];
     const failed: PreparedSurface[] = [];
 
@@ -169,13 +170,13 @@ export class SceneRenderer {
     gl.useProgram(this.solid);
     gl.uniform2f(gl.getUniformLocation(this.solid, "u_resolution"), ...res);
     const uColor = gl.getUniformLocation(this.solid, "u_color");
-    for (const s of failed) {
+    for (const s of editing ? failed : []) {
       gl.uniform4f(uColor, ...(ERROR_RGBA as [number, number, number, number]));
       gl.bindVertexArray(s.outline);
       gl.drawArrays(gl.LINE_LOOP, 0, s.outlineCount);
     }
 
-    const selected = this.surfaces.find((s) => s.id === this.scene!.selected);
+    const selected = editing ? this.surfaces.find((s) => s.id === this.scene!.selected) : undefined;
     if (selected) {
       // Pulse a translucent white over the selected surface so it can be found on the wall.
       const a = 0.3 + 0.15 * Math.sin(timeSeconds * 4);
