@@ -33,6 +33,9 @@
       #project-list li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
       #project-list li.active { color: var(--ok); }
       .hint { font-size: 12px; margin: 0 0 8px; }
+      #surfaces.drawing { cursor: crosshair; }
+      #surfaces polyline.draft { fill: rgba(251, 191, 36, 0.15); stroke: #fbbf24; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+      #surfaces circle.draft { fill: #fbbf24; pointer-events: none; }
       #surfaces text { pointer-events: none; fill: #fff; font: 600 28px system-ui, sans-serif; paint-order: stroke; stroke: #000; stroke-width: 4px; }
       .muted { color: var(--muted); margin: 8px 0 0; }
       .stage { aspect-ratio: 16 / 9; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
@@ -58,6 +61,8 @@
       <button id="open-output">Open output window</button>
       <button id="refresh">Refresh hardware</button>
       <button id="scan" class="primary" disabled>Scan</button>
+      <button id="draw" title="Click corners on the scan; double-click or Enter to finish, Esc to cancel">Draw surface</button>
+      <button id="redetect" title="Detect surfaces again; keeps the ones you drew or edited">Redetect</button>
       <button id="play" title="P">Play</button>
       <button id="blackout" title="B">Blackout</button>
     </header>
@@ -100,6 +105,7 @@
         <img id="preview" alt="Camera preview" hidden />
         <section id="surface-panel" hidden>
           <h2 id="surface-title">Surface</h2>
+          <p id="surface-source" class="muted hint"></p>
           <div class="row"><input id="surface-name" type="text" placeholder="Name" /></div>
           <div class="row">
             <button id="delete-surface">Delete</button>

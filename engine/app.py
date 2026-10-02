@@ -19,7 +19,7 @@ from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
 from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
-from engine.scan import block_coverage, diagnose, projector_space_image
+from engine.scan import DecodeResult, block_coverage, diagnose, projector_space_image
 from engine.scan_runner import ScanCancelled, ScanError, capture_scan
 from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
@@ -29,6 +29,7 @@ from engine.messages import (
     EditorHello,
     Hello,
     MergeRequest,
+    NewSurfaceRequest,
     OutputHello,
     PresentationRequest,
     ProjectSaveRequest,
@@ -222,7 +223,7 @@ def create_app(
                     "warnings": diagnose(decoded, coverage),
                 }
                 await asyncio.to_thread(save_scan, decoded, image, covered, summary)
-                scene.reset_from_scan(summary)
+                scene.apply_detection(summary)  # keeps drawn/edited surfaces and carries effects
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except ScanCancelled:
                 await hub.broadcast({"type": "scan_cancelled"})
@@ -286,6 +287,39 @@ def create_app(
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
         return scene.public()
+
+    @app.post("/api/scene/surfaces")
+    async def add_surface(req: NewSurfaceRequest):
+        if scene.scene is None:
+            raise HTTPException(404, "No scan yet")
+        scene.add_manual(req.polygon, req.name)
+        await app.state.hub.broadcast_scene()
+        return scene.public()
+
+    @app.post("/api/scene/redetect")
+    async def redetect():
+        if scene.scene is None or not (scan_dir / "map.npz").exists():
+            raise HTTPException(404, "No scan yet")
+        if scan_busy():
+            raise HTTPException(409, "A scan is running")
+        summary = await asyncio.to_thread(detect_saved_scan)
+        scene.apply_detection(summary)
+        await app.state.hub.broadcast_scene()
+        await app.state.hub.broadcast({"type": "scan_reload"})
+        return scene.public()
+
+    def detect_saved_scan() -> dict:
+        """Runs surface detection again on the saved scan, e.g. after detection improvements."""
+        m = np.load(scan_dir / "map.npz")
+        meta = json.loads((scan_dir / "meta.json").read_text())
+        decoded = DecodeResult(
+            proj_x=m["proj_x"].astype(np.int32), proj_y=m["proj_y"].astype(np.int32), valid=m["valid"],
+            white=None, black=None, bit_reliability={}, width=meta["width"], height=meta["height"],
+        )
+        image = cv2.imread(str(scan_dir / "scan.png"))
+        meta["surfaces"] = detect_surfaces(decoded, (image, m["covered"]))
+        (scan_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        return meta
 
     @app.delete("/api/scene/surfaces/{surface_id}")
     async def delete_surface(surface_id: int):

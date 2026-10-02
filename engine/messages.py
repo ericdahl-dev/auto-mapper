@@ -55,3 +55,8 @@ class ProjectSaveRequest(BaseModel):
 class PresentationRequest(BaseModel):
     mode: Literal["edit", "play"] | None = None
     blackout: bool | None = None
+
+
+class NewSurfaceRequest(BaseModel):
+    polygon: Annotated[list[Point], Field(min_length=3)]
+    name: Annotated[str, Field(max_length=80)] | None = None
