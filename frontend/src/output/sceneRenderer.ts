@@ -167,7 +167,10 @@ export class SceneRenderer {
       } else {
         el.addEventListener("load", () => {
           const img = el as HTMLImageElement;
-          if (this.media.get(src) === m) this.upload(m, img);
+          if (this.media.get(src) === m) {
+            gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT); // not unit 0: that holds the scan
+            this.upload(m, img);
+          }
           m.size = [img.naturalWidth, img.naturalHeight];
           settle();
         }, { once: true });
@@ -190,12 +193,12 @@ export class SceneRenderer {
     s.media.forEach(([name, src], i) => {
       const m = this.media.get(src)!;
       const v = m.video;
+      gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT + i); // before any upload, which binds: keep unit 0 the scan
       // Videos: the current frame, uploaded once per draw however many surfaces show it.
       if (v && m.uploadedFrame !== this.frame && v.readyState >= v.HAVE_CURRENT_DATA && v.videoWidth > 0) {
         this.upload(m, v);
         m.uploadedFrame = this.frame;
       }
-      gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT + i);
       gl.bindTexture(gl.TEXTURE_2D, m.texture);
       gl.uniform1i(gl.getUniformLocation(p, `u_${name}`), FIRST_MEDIA_UNIT + i);
       gl.uniform2f(gl.getUniformLocation(p, `u_${name}Size`), ...m.size);
