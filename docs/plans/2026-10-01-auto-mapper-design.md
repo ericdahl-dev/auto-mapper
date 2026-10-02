@@ -63,7 +63,7 @@ Decisions:
 A single uncalibrated camera gives no true depth, so detection combines two cues in projector
 space:
 
-- **Decode discontinuities:** neighbouring projector pixels whose camera positions jump far
+- **Decode discontinuities:** neighboring projector pixels whose camera positions jump far
   apart mark edges between objects at different depths. This is the strongest cue.
 - **Color and brightness edges** in `scan.png`.
 

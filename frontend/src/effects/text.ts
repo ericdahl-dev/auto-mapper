@@ -7,7 +7,7 @@ export const text: Effect = {
   name: "Text",
   params: [
     { name: "text", label: "Text", type: "text", default: "Hello" },
-    { name: "color", label: "Colour", type: "color", default: "#ffffff" },
+    { name: "color", label: "Color", type: "color", default: "#ffffff" },
     { name: "background", label: "Background", type: "color", default: "#000000" },
     { name: "font", label: "Font", type: "choice", default: "sans", options: [
       { value: "sans", label: "Sans" },
@@ -16,7 +16,7 @@ export const text: Effect = {
     ] },
     { name: "align", label: "Align", type: "choice", default: "center", options: [
       { value: "left", label: "Left" },
-      { value: "center", label: "Centre" },
+      { value: "center", label: "Center" },
       { value: "right", label: "Right" },
     ] },
     { name: "fit", label: "Fit", type: "choice", default: "fit", options: [
@@ -41,7 +41,7 @@ void main() {
     vec3 h = u_corners * vec3(v_pos, 1.0);
     uv = h.z > 0.0 ? h.xy / h.z : vec2(-1.0);
   } else {
-    // Fit inside: the whole text in the bounding box, keeping its shape, centred.
+    // Fit inside: the whole text in the bounding box, keeping its shape, centered.
     uv = v_uv;
     float surface = u_bounds.z / u_bounds.w;
     float image = size.x / size.y;

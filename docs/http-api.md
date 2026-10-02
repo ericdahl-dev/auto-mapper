@@ -29,7 +29,7 @@ Most write routes respond with the updated scene and also broadcast it over the 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
 | POST | `/api/scan` | | 202 `{"started": true}`; the scan runs in the background and reports over the WebSocket. 409 if the rig isn't ready, the camera isn't a USB webcam, or a scan is already running |
-| POST | `/api/scan/cancel` | | `{"cancelling": true}`. 409 if no scan is running |
+| POST | `/api/scan/cancel` | | `{"canceling": true}`. 409 if no scan is running |
 | GET | `/api/scan/latest` | | The last scan's summary (`meta.json`): size, coverage, seconds, bit reliability, detected surfaces, warnings, plus an `image` URL. 404 before the first scan |
 | GET | `/api/scan/latest.png` | | The scan image in projector pixels |
 | GET | `/api/scan/latest-mask.png` | | The decoded-pixel mask |
@@ -83,7 +83,7 @@ The first message from a client must be a hello; otherwise the engine closes the
 - Editor: `{"type": "hello", "role": "editor"}`
 - Output: `{"type": "hello", "role": "output", "width": W, "height": H}`. The output sends it again when it is resized (for example on going fullscreen). A newer output window replaces the previous one.
 
-**Engine to editors:** `status`, `scene`, `scan_started`, `scan_progress` (`done`, `total`), `scan_result` (the scan summary plus `image`), `scan_failed` (`error`), `scan_cancelled`, `scan_reload` (refetch the scan after a redetect or project open), `effect_error` (`surface`, `effect`, `log`).
+**Engine to editors:** `status`, `scene`, `scan_started`, `scan_progress` (`done`, `total`), `scan_result` (the scan summary plus `image`), `scan_failed` (`error`), `scan_canceled`, `scan_reload` (refetch the scan after a redetect or project open), `effect_error` (`surface`, `effect`, `log`).
 
 **Engine to output:** `scene`, `show_test_frame` (`kind`), `show_pattern` (`seq`, `pattern`).
 

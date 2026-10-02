@@ -1,6 +1,6 @@
-// The output window's microphone: Web Audio capture feeding AudioAnalyser, once per frame.
+// The output window's microphone: Web Audio capture feeding AudioAnalyzer, once per frame.
 
-import { AudioAnalyser, type AudioValues, SILENT } from "./analysis";
+import { AudioAnalyzer, type AudioValues, SILENT } from "./analysis";
 
 export interface SoundSettings {
   enabled: boolean;
@@ -12,7 +12,7 @@ export class SoundInput {
   private stream: MediaStream | null = null;
   private node: AnalyserNode | null = null;
   private data = new Uint8Array(0);
-  private analyser: AudioAnalyser | null = null;
+  private analyzer: AudioAnalyzer | null = null;
   private last: AudioValues = SILENT;
   private error: string | null = null;
   private current = "";
@@ -32,10 +32,10 @@ export class SoundInput {
       this.ctx = new AudioContext();
       this.node = this.ctx.createAnalyser();
       this.node.fftSize = 2048;
-      this.node.smoothingTimeConstant = 0; // AudioAnalyser smooths
+      this.node.smoothingTimeConstant = 0; // AudioAnalyzer smooths
       this.ctx.createMediaStreamSource(this.stream).connect(this.node);
       this.data = new Uint8Array(this.node.frequencyBinCount);
-      this.analyser = new AudioAnalyser(this.ctx.sampleRate);
+      this.analyzer = new AudioAnalyzer(this.ctx.sampleRate);
       await this.resume();
     } catch (e) {
       this.stop();
@@ -52,9 +52,9 @@ export class SoundInput {
 
   /** This frame's sound values (all 0 when off or failed). */
   frame(dt: number): AudioValues {
-    if (!this.node || !this.analyser) return SILENT;
+    if (!this.node || !this.analyzer) return SILENT;
     this.node.getByteFrequencyData(this.data);
-    this.last = this.analyser.update(this.data, dt);
+    this.last = this.analyzer.update(this.data, dt);
     return this.last;
   }
 
@@ -65,7 +65,7 @@ export class SoundInput {
   private stop() {
     this.stream?.getTracks().forEach((t) => t.stop());
     void this.ctx?.close().catch(() => {});
-    this.stream = this.ctx = this.node = this.analyser = null;
+    this.stream = this.ctx = this.node = this.analyzer = null;
     this.last = SILENT;
     this.error = null;
   }

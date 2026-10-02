@@ -60,7 +60,7 @@ def test_scan_image_is_the_scene_seen_from_the_projector():
     img, covered = projector_space_image(r)
 
     assert img.shape == (scene.proj_h, scene.proj_w, 3)
-    # Inside the projection, projector pixels get a colour (small holes filled). The only
+    # Inside the projection, projector pixels get a color (small holes filled). The only
     # gap left is the strip beside the box that the camera can't see (its shadow).
     assert covered[10:-10, 10:-10].mean() > 0.97
     assert img[10:-10, 10:-10].mean() > 100

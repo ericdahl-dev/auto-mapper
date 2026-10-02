@@ -1,10 +1,10 @@
 """Finds surfaces (walls, boxes, objects) in a scan and outlines them as projector-space polygons.
 
 Two kinds of boundary separate surfaces:
-- depth edges: neighbouring camera pixels whose projector coordinates jump, because the
+- depth edges: neighboring camera pixels whose projector coordinates jump, because the
   projector and camera see a step in depth from different angles (parallax). This works
-  even when both surfaces are the same colour.
-- colour/brightness edges in the scan image.
+  even when both surfaces are the same color.
+- color/brightness edges in the scan image.
 Areas the camera could not see at all (shadows, occlusion) are boundaries too.
 """
 
@@ -21,8 +21,8 @@ DENSITY_SIGMA = 6
 MIN_DEPTH_EDGE_PX = 40  # tuned on a real room: 99% of noise fragments were under 13 px
 FILL_SIGMA = 1.5  # projector px; spreads sparse camera samples across empty projector pixels
 CANNY_LOW, CANNY_HIGH = 6, 16  # tuned on the rig: a light box against a light wall is subtle
-BLUR_PX = 3  # smooth speckle before colour edges
-EDGE_DILATE_PX = 7  # tuned on the rig: bridges gaps in faint colour edges
+BLUR_PX = 3  # smooth speckle before color edges
+EDGE_DILATE_PX = 7  # tuned on the rig: bridges gaps in faint color edges
 MIN_AREA_FRACTION = 0.003  # of the projector area
 SIMPLIFY_FRACTION = 0.015  # polygon tolerance, as a fraction of its perimeter
 SLIT_CLOSE_PX = 15  # gaps narrower than this inside a region are sealed; wider bends are kept
@@ -36,7 +36,7 @@ CURVE_EPS_PX = 1.5  # simplification tolerance on curved runs
 def depth_edges(decoded: DecodeResult) -> np.ndarray:
     """Projector-space mask of depth discontinuities.
 
-    Neighbouring projector pixels on the same surface are seen by neighbouring camera
+    Neighboring projector pixels on the same surface are seen by neighboring camera
     pixels. Across a depth step, parallax makes the camera position jump.
     """
     h, w = decoded.height, decoded.width
@@ -84,7 +84,7 @@ def depth_edges(decoded: DecodeResult) -> np.ndarray:
     return long_enough[labels]
 
 
-def colour_edges(image: np.ndarray, covered: np.ndarray) -> np.ndarray:
+def color_edges(image: np.ndarray, covered: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (0, 0), BLUR_PX)
     edges = cv2.Canny(gray, CANNY_LOW, CANNY_HIGH).astype(bool)
@@ -98,7 +98,7 @@ def detect_surfaces(decoded: DecodeResult, view: tuple[np.ndarray, np.ndarray]) 
     h, w = covered.shape
     # Unseen areas (camera shadow) are boundaries too, grown with the edges so the
     # edge lines and shadow strips join up without leaks at the corners.
-    boundary = depth_edges(decoded) | colour_edges(image, covered) | ~covered
+    boundary = depth_edges(decoded) | color_edges(image, covered) | ~covered
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * EDGE_DILATE_PX + 1, 2 * EDGE_DILATE_PX + 1))
     boundary = cv2.dilate(boundary.astype(np.uint8), k).astype(bool)
 
@@ -109,7 +109,7 @@ def detect_surfaces(decoded: DecodeResult, view: tuple[np.ndarray, np.ndarray]) 
     for label in range(1, count):
         if stats[label, cv2.CC_STAT_AREA] < min_area:
             continue
-        # Grow back over the boundary band so neighbouring surfaces meet.
+        # Grow back over the boundary band so neighboring surfaces meet.
         mask = cv2.dilate((labels == label).astype(np.uint8), k) & covered.astype(np.uint8)
         poly = outline_polygon(mask)
         if len(poly) < 3:

@@ -34,7 +34,7 @@ describe("moveOnRun", () => {
     const poly = archedSquare();
     const moved = moveOnRun(poly, 15, [poly[15][0], poly[15][1] - 30]);
     expect(moved[15][1]).toBeCloseTo(poly[15][1] - 30, 0);
-    expect(moved[14][1]).toBeLessThan(poly[14][1]); // neighbours follow...
+    expect(moved[14][1]).toBeLessThan(poly[14][1]); // neighbors follow...
     expect(poly[14][1] - moved[14][1]).toBeLessThan(30); // ...less than the dragged point
     for (const c of [0, 31, 32, 33]) expect(moved[c]).toEqual(poly[c]); // corners don't move
   });

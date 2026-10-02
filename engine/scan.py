@@ -72,7 +72,7 @@ def _refine(values: np.ndarray, valid: np.ndarray, unknown: np.ndarray, coarse: 
     """Recovers sub-stripe positions when the finest stripes were too thin for the camera.
 
     Projector coordinates change smoothly across the camera image, so averaging the
-    coarse (interval-centre) values of neighbouring camera pixels lands between stripe
+    coarse (interval-center) values of neighboring camera pixels lands between stripe
     edges. The window spans about one unresolved stripe, measured in camera pixels.
     """
     import cv2
@@ -138,7 +138,7 @@ class GrayDecoder:
         for name, axis in self._axes.items():
             k = np.clip(axis.bits - axis.reliable_bits, 0, None)  # unreadable low bits per pixel
             base = (_gray_to_binary(axis.code) >> k) << k
-            # Centre of the interval the unreadable bits leave open.
+            # Center of the interval the unreadable bits leave open.
             coarse[name] = base + ((1 << k) - 1) / 2.0
             unknown[name] = k
             valid &= (k <= MAX_UNRELIABLE_LOW_BITS) & (base < axis.size)

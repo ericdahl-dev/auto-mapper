@@ -4,13 +4,13 @@
 
 Automatic projection mapping with a projector, a USB webcam and a Mac.
 
-auto-mapper is a [Lightform](https://lightform.com/)-style projection mapper (Lightform, the commercial product it is modelled on, is discontinued). You point a projector and a webcam at a scene and press **Scan**. The app projects structured-light patterns, works out which camera pixel sees which projector pixel, and finds the surfaces in the scene: walls, boxes, cabinet doors, corbels. You give each surface a live shader effect, and the projector plays them back, each one clipped to its surface.
+auto-mapper is a [Lightform](https://lightform.com/)-style projection mapper (Lightform, the commercial product it is modeled on, is discontinued). You point a projector and a webcam at a scene and press **Scan**. The app projects structured-light patterns, works out which camera pixel sees which projector pixel, and finds the surfaces in the scene: walls, boxes, cabinet doors, corbels. You give each surface a live shader effect, and the projector plays them back, each one clipped to its surface.
 
 A session looks like this:
 
 1. **Scan**: about a minute of black-and-white stripe patterns on the scene.
 2. **Surfaces**: outlines are detected automatically; you fix, merge, draw or curve them.
-3. **Effects**: pick an effect per surface (colour fills, outline chases, scan-based tints, images and video) and tune its parameters.
+3. **Effects**: pick an effect per surface (color fills, outline chases, scan-based tints, images and video) and tune its parameters.
 4. **Play**: switch the projector from the editing view to the show, and save it as a project.
 
 Once the scan is done, everything lives in projector coordinates, so playback and saved projects don't need the camera.
@@ -121,7 +121,7 @@ The **Test frame** buttons (Grid, White, Black) put a test image on the projecto
 
 ### 2. Pick the camera
 
-The **Camera** dropdown lists every camera, labelled `(USB)`, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default; your choice is remembered in `settings.json`.
+The **Camera** dropdown lists every camera, labeled `(USB)`, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default; your choice is remembered in `settings.json`.
 
 **Show preview** is off by default. While it's on, the editor polls a camera frame twice a second; turning it off releases the camera. Starting a scan turns the preview off, because the scan needs the camera to itself. Use the preview to check that the camera sees the whole projected area.
 
@@ -149,7 +149,7 @@ Detected surfaces appear as numbered outlines over the scan. In the editor:
 | Rename | Type in the name field of the surface panel. |
 | Delete | **Delete** in the surface panel. |
 | Merge | Shift-click other surfaces, then **Merge N surfaces**. The result keeps the first surface's id and effect. |
-| Move a corner | Drag a handle. On a curved run, the neighbouring points follow with a smooth falloff, so the curve bends instead of kinking. |
+| Move a corner | Drag a handle. On a curved run, the neighboring points follow with a smooth falloff, so the curve bends instead of kinking. |
 | Add a corner | Double-click an edge of the selected surface. |
 | Remove a corner | Alt-click a handle. A surface always keeps at least three corners. |
 | Draw a surface | **Draw surface**, then click corners on the scan. Double-click or press Enter to finish, Esc to cancel. Use this for anything detection missed. |
@@ -173,20 +173,20 @@ Pick an effect for the selected surface in the surface panel; its controls appea
 | Effect | What it does | Parameters |
 |--------|--------------|------------|
 | **None (dark)** | Leaves the surface black | none |
-| **Fill** | Solid colour, or a linear gradient when the two colours differ | Colour, Gradient to, Gradient angle (0 to 360), Brightness, React to sound |
-| **Outline trace** | A glowing line around the surface's edge, optionally chasing round it | Colour, Line width (1 to 40 px), Glow, Chase, Speed (0 to 2 laps/s), Segments (1 to 8), React to sound |
-| **Noise flow** | Slowly drifting cloud-like texture between two colours | Colour, Second colour, Scale, Speed, Contrast, Brightness, React to sound |
-| **Tint (scan)** | Recolours the real object while keeping its texture (wood grain, fabric) visible | Colour, Texture, Scan gain |
-| **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Colour, Sensitivity, Line width (1 to 8 px), Base light, Pulse |
-| **Posterize (scan)** | Flattens the real surface into a few bands of colour, like a screen print | Bands (2 to 8), Dark colour, Light colour, Scan gain |
-| **Text** | Your text, as large as fits inside the surface (or corner-pinned to it), several lines allowed | Text, Colour, Background, Font (Sans, Serif, Mono), Align, Fit (Fit inside, Map to corners), Motion (None, Scroll, Pulse), Speed, React to sound |
+| **Fill** | Solid color, or a linear gradient when the two colors differ | Color, Gradient to, Gradient angle (0 to 360), Brightness, React to sound |
+| **Outline trace** | A glowing line around the surface's edge, optionally chasing round it | Color, Line width (1 to 40 px), Glow, Chase, Speed (0 to 2 laps/s), Segments (1 to 8), React to sound |
+| **Noise flow** | Slowly drifting cloud-like texture between two colors | Color, Second color, Scale, Speed, Contrast, Brightness, React to sound |
+| **Tint (scan)** | Recolors the real object while keeping its texture (wood grain, fabric) visible | Color, Texture, Scan gain |
+| **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Color, Sensitivity, Line width (1 to 8 px), Base light, Pulse |
+| **Posterize (scan)** | Flattens the real surface into a few bands of color, like a screen print | Bands (2 to 8), Dark color, Light color, Scan gain |
+| **Text** | Your text, as large as fits inside the surface (or corner-pinned to it), several lines allowed | Text, Color, Background, Font (Sans, Serif, Mono), Align, Fit (Fit inside, Map to corners), Motion (None, Scroll, Pulse), Speed, React to sound |
 | **Image / video** | An uploaded image or video, clipped to the surface's outline | Image or video (file); Fit: Cover, Stretch, Map to corners, Contain, Original size, Tile; Zoom, Pan, Rotate, Flip, Background; Video start and speed |
 
 The three "(scan)" effects read the scan image, so they react to what is really on the surface. Image / video accepts PNG, JPEG, WebP, GIF, MP4, M4V, MOV and WebM up to 2 GB; videos loop silently from their start time.
 
 **Framing images and video.**
 
-- **Fit:** Cover fills the surface's bounding box and crops evenly; Stretch fills it exactly; Contain shows the whole image, letterboxed in the Background colour; Original size shows one image pixel per projector pixel; Tile repeats the image at original size.
+- **Fit:** Cover fills the surface's bounding box and crops evenly; Stretch fills it exactly; Contain shows the whole image, letterboxed in the Background color; Original size shows one image pixel per projector pixel; Tile repeats the image at original size.
 - **Map to corners** (corner pin) warps the image onto the surface's four corners, so it lies flat on a surface seen at an angle, like a poster, instead of being sheared by the bounding box. Orange diamond handles show the four corners (the outline's own until you drag one): drag to pin, Alt-click to reset.
 - **On the surface:** with the effect selected, drag inside the surface to pan and scroll to zoom. The Zoom, Pan, Rotate and Flip controls set the same values.
 
@@ -204,7 +204,7 @@ Then raise **React to sound** (0 = off) on an effect:
 - **Outline trace**: the line thickens on beats and glows with loudness.
 - **Noise flow**: swells with the bass and flashes on beats.
 
-Sound is analysed raw (no echo cancellation or noise suppression), split into bass (20 to 250 Hz), mid (250 Hz to 4 kHz) and treble (4 to 16 kHz), smoothed so effects don't flicker, plus a beat pulse when the bass jumps above its recent average.
+Sound is analyzed raw (no echo cancellation or noise suppression), split into bass (20 to 250 Hz), mid (250 Hz to 4 kHz) and treble (4 to 16 kHz), smoothed so effects don't flicker, plus a beat pulse when the bass jumps above its recent average.
 
 ### 7. Play
 
@@ -238,7 +238,7 @@ From real use on the rig:
 | "Engine not reachable. Is `make dev` running?" | The editor can't reach the engine on port 8765. Start or restart `make dev`. |
 | "Camera read failed" (in a scan error or a broken preview) | The engine lost the webcam. Restart `make dev`; the camera is reopened on the next preview, calibration or scan. |
 | "Output window not connected..." or "Output window is WxH but the projector is WxH..." | Open the output window, move it onto the projector and click it to go fullscreen. Scanning needs the output to match the projector's resolution exactly. |
-| "The output window stopped responding..." during a scan | A minimised or hidden window stops drawing. Keep it visible and fullscreen on the projector, then scan again. |
+| "The output window stopped responding..." during a scan | A minimized or hidden window stops drawing. Keep it visible and fullscreen on the projector, then scan again. |
 | "White and black frames look the same to the camera..." | The camera can't see the projection, or it is too dim to register. Check the preview, darken the room, move the projector closer, or raise `AUTO_MAPPER_SCAN_SETTLE`. |
 | "Only N% of the projection decoded." | Read the hint that follows it (bright room, faint projection, or camera not seeing the projection), then use **Show missed areas** to see where. |
 | "Camera brightness did not respond to exposure changes..." | The camera being controlled may not be the one being read, or the lens is covered. |
@@ -256,14 +256,14 @@ The browser output window owns the projector at all times, including during a sc
 
 ### Decoding
 
-Each Gray-code bit is compared with its inverse pattern, so every pixel is judged against its own lighting rather than a global threshold. Bits are read from coarse to fine; once a bit can't be read clearly at a pixel, it and all finer bits are dropped, which bounds the error to that stripe width instead of discarding the pixel (pixels missing more than the three finest bits are discarded). Sub-stripe refinement then recovers positions between the coarse stripes by averaging neighbouring pixels, since projector coordinates vary smoothly across the camera image. The result is mapped into projector space (`scan.png`, with small holes filled), and coverage is the share of 8x8 projector-pixel blocks with any decoded data.
+Each Gray-code bit is compared with its inverse pattern, so every pixel is judged against its own lighting rather than a global threshold. Bits are read from coarse to fine; once a bit can't be read clearly at a pixel, it and all finer bits are dropped, which bounds the error to that stripe width instead of discarding the pixel (pixels missing more than the three finest bits are discarded). Sub-stripe refinement then recovers positions between the coarse stripes by averaging neighboring pixels, since projector coordinates vary smoothly across the camera image. The result is mapped into projector space (`scan.png`, with small holes filled), and coverage is the share of 8x8 projector-pixel blocks with any decoded data.
 
 ### Surface detection
 
 Detection works in projector space and combines three kinds of boundary:
 
-- **depth edges**: neighbouring projector pixels whose camera positions jump, because the camera and projector see a depth step from different angles (parallax), which separates surfaces even when they are the same colour;
-- **colour edges** in the scan image;
+- **depth edges**: neighboring projector pixels whose camera positions jump, because the camera and projector see a depth step from different angles (parallax), which separates surfaces even when they are the same color;
+- **color edges** in the scan image;
 - **unseen areas** the camera couldn't decode (shadows, occlusion).
 
 The remaining regions above a minimum size become surfaces. Their outlines keep straight sides as single lines and follow sides that really bend (a cubic fits them smoothly, unlike edge noise).
@@ -282,7 +282,7 @@ An effect is one GLSL ES 3.0 fragment shader plus a parameter schema. The editor
 | `u_poly`, `u_polyCount`, `u_perimeter` | The outline (up to 256 vertices) and its length |
 | `polyEdge(p, out along)` | Distance from `p` to the outline, and how far round the outline the nearest point is |
 | `scanAt(px)`, `u_scan` | The scan image at a projector pixel |
-| `luminance(c)` | Brightness of a colour |
+| `luminance(c)` | Brightness of a color |
 | `u_level`, `u_bass`, `u_mid`, `u_treble` | Sound, 0 to 1, smoothed; all 0 when sound is off |
 | `u_beat` | 1 on a beat, decaying to 0 over a fraction of a second |
 
@@ -298,7 +298,7 @@ Shaders write to `out vec4 color`. Compile errors are reported back to the edito
 | `app.py` | FastAPI app: all HTTP routes and the `/ws` WebSocket, scan orchestration (see [docs/http-api.md](docs/http-api.md)) |
 | `hub.py` | Tracks the editors and the output window, pushes status and scene, pattern acks |
 | `hardware.py` | Finds displays (`system_profiler`) and cameras (AVFoundation metadata; never opens a camera) |
-| `cameras.py` | Camera catalogue, USB address parsing, default camera choice, `settings.json` |
+| `cameras.py` | Camera catalog, USB address parsing, default camera choice, `settings.json` |
 | `camera_device.py` | Opens and reads the selected camera through OpenCV, one at a time |
 | `camera_lock.py` | Locks and restores UVC controls with `uvc-util`; crash recovery |
 | `calibrate.py` | Exposure and gain search on a white frame |
@@ -356,7 +356,7 @@ Parameter types:
 
 | `type` | Editor control | Shader uniform |
 |--------|----------------|----------------|
-| `color` | Colour picker; default as `#rrggbb` | `vec3 u_<name>` |
+| `color` | Color picker; default as `#rrggbb` | `vec3 u_<name>` |
 | `number` | Slider with optional `min`, `max`, `step` (defaults 0, 1, 0.01) | `float u_<name>`, clamped to the range |
 | `choice` | Dropdown of `options` | `float u_<name>`: the chosen option's index |
 | `text` | Text box | `sampler2D u_<name>` (the text drawn white on black: use `.r` as a mask, in the effect's `font`/`align` choices if it has them) and `vec2 u_<name>Size` |
@@ -375,7 +375,7 @@ export const pulse: Effect = {
   id: "pulse",
   name: "Pulse",
   params: [
-    { name: "tone", label: "Colour", type: "color", default: "#ffffff" },
+    { name: "tone", label: "Color", type: "color", default: "#ffffff" },
     { name: "rate", label: "Speed", type: "number", default: 1, min: 0, max: 5, step: 0.1 },
   ],
   fragment: `

@@ -1,12 +1,12 @@
 import type { Effect } from "./types";
 
-/** Slowly drifting cloud-like texture between two colours. */
+/** Slowly drifting cloud-like texture between two colors. */
 export const noise: Effect = {
   id: "noise",
   name: "Noise flow",
   params: [
-    { name: "colorA", label: "Colour", type: "color", default: "#0ea5e9" },
-    { name: "colorB", label: "Second colour", type: "color", default: "#a855f7" },
+    { name: "colorA", label: "Color", type: "color", default: "#0ea5e9" },
+    { name: "colorB", label: "Second color", type: "color", default: "#a855f7" },
     { name: "scale", label: "Scale", type: "number", default: 4, min: 1, max: 20, step: 0.1 },
     { name: "speed", label: "Speed", type: "number", default: 0.3, min: 0, max: 2, step: 0.01 },
     { name: "contrast", label: "Contrast", type: "number", default: 1.5, min: 0.5, max: 4, step: 0.05 },

@@ -1,11 +1,11 @@
 import type { Effect } from "./types";
 
-/** Solid colour, or a linear gradient when the two colours differ. */
+/** Solid color, or a linear gradient when the two colors differ. */
 export const fill: Effect = {
   id: "fill",
   name: "Fill",
   params: [
-    { name: "colorA", label: "Colour", type: "color", default: "#2563eb" },
+    { name: "colorA", label: "Color", type: "color", default: "#2563eb" },
     { name: "colorB", label: "Gradient to", type: "color", default: "#2563eb" },
     { name: "angle", label: "Gradient angle", type: "number", default: 90, min: 0, max: 360, step: 1 },
     { name: "brightness", label: "Brightness", type: "number", default: 1, min: 0, max: 1, step: 0.01 },

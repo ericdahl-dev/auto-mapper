@@ -1,13 +1,13 @@
 import type { Effect } from "./types";
 
-/** Flattens the real surface into a few bands of colour, like a screen print. */
+/** Flattens the real surface into a few bands of color, like a screen print. */
 export const posterize: Effect = {
   id: "posterize",
   name: "Posterize (scan)",
   params: [
     { name: "levels", label: "Bands", type: "number", default: 4, min: 2, max: 8, step: 1 },
-    { name: "colorA", label: "Dark colour", type: "color", default: "#1e1b4b" },
-    { name: "colorB", label: "Light colour", type: "color", default: "#fde047" },
+    { name: "colorA", label: "Dark color", type: "color", default: "#1e1b4b" },
+    { name: "colorB", label: "Light color", type: "color", default: "#fde047" },
     { name: "gain", label: "Scan gain", type: "number", default: 1.5, min: 0.5, max: 4, step: 0.05 },
   ],
   fragment: `

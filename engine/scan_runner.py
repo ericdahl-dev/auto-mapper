@@ -15,7 +15,7 @@ class ScanError(Exception):
     pass
 
 
-class ScanCancelled(Exception):
+class ScanCanceled(Exception):
     pass
 
 
@@ -31,7 +31,7 @@ def capture_scan(
     progress: Callable[[int, int], None],
     settle_seconds: float,
     drop_frames: int,
-    cancelled: Callable[[], bool] = lambda: False,
+    canceled: Callable[[], bool] = lambda: False,
     frames_per_pattern: int = 1,
 ) -> tuple[DecodeResult, dict]:
     seq = pattern_sequence(width, height)
@@ -45,8 +45,8 @@ def capture_scan(
         uvc.set("exposure-time-abs", str(calibration["exposure"]))
 
         for i, pattern in enumerate(seq, 1):
-            if cancelled():
-                raise ScanCancelled()
+            if canceled():
+                raise ScanCanceled()
             show(pattern)
             time.sleep(settle_seconds)  # projector input lag beyond the browser's frame
             for _ in range(drop_frames):  # frames already buffered before the pattern changed

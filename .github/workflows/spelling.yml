@@ -1,0 +1,23 @@
+name: American spelling
+
+# The product, docs and code use American spelling (color, center, canceled, analyze...).
+# Fails a push or PR that adds British spellings; see scripts/american_spelling.py.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  spelling:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check spelling
+        run: python scripts/american_spelling.py

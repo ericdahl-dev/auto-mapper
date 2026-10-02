@@ -21,7 +21,7 @@ function render(params: Record<string, unknown>, time = 0, polygon = SQUARE) {
   expect(errors).toEqual([]);
   const px = new Uint8Array(W * H * 4);
   gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
-  /** Is the projector pixel (x, y) lit (text colour white)? */
+  /** Is the projector pixel (x, y) lit (text color white)? */
   const lit = (x: number, y: number) => px[((H - 1 - y) * W + x) * 4 + 1] > 128;
   const count = (x0: number, y0: number, x1: number, y1: number) => {
     let n = 0;
@@ -32,7 +32,7 @@ function render(params: Record<string, unknown>, time = 0, polygon = SQUARE) {
 }
 
 describe("text effect", () => {
-  it("draws the text inside the surface, in the text colour, and nothing outside it", () => {
+  it("draws the text inside the surface, in the text color, and nothing outside it", () => {
     const { count } = render({ text: "HI", color: "#ffffff", background: "#000000" });
     expect(count(16, 16, 80, 80)).toBeGreaterThan(200); // big letters filling the square
     expect(count(0, 0, 96, 16) + count(0, 80, 96, 96)).toBe(0); // outside the surface

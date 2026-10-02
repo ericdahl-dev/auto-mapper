@@ -16,7 +16,7 @@ class OutputNotResponding(Exception):
 
 NOT_RESPONDING = (
     "The output window stopped responding. Keep it visible and fullscreen on the projector "
-    "(a minimised or hidden window stops drawing), then scan again."
+    "(a minimized or hidden window stops drawing), then scan again."
 )
 CLOSED = "The output window closed during the scan. Reopen it fullscreen on the projector and scan again."
 NOT_CONNECTED = "The output window is not connected. Open it fullscreen on the projector and scan again."
@@ -42,7 +42,7 @@ class Hub:
 
     @hardware.setter
     def hardware(self, snapshot: HardwareSnapshot) -> None:
-        snapshot.chosen = self.settings.projector()  # every probe honours the saved choice
+        snapshot.chosen = self.settings.projector()  # every probe honors the saved choice
         self._hardware = snapshot
 
     def status(self) -> dict:

@@ -40,7 +40,7 @@ def solidity(polygon):
     return cv2.contourArea(pts) / max(cv2.contourArea(hull), 1.0)
 
 
-# room1: front of a wooden kitchen island: a centre pillar, door panels either side,
+# room1: front of a wooden kitchen island: a center pillar, door panels either side,
 # corbels under a countertop; dark cabinets and background around it.
 
 
@@ -64,7 +64,7 @@ def test_large_surfaces_have_straight_sides(room1):
 
 
 def test_pillar_shaft_has_parallel_sides(room1):
-    """The pillar joins the centre corbel at the top (continuous wood), so only its shaft,
+    """The pillar joins the center corbel at the top (continuous wood), so only its shaft,
     the lower part, is a box."""
     surfaces, _ = room1
     pillar = [s for s, c in zip(surfaces, centroids(surfaces)) if 780 <= c[0] <= 1020 and c[1] > 500]

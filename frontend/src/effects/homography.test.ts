@@ -15,7 +15,7 @@ describe("homography", () => {
     });
   });
 
-  it("is a perspective map, not affine: the quad's diagonal crossing lands on the image centre", () => {
+  it("is a perspective map, not affine: the quad's diagonal crossing lands on the image center", () => {
     // Intersection of the diagonals DOOR[0]-DOOR[2] and DOOR[1]-DOOR[3].
     const [a, c] = [DOOR[0], DOOR[2]];
     const [b, d] = [DOOR[1], DOOR[3]];
