@@ -13,7 +13,10 @@
       /* Image and overlay share one box with the scan's aspect ratio, so polygons line up. */
       #scan-view { position: relative; max-width: 100%; max-height: 100%; width: 100%; }
       #scan-view[hidden] { display: none; }
-      #scan-view img, #scan-view svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      #missed { pointer-events: none; }
+      #missed[hidden] { display: none; }
+      #scan-warnings .banner { margin-top: 6px; }
+      #scan-view canvas, #scan-view img, #scan-view svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
       #surfaces polygon { cursor: pointer; vector-effect: non-scaling-stroke; }
       #surface-panel { border-top: 1px solid var(--line); padding-top: 12px; margin-bottom: 12px; }
       .control { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; margin-bottom: 8px; }
@@ -64,11 +67,14 @@
         <div class="stage">
           <div id="scan-view" hidden>
             <img id="scan-image" alt="Scan" />
+            <canvas id="missed" hidden></canvas>
             <svg id="surfaces" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
           </div>
           <span id="stage-empty">Scan image appears here after a scan.</span>
         </div>
-        <p id="scan-label" class="muted">No scan yet</p>
+        <p class="row"><span id="scan-label" class="muted">No scan yet</span>
+          <label class="muted"><input id="show-missed" type="checkbox" /> Show missed areas</label></p>
+        <div id="scan-warnings"></div>
       </div>
       <aside>
         <h2>Project</h2>
