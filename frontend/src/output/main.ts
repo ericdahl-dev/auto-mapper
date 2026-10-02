@@ -11,6 +11,12 @@ const conn = connect({
   hello: () => ({ type: "hello", role: "output", ...size }),
   onMessage(msg) {
     if (msg.type === "show_test_frame") renderer.showTestFrame(msg.kind);
+    if (msg.type === "show_pattern") {
+      renderer.showPattern(msg.pattern);
+      // Ack only once the frame has been composited: one rAF gets it drawn, the second
+      // guarantees the previous frame was presented.
+      requestAnimationFrame(() => requestAnimationFrame(() => conn.send({ type: "pattern_shown", seq: msg.seq })));
+    }
   },
 });
 

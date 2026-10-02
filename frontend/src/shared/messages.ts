@@ -37,7 +37,42 @@ export interface ShowTestFrameMessage {
   kind: TestFrameKind;
 }
 
-export type ServerMessage = StatusMessage | ShowTestFrameMessage;
+export type Pattern =
+  | { kind: "white" }
+  | { kind: "black" }
+  | { kind: "gray"; axis: "x" | "y"; bit: number; inverse: boolean };
+
+export interface ShowPatternMessage {
+  type: "show_pattern";
+  seq: number;
+  pattern: Pattern;
+}
+
+export type ScanMessage =
+  | { type: "scan_started" }
+  | { type: "scan_progress"; done: number; total: number }
+  | {
+      type: "scan_result";
+      coverage: number;
+      seconds: number;
+      bit_reliability: Record<string, Record<string, number>>;
+      image: string;
+    }
+  | { type: "scan_failed"; error: string };
+
+export type ServerMessage = StatusMessage | ShowTestFrameMessage | ShowPatternMessage | ScanMessage;
+
+function isPattern(p: unknown): p is Pattern {
+  if (typeof p !== "object" || p === null) return false;
+  const q = p as Record<string, unknown>;
+  if (q.kind === "white" || q.kind === "black") return true;
+  return (
+    q.kind === "gray" &&
+    (q.axis === "x" || q.axis === "y") &&
+    Number.isInteger(q.bit) &&
+    typeof q.inverse === "boolean"
+  );
+}
 
 export type ClientHello =
   | { type: "hello"; role: "editor" }
@@ -57,6 +92,16 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return typeof m.can_scan === "boolean" && typeof m.hardware === "object" ? (m as unknown as StatusMessage) : null;
     case "show_test_frame":
       return TEST_FRAME_KINDS.includes(m.kind as TestFrameKind) ? (m as unknown as ShowTestFrameMessage) : null;
+    case "show_pattern":
+      return Number.isInteger(m.seq) && isPattern(m.pattern) ? (m as unknown as ShowPatternMessage) : null;
+    case "scan_started":
+      return m as unknown as ScanMessage;
+    case "scan_progress":
+      return typeof m.done === "number" && typeof m.total === "number" ? (m as unknown as ScanMessage) : null;
+    case "scan_result":
+      return typeof m.coverage === "number" && typeof m.image === "string" ? (m as unknown as ScanMessage) : null;
+    case "scan_failed":
+      return typeof m.error === "string" ? (m as unknown as ScanMessage) : null;
     default:
       return null;
   }

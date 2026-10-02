@@ -10,6 +10,8 @@
       header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
       h1 { font-size: 16px; margin: 0 auto 0 0; }
       main { display: grid; grid-template-columns: 1fr 280px; gap: 16px; padding: 16px; }
+      .stage img { width: 100%; height: 100%; object-fit: contain; display: block; }
+      .muted { color: var(--muted); margin: 8px 0 0; }
       .stage { aspect-ratio: 16 / 9; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
       aside { background: var(--panel); border: 1px solid var(--line); padding: 12px; }
       dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0 0 16px; }
@@ -35,7 +37,10 @@
     </header>
     <div id="banners"></div>
     <main>
-      <div class="stage">Scan image appears here after a scan.</div>
+      <div>
+        <div class="stage"><img id="scan-image" alt="Scan" hidden /><span id="stage-empty">Scan image appears here after a scan.</span></div>
+        <p id="scan-label" class="muted">No scan yet</p>
+      </div>
       <aside>
         <h2>Hardware</h2>
         <dl>

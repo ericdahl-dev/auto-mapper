@@ -25,6 +25,8 @@ def engine(hardware, **kwargs):
         kwargs.setdefault("data_dir", tmp)
         kwargs.setdefault("camera_factory", FakeCameraFactory())  # never a real camera in tests
         kwargs.setdefault("settle_seconds", 0)
+        kwargs.setdefault("scan_settle_seconds", 0)
+        kwargs.setdefault("scan_drop_frames", 0)
         with TestClient(create_app(hardware=hardware, **kwargs)) as client:
             yield client
 

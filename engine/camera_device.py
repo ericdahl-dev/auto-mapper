@@ -49,6 +49,8 @@ class FakeCamera:
         self.factory, self.index = factory, index
 
     def read(self) -> np.ndarray:
+        if self.factory.frame is not None:
+            return self.factory.frame()
         b = self.factory.brightness
         return np.full((self.factory.height, self.factory.width, 3), b() if callable(b) else b, np.uint8)
 
@@ -59,8 +61,14 @@ class FakeCamera:
 class FakeCameraFactory:
     """Test camera: records which OpenCV indices were opened and which are still open."""
 
-    def __init__(self, width: int = 320, height: int = 180, brightness: int | Callable[[], int] = 128):
-        self.width, self.height, self.brightness = width, height, brightness
+    def __init__(
+        self,
+        width: int = 320,
+        height: int = 180,
+        brightness: int | Callable[[], int] = 128,
+        frame: Callable[[], np.ndarray] | None = None,  # e.g. a synthetic scene renderer
+    ):
+        self.width, self.height, self.brightness, self.frame = width, height, brightness, frame
         self.opened: list[int] = []
         self.open_now: list[int] = []
 
