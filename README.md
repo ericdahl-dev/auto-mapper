@@ -115,13 +115,13 @@ Everything is plain files under `~/.auto-mapper/`:
 
 Click **Open output window** in the editor. Drag the new window onto the projector and click inside it to go fullscreen (browsers only allow fullscreen from a click, so the app can't do this for you). The setup hint ("Drag this window onto the projector, then click to go fullscreen.") disappears once the window fills the screen, so it is never projected over the patterns.
 
-The editor's **Hardware** panel shows the projector (a dropdown: with more than one external monitor, pick the one that is the projector; the choice is remembered, and if that display is unplugged the editor says so and falls back to the first non-main display), the cameras, whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
+The editor's **Hardware** panel shows the projector (a dropdown: with more than one external monitor, pick the one that is the projector; the choice is remembered, and if that display is unplugged the editor says so and falls back to the first non-main display), the camera (a dropdown too: see the next step), whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
 
 The **Test frame** buttons (Grid, White, Black) put a test image on the projector, which helps with aiming and focusing.
 
 ### 2. Pick the camera
 
-The **Camera** dropdown lists every camera, labeled `(USB)`, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default; your choice is remembered in `settings.json`.
+The **Camera** dropdown in the Hardware panel lists every camera, labeled `(USB)`, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default; your choice is remembered in `settings.json`.
 
 **Show preview** is off by default. While it's on, the editor polls a camera frame twice a second; turning it off releases the camera. Starting a scan turns the preview off, because the scan needs the camera to itself. Use the preview to check that the camera sees the whole projected area.
 
