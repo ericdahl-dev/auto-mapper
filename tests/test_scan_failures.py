@@ -90,3 +90,52 @@ def test_output_closed_mid_scan_gives_an_actionable_error(tmp_path):
     assert done["type"] == "scan_failed"
     assert "closed" in done["error"]
     assert uvc.values == DEFAULTS
+
+
+def scan_once(scene, uvc, hw, cams, tmp_path):
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        client.app.state.hub.settings.save_calibration(AC410["unique_id"], {"exposure": 200, "gain": 0, "p99": 200})
+        client.post("/api/scan")
+        while True:
+            msg = out.receive_json()
+            if msg["type"] == "show_test_frame" and msg["kind"] == "black":
+                break
+            if msg["type"] == "show_pattern":
+                scene.pattern = msg["pattern"]
+                out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
+        done = until_done(ed)
+        mask = client.get("/api/scan/latest-mask.png")
+    return done, mask
+
+
+def test_bright_room_low_coverage_warns_about_room_light(tmp_path):
+    scene, uvc, hw, cams = make_rig(ambient=200, power=0.04)
+    done, mask = scan_once(scene, uvc, hw, cams, tmp_path)
+
+    assert done["type"] == "scan_result"
+    assert done["coverage"] < 0.4
+    assert any("room" in w.lower() and "bright" in w.lower() for w in done["warnings"])
+    assert uvc.values == DEFAULTS
+
+
+def test_faint_projection_warns_about_projector_light(tmp_path):
+    scene, uvc, hw, cams = make_rig(ambient=12, power=0.04)
+    done, _ = scan_once(scene, uvc, hw, cams, tmp_path)
+
+    assert done["coverage"] < 0.4
+    assert any("faint" in w.lower() for w in done["warnings"])
+    assert not any("bright" in w.lower() for w in done["warnings"])
+
+
+def test_good_scan_has_no_warnings_and_serves_a_coverage_mask(tmp_path):
+    import cv2
+
+    scene, uvc, hw, cams = make_rig()
+    done, mask = scan_once(scene, uvc, hw, cams, tmp_path)
+
+    assert done["coverage"] > 0.9
+    assert done["warnings"] == []
+    img = cv2.imdecode(np.frombuffer(mask.content, np.uint8), cv2.IMREAD_GRAYSCALE)
+    assert img.shape == (H, W)
+    assert (img > 0).mean() > 0.9  # white where decoded

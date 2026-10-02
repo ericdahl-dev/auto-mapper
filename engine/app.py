@@ -19,7 +19,7 @@ from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
 from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
-from engine.scan import block_coverage, projector_space_image
+from engine.scan import block_coverage, diagnose, projector_space_image
 from engine.scan_runner import ScanCancelled, ScanError, capture_scan
 from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
@@ -212,6 +212,7 @@ def create_app(
                     "seconds": round(time.monotonic() - started, 1),
                     "bit_reliability": decoded.bit_reliability,
                     "surfaces": surfaces,
+                    "warnings": diagnose(decoded, coverage),
                 }
                 await asyncio.to_thread(save_scan, decoded, image, covered, summary)
                 scene.reset_from_scan(summary)
@@ -233,6 +234,7 @@ def create_app(
     def save_scan(decoded, image, covered, summary: dict) -> None:
         scan_dir.mkdir(parents=True, exist_ok=True)
         cv2.imwrite(str(scan_dir / "scan.png"), image)
+        cv2.imwrite(str(scan_dir / "mask.png"), covered.astype(np.uint8) * 255)
         np.savez_compressed(
             scan_dir / "map.npz", proj_x=decoded.proj_x.astype(np.int16), proj_y=decoded.proj_y.astype(np.int16),
             valid=decoded.valid, covered=covered,
@@ -248,6 +250,13 @@ def create_app(
         if not meta.exists():
             raise HTTPException(404, "No scan yet")
         return {**json.loads(meta.read_text()), "image": latest_image_url()}
+
+    @app.get("/api/scan/latest-mask.png")
+    async def latest_scan_mask():
+        path = scan_dir / "mask.png"
+        if not path.exists():
+            raise HTTPException(404, "No scan yet")
+        return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
     @app.get("/api/scan/latest.png")
     async def latest_scan_image():
