@@ -10,6 +10,7 @@ from engine.files import write_text_atomic
 from engine.scene import SceneStore
 
 SCAN_FILES = ["scan.png", "mask.png", "map.npz", "meta.json", "scene.json"]
+MEDIA_DIR = "media"  # images and videos surfaces show (see engine/media.py)
 
 
 class UnknownProject(LookupError):
@@ -51,6 +52,7 @@ class ProjectStore:
         for f in SCAN_FILES:
             if (self.scan_dir / f).exists():
                 shutil.copy2(self.scan_dir / f, folder / f)
+        _replace_dir(self.scan_dir / MEDIA_DIR, folder / MEDIA_DIR)
         info = {
             "name": name.strip() or slug,
             "slug": slug,
@@ -80,7 +82,15 @@ class ProjectStore:
                 shutil.copy(folder / f, target)  # fresh mtimes: an opened project is new scan data
             else:
                 target.unlink(missing_ok=True)
+        _replace_dir(folder / MEDIA_DIR, self.scan_dir / MEDIA_DIR)
         self.scene.reload()
         info = json.loads((folder / "project.json").read_text())
         self._set_active(info)
         return info
+
+
+def _replace_dir(source: Path, target: Path) -> None:
+    """Makes target a copy of source; no source means no target."""
+    shutil.rmtree(target, ignore_errors=True)
+    if source.is_dir():
+        shutil.copytree(source, target, ignore=shutil.ignore_patterns("*.part"))
