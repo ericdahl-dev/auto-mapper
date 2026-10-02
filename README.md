@@ -153,6 +153,7 @@ Detected surfaces appear as numbered outlines over the scan. In the editor:
 | Move a corner | Drag a handle. On a curved run, the neighboring points follow with a smooth falloff, so the curve bends instead of kinking. |
 | Add a corner | Double-click an edge of the selected surface. |
 | Remove a corner | Alt-click a handle. A surface always keeps at least three corners. |
+| Undo a change | **Cmd-Z** (Ctrl-Z elsewhere) or **Undo**; **Cmd-Shift-Z** or **Redo** to redo. The buttons say what they'll undo. A whole drag is one step. Works for every show change, in every open Editor at once. |
 | Projector got bumped | Click **Realign** and drag the green corners until the show lines up again; no rescan needed. **Brightness** there dims the whole show. **Reset** puts both back. A new scan drops the realignment (it already matches) but keeps the brightness. |
 | Stop light spilling past an edge | Drag **Edge** in the surface panel: below 0 shrinks the lit area inside the outline, above 0 grows it to cover a gap (up to 10 px). The lit area shows as a faint dashed outline. Effects still use the real outline. |
 | Draw a surface | **Draw surface**, then click corners on the scan. Double-click or press Enter to finish, Esc to cancel. Use this for anything detection missed. |

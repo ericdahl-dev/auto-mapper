@@ -15,8 +15,14 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
 
   return {
     // The current show's surfaces
-    patchSurface: (id: number, body: SurfaceEdit & { effect?: string; name?: string }) =>
-      fetchFn(`/api/show/surfaces/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    /** `gesture` groups saves into one undo step (a whole drag). */
+    patchSurface: (id: number, body: SurfaceEdit & { effect?: string; name?: string }, gesture?: string) =>
+      fetchFn(`/api/show/surfaces/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(gesture ? { ...body, gesture } : body),
+      }),
+    undo: () => post("/api/show/undo"),
+    redo: () => post("/api/show/redo"),
     select: (id: number | null) => post("/api/show/select", { id }),
     addSurface: (polygon: number[][]) => post("/api/show/surfaces", { polygon }),
     deleteSurface: (id: number) => fetchFn(`/api/show/surfaces/${id}`, { method: "DELETE" }),
@@ -24,7 +30,7 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     applyEffect: (from: number, to?: number[]) => post("/api/show/apply", { from, ...(to ? { to } : {}) }),
     redetect: () => post("/api/show/redetect"),
     // Realigning the whole show (a bumped projector) and its master brightness
-    align: (body: { corners?: number[][]; brightness?: number }) => post("/api/show/alignment", body),
+    align: (body: { corners?: number[][]; brightness?: number; gesture?: string }) => post("/api/show/alignment", body),
     resetAlignment: () => post("/api/show/alignment/reset"),
     uploadMedia: (file: File) => fetchFn(`/api/media?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file }),
     // Sound

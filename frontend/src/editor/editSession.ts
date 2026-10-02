@@ -15,16 +15,25 @@ export interface SurfaceEdit {
 }
 
 export interface EditSessionOptions {
-  /** Saves a change to the engine (PATCH /api/show/surfaces/{id}). */
-  patch: (id: number, body: SurfaceEdit) => void;
+  /** Saves a change to the engine (PATCH /api/show/surfaces/{id}). Saves sharing a gesture id are
+   *  one undo step: a whole drag, or edits outside a drag (typing, a slider) until a short pause. */
+  patch: (id: number, body: SurfaceEdit, gesture: string) => void;
   /** Runs fn on the next frame; saves are sent at most once per frame. */
   nextFrame?: (fn: () => void) => void;
+  /** Milliseconds clock, for grouping edits outside a drag. */
+  now?: () => number;
 }
+
+/** Edits outside a drag this close together are one undo step. */
+const PAUSE_MS = 1000;
+let gestureCount = 0;
+const newGesture = () => `${Date.now().toString(36)}-${++gestureCount}`;
 
 interface Pending {
   shape?: { polygon: number[][]; bezier?: Bezier };
   params?: Record<string, unknown>;
   edge?: number;
+  gesture?: string;
 }
 
 export class EditSession {
@@ -34,12 +43,16 @@ export class EditSession {
   private pending = new Map<number, Pending>(); // not sent yet
   private flushQueued = false;
   private gestures = 0;
+  private gesture: string | null = null; // the undo step edits belong to now
+  private lastLooseEdit = -Infinity; // when an edit outside a drag last happened
   private listeners: ((show: ShowMessage) => void)[] = [];
   private readonly sendPatch: EditSessionOptions["patch"];
   private readonly nextFrame: NonNullable<EditSessionOptions["nextFrame"]>;
+  private readonly now: () => number;
 
   constructor(options: EditSessionOptions) {
     this.sendPatch = options.patch;
+    this.now = options.now ?? (() => performance.now());
     this.nextFrame = options.nextFrame ?? ((fn) => void requestAnimationFrame(fn));
   }
 
@@ -63,7 +76,7 @@ export class EditSession {
   }
 
   begin(): void {
-    this.gestures++;
+    if (this.gestures++ === 0) this.gesture = newGesture(); // the whole drag is one undo step
   }
 
   /** Ends a gesture: sends its last edits now and applies any show that arrived meanwhile. */
@@ -72,6 +85,7 @@ export class EditSession {
     this.gestures--;
     if (this.busy) return;
     this.flush();
+    this.gesture = null;
     const held = this.held;
     this.held = null;
     if (held) this.commit(held);
@@ -80,11 +94,18 @@ export class EditSession {
   /** Shows a change straight away and saves it: at most one save per frame per surface and kind
    *  of change, so shape edits and settings edits (or two surfaces) never cancel each other. */
   edit(id: number, change: SurfaceEdit): void {
+    if (!this.busy) {
+      const now = this.now();
+      if (this.gesture === null || now - this.lastLooseEdit > PAUSE_MS) this.gesture = newGesture();
+      this.lastLooseEdit = now;
+    }
+    const gesture = this.gesture!;
     for (const map of [this.local, this.pending]) {
       const entry = map.get(id) ?? {};
       if (change.polygon) entry.shape = { polygon: change.polygon, ...(change.bezier ? { bezier: change.bezier } : {}) };
       if (change.params) entry.params = { ...entry.params, ...change.params };
       if (change.edge !== undefined) entry.edge = change.edge;
+      entry.gesture = gesture;
       map.set(id, entry);
     }
     if (!this.flushQueued) {
@@ -118,9 +139,10 @@ export class EditSession {
   private flush(): void {
     this.flushQueued = false;
     for (const [id, p] of this.pending) {
-      if (p.shape) this.sendPatch(id, p.shape.bezier ? { polygon: p.shape.polygon, bezier: p.shape.bezier } : { polygon: p.shape.polygon });
-      if (p.params) this.sendPatch(id, { params: p.params });
-      if (p.edge !== undefined) this.sendPatch(id, { edge: p.edge });
+      const g = p.gesture!;
+      if (p.shape) this.sendPatch(id, p.shape.bezier ? { polygon: p.shape.polygon, bezier: p.shape.bezier } : { polygon: p.shape.polygon }, g);
+      if (p.params) this.sendPatch(id, { params: p.params }, g);
+      if (p.edge !== undefined) this.sendPatch(id, { edge: p.edge }, g);
     }
     this.pending.clear();
   }

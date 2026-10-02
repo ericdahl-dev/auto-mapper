@@ -19,7 +19,7 @@ from engine import media
 from engine.scan_folder import ScanFolder
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
-from engine.show import CurrentShow, UnknownSurface
+from engine.show import CurrentShow, NothingToUndo, UnknownSurface
 from engine.messages import (
     AlignmentRequest,
     ApplyEffectRequest,
@@ -228,7 +228,7 @@ def create_app(
     @app.patch("/api/show/surfaces/{surface_id}")
     async def update_surface(surface_id: int, req: SurfaceUpdate):
         try:
-            show.update(surface_id, req.effect, req.params, req.polygon, req.name, req.bezier, req.edge)
+            show.update(surface_id, req.effect, req.params, req.polygon, req.name, req.bezier, req.edge, req.gesture)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         return show.public()
@@ -289,11 +289,27 @@ def create_app(
         show.present(req.mode, req.blackout)
         return show.presentation
 
+    @app.post("/api/show/undo")
+    async def undo():
+        try:
+            show.undo()
+        except NothingToUndo:
+            raise HTTPException(409, "Nothing to undo")
+        return show.public()
+
+    @app.post("/api/show/redo")
+    async def redo():
+        try:
+            show.redo()
+        except NothingToUndo:
+            raise HTTPException(409, "Nothing to redo")
+        return show.public()
+
     @app.post("/api/show/alignment")
     async def set_alignment(req: AlignmentRequest):
         if show.data is None:
             raise HTTPException(404, "No scan yet")
-        show.set_alignment(req.corners, req.brightness)
+        show.set_alignment(req.corners, req.brightness, req.gesture)
         return show.alignment()
 
     @app.post("/api/show/alignment/reset")

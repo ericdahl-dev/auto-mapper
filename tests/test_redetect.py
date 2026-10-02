@@ -91,3 +91,13 @@ def test_redetect_keeps_drawn_and_edited_surfaces_and_effects(rig, scanned):
 def test_redetect_without_a_scan_is_404(rig, tmp_path):
     with engine(rig, data_dir=tmp_path) as client:
         assert client.post("/api/show/redetect").status_code == 404
+
+
+def test_redetect_can_be_undone(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        box = surfaces(client)[1]
+        client.patch(f"/api/show/surfaces/{box['id']}", json={"effect": "fill"})
+        before = surfaces(client)
+        assert client.post("/api/show/redetect").status_code == 200
+        assert client.get("/api/show").json()["history"]["undo"] == "Redetect"
+        assert client.post("/api/show/undo").json()["surfaces"] == before

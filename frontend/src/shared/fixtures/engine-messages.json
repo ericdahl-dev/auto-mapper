@@ -130,6 +130,10 @@
       ]
     },
     "height": 144,
+    "history": {
+      "redo": null,
+      "undo": null
+    },
     "presentation": {
       "blackout": false,
       "mode": "edit"

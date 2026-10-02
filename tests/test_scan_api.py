@@ -157,3 +157,30 @@ def test_releasing_the_camera_during_a_scan_is_refused(rig, tmp_path):
         play_output(out, scene)
 
     assert released.status_code == 409
+
+
+def test_a_new_scan_starts_undo_over_in_the_show_every_editor_gets(rig, tmp_path):
+    """#65: a new scan clears the undo history, and the show pushed with it already says so."""
+    scene, uvc, hw, cams = rig
+
+    def scan(ed, out):
+        assert client.post("/api/scan").status_code == 202
+        play_output(out, scene)
+        shows, done = [], False
+        while not (done and shows):  # the scan's result and the show pushed with it, in either order
+            msg = ed.receive_json()
+            assert msg["type"] != "scan_failed", msg
+            done = done or msg["type"] == "scan_result"
+            if msg["type"] == "show":
+                shows.append(msg)
+        return shows
+
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        scan(ed, out)
+        client.patch("/api/show/surfaces/1", json={"effect": "fill"})
+        while (msg := ed.receive_json())["type"] != "show" or msg["history"]["undo"] != "Change effect":
+            pass  # that edit's own push
+        shows = scan(ed, out)
+        assert shows and shows[-1]["history"] == {"undo": None, "redo": None}
+        assert client.post("/api/show/undo").status_code == 409

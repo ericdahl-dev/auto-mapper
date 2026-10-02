@@ -39,7 +39,7 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
 | GET | `/api/show` | | The current show: size, surfaces, selected id, presentation state, `scan_rev`. 404 before the first scan |
-| PATCH | `/api/show/surfaces/{id}` | Any of `effect`, `params`, `polygon` (3+ `[x, y]` points), `name` (up to 80 characters), `bezier` (the editor's curve data, sent together with its flattened `polygon`), `edge` (-10..10 px: shrink or grow the lit area past the outline) | Updates one surface. Changing `effect` resets `params`; changing `polygon` marks a detected surface as edited, and drops any stored `bezier` unless a new one is sent with it |
+| PATCH | `/api/show/surfaces/{id}` | Any of `effect`, `params`, `polygon` (3+ `[x, y]` points), `name` (up to 80 characters), `bezier` (the editor's curve data, sent together with its flattened `polygon`), `edge` (-10..10 px: shrink or grow the lit area past the outline), `gesture` (an id: PATCHes sharing one are one undo step, e.g. a whole drag) | Updates one surface. Changing `effect` resets `params`; changing `polygon` marks a detected surface as edited, and drops any stored `bezier` unless a new one is sent with it |
 | DELETE | `/api/show/surfaces/{id}` | | Removes a surface |
 | POST | `/api/show/surfaces` | `{"polygon": [[x, y], ...], "name"?: "..."}` | Adds a hand-drawn surface and selects it |
 | POST | `/api/show/select` | `{"id": 3}` or `{"id": null}` | Selects or deselects a surface |
@@ -47,6 +47,8 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | POST | `/api/show/apply` | `{"from": 3, "to"?: [5, 6]}` | Copies a surface's effect and params to the listed surfaces, or to all of them if `to` is omitted |
 | POST | `/api/show/redetect` | | Reruns detection on the saved scan, keeping drawn and edited surfaces. 404 before a scan, 409 while scanning |
 | POST | `/api/show/alignment` | `{"corners"?: [[x,y]×4], "brightness"?: 0..1}` | Realigns the whole show (where the output's TL, TR, BR, BL go) and sets the master brightness. Saved with the show; a new scan drops the corners, keeps brightness. 404 before a scan |
+| POST | `/api/show/undo` | | Undoes the last show change (surfaces, effects, settings, alignment; not selection, Play/Blackout or sound). The show message's `history` names what Undo and Redo would do. 409 when there's nothing to undo. Up to 100 steps; a new scan or opening a project clears them |
+| POST | `/api/show/redo` | | Redoes the last undone change; any new change clears redo. 409 when there's nothing to redo |
 | POST | `/api/show/alignment/reset` | | Back to the projector's own corners at full brightness |
 
 Routes that name a surface return 404 for an unknown surface id.
