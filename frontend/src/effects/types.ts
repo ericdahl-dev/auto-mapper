@@ -1,3 +1,5 @@
+import { autoCorners, homography } from "./homography";
+
 // An effect is one GLSL fragment shader plus the schema of its parameters.
 // The editor builds controls from the schema; the output passes params as `u_<name>` uniforms.
 
@@ -7,7 +9,11 @@ export type ParamSchema =
   // One of a few named options; the shader gets the option's index as a float.
   | { name: string; label: string; type: "choice"; default: string; options: { value: string; label: string }[] }
   // An uploaded image or video (its URL). The shader gets `sampler2D u_<name>` and its pixel size `vec2 u_<name>Size`.
-  | { name: string; label: string; type: "media"; default: string };
+  | { name: string; label: string; type: "media"; default: string }
+  // A corner pin: 4 points (TL, TR, BR, BL) in projector pixels, edited on the surface itself, not in the
+  // panel. Unset = the outline's own corners. The shader gets `mat3 u_<name>` taking projector pixels
+  // (v_pos) to the pinned quad's 0..1 square (divide xy by z).
+  | { name: string; label: string; type: "quad" };
 
 export interface Effect {
   id: string;
@@ -17,7 +23,7 @@ export interface Effect {
   fragment: string | null;
 }
 
-export type UniformValue = number | [number, number, number];
+export type UniformValue = number | [number, number, number] | number[]; // number[] = mat3, column-major
 
 /** Uniform names the preamble already declares (without the u_ prefix). */
 export const RESERVED = ["time", "resolution", "bounds", "scan", "poly", "polyCount", "perimeter"];
@@ -44,17 +50,31 @@ export function validateEffect(effect: Effect): string[] {
   return problems;
 }
 
+const UNIT_SQUARE = [[0, 0], [1, 0], [1, 1], [0, 1]];
+
+/** 4 finite [x, y] points. */
+export function isQuad(v: unknown): v is number[][] {
+  return Array.isArray(v) && v.length === 4 && v.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite));
+}
+
 export function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
-/** Uniform values for a surface: declared params only, defaults filled, numbers clamped. Media is bound by the renderer. */
-export function uniformsFor(effect: Effect, params: Record<string, unknown>): Record<string, UniformValue> {
+/** Uniform values for a surface: declared params only, defaults filled, numbers clamped. Media is bound by the renderer.
+ *  `outline` (the surface's polygon) supplies a quad param's corners until the user pins some. */
+export function uniformsFor(effect: Effect, params: Record<string, unknown>, outline: number[][] = []): Record<string, UniformValue> {
   const out: Record<string, UniformValue> = {};
   for (const p of effect.params) {
     const v = params[p.name];
     if (p.type === "media") continue;
+    if (p.type === "quad") {
+      const h = (isQuad(v) && homography(v, UNIT_SQUARE)) || (outline.length >= 3 && homography(autoCorners(outline), UNIT_SQUARE));
+      // Row-major H to GLSL's column-major mat3; an unusable outline gets all zeros (draws the image's corner).
+      out[`u_${p.name}`] = h ? [h[0], h[3], h[6], h[1], h[4], h[7], h[2], h[5], h[8]] : Array(9).fill(0);
+      continue;
+    }
     if (p.type === "color") {
       out[`u_${p.name}`] = hexToRgb(typeof v === "string" && HEX.test(v) ? v : p.default);
     } else if (p.type === "choice") {
@@ -72,8 +92,9 @@ export function uniformsFor(effect: Effect, params: Record<string, unknown>): Re
 export function mediaSources(effect: Effect, params: Record<string, unknown>): Record<string, string> {
   const out: Record<string, string> = {};
   for (const p of effect.params) {
+    if (p.type !== "media") continue;
     const v = params[p.name] ?? p.default;
-    if (p.type === "media" && typeof v === "string" && v) out[p.name] = v;
+    if (typeof v === "string" && v) out[p.name] = v;
   }
   return out;
 }

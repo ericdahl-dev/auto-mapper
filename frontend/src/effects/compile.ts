@@ -59,6 +59,7 @@ export function fragmentSource(effect: Effect): string {
   const uniforms = effect.params
     .map((p) => {
       if (p.type === "media") return `uniform sampler2D u_${p.name};\nuniform vec2 u_${p.name}Size;`;
+      if (p.type === "quad") return `uniform mat3 u_${p.name};`;
       return `uniform ${p.type === "color" ? "vec3" : "float"} u_${p.name};`;
     })
     .join("\n");

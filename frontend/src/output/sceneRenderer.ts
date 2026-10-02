@@ -1,7 +1,7 @@
 import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
-import { mediaSources, uniformsFor } from "../effects/types";
+import { mediaSources, type UniformValue, uniformsFor } from "../effects/types";
 import type { SceneMessage } from "../shared/messages";
 
 export interface EffectError {
@@ -23,6 +23,7 @@ interface PreparedSurface {
   outline: WebGLVertexArrayObject; // line loop through pixel centres
   outlineCount: number;
   media: [string, string][]; // [param name, src] for each media param that has a file
+  uniforms: Record<string, UniformValue>;
 }
 
 /** An image or video shown on surfaces; one texture per file, shared by every surface showing it. */
@@ -123,6 +124,7 @@ export class SceneRenderer {
         outline: this.vao(lineVerts),
         outlineCount: lineVerts.length / 2,
         media: Object.entries(mediaSources(effect, s.params)),
+        uniforms: uniformsFor(effect, s.params, outline), // once per scene update, not per frame
       };
     });
     this.syncMedia(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
@@ -271,9 +273,10 @@ export class SceneRenderer {
       gl.bindTexture(gl.TEXTURE_2D, this.scanTexture);
       gl.uniform1i(gl.getUniformLocation(p, "u_scan"), 0);
       this.bindMedia(p, s);
-      for (const [name, value] of Object.entries(uniformsFor(s.effect, s.params))) {
+      for (const [name, value] of Object.entries(s.uniforms)) {
         const loc = gl.getUniformLocation(p, name);
-        if (Array.isArray(value)) gl.uniform3f(loc, ...value);
+        if (Array.isArray(value) && value.length === 9) gl.uniformMatrix3fv(loc, false, value);
+        else if (Array.isArray(value)) gl.uniform3f(loc, value[0], value[1], value[2]);
         else gl.uniform1f(loc, value);
       }
       gl.bindVertexArray(s.fill);
