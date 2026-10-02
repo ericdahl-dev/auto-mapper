@@ -5,7 +5,7 @@ import pytest
 from engine.camera_device import FakeCameraFactory
 from engine.camera_lock import FakeUvc
 from engine.hardware import FakeHardware
-from tests.helpers import AC410, LAPTOP, editor, engine, output
+from tests.helpers import AC410, LAPTOP, editor, engine, output, play_output
 from tests.synthetic import Scene
 
 DEFAULTS = {
@@ -28,20 +28,6 @@ def rig():
 
     hw = FakeHardware(displays=[LAPTOP, SMALL_PROJECTOR], cameras=[AC410])
     return scene, uvc, hw, FakeCameraFactory(frame=frame)
-
-
-def play_output(out, scene, ack=True):
-    """Acts as the output window: shows each pattern on the synthetic scene and acks it."""
-    shown = []
-    while True:
-        msg = out.receive_json()
-        if msg["type"] == "show_test_frame" and msg["kind"] == "black":
-            return shown  # engine blanks the projector when the scan ends
-        if msg["type"] == "show_pattern":
-            scene.pattern = msg["pattern"]
-            shown.append(msg["pattern"])
-            if ack:
-                out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
 
 
 def test_scan_decodes_the_scene_and_reports_progress(rig, tmp_path):
