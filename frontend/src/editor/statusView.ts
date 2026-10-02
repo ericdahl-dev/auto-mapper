@@ -7,6 +7,7 @@ export interface StatusView {
   output: string;
   calibration: string;
   project: string;
+  cameras: string;
 }
 
 export interface CameraOption {
@@ -32,6 +33,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
       output: "Unknown",
       calibration: "Unknown",
       project: "Unknown",
+      cameras: "Unknown",
     };
   }
 
@@ -52,6 +54,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
     calibration: describeCalibration(status.camera.calibration),
     project: status.project?.name ?? "Unsaved",
+    cameras: status.hardware.cameras.map((c) => c.name).join(", ") || "None",
   };
 }
 

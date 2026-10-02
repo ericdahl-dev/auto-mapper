@@ -34,9 +34,8 @@ function loop() {
 }
 
 function showScene(msg: SceneMessage) {
-  // A new scan brings new geometry; effect/param edits keep it. Reload the scan image only then.
-  const geometry = (m: SceneMessage | null) => (m ? JSON.stringify(m.surfaces.map((s) => s.polygon)) : "");
-  const changedScan = geometry(scene) !== geometry(msg);
+  // Reload the scan image only when the engine says the scan data changed, not on every edit.
+  const changedScan = !scene || scene.scan_rev !== msg.scan_rev;
   scene = msg;
   sceneRenderer.setScene(msg);
   if (changedScan) {
@@ -77,7 +76,6 @@ window.addEventListener("resize", () => {
   size = renderer.resize(mode === "frames");
   conn.send({ type: "hello", role: "output", ...size });
   syncHint();
-bindPresentationKeys(() => scene?.presentation.mode ?? "edit");
 });
 
 // Browsers only allow fullscreen from a user gesture, so the engine can't do it for us.

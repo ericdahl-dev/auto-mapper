@@ -42,6 +42,7 @@ export class SceneRenderer {
   private scene: SceneMessage | null = null;
   private scanTexture: WebGLTexture;
   private buffers: WebGLBuffer[] = [];
+  private vaos: WebGLVertexArrayObject[] = [];
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -67,8 +68,11 @@ export class SceneRenderer {
 
   setScene(scene: SceneMessage) {
     const { gl } = this;
+    // Scenes arrive on every slider move and drag frame: free the previous one's GPU objects.
     this.buffers.forEach((b) => gl.deleteBuffer(b));
+    this.vaos.forEach((v) => gl.deleteVertexArray(v));
     this.buffers = [];
+    this.vaos = [];
     this.scene = scene;
     this.surfaces = scene.surfaces.map((s) => {
       const flat = s.polygon.flat();
@@ -105,6 +109,7 @@ export class SceneRenderer {
   private vao(data: Float32Array): WebGLVertexArrayObject {
     const { gl } = this;
     const vao = gl.createVertexArray()!;
+    this.vaos.push(vao);
     gl.bindVertexArray(vao);
     const buf = gl.createBuffer()!;
     this.buffers.push(buf);

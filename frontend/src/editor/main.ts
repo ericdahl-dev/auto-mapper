@@ -377,7 +377,7 @@ function render() {
   projector.textContent = view.projector;
   output.textContent = view.output;
   output.className = status?.output_connected ? "ok" : "bad";
-  cameras.textContent = status?.hardware.cameras.join(", ") || "None";
+  cameras.textContent = view.cameras;
   scan.disabled = !view.scanEnabled;
   $("fps").textContent = status?.output_fps ? `${status.output_fps} fps` : "–";
   projectName.textContent = `· ${view.project}`;

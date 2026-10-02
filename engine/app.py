@@ -235,6 +235,7 @@ def create_app(
                 log.warning("scan failed: %s", e)
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})
             except Exception as e:  # never leave the editor waiting on a dead scan
+                log.exception("scan crashed")
                 await hub.broadcast({"type": "scan_failed", "error": f"Scan crashed: {e}"})
                 raise
             finally:
