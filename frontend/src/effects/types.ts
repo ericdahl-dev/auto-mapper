@@ -13,14 +13,14 @@ export interface Effect {
   id: string;
   name: string;
   params: ParamSchema[];
-  /** Fragment shader body. The shared preamble (see preamble.ts) is prepended. null = draw nothing. */
+  /** Fragment shader body. The shared preamble (see compile.ts) is prepended. null = draw nothing. */
   fragment: string | null;
 }
 
 export type UniformValue = number | [number, number, number];
 
 /** Uniform names the preamble already declares (without the u_ prefix). */
-export const RESERVED = ["time", "resolution", "bounds", "scan", "highlight", "poly", "polyCount", "perimeter"];
+export const RESERVED = ["time", "resolution", "bounds", "scan", "poly", "polyCount", "perimeter"];
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEX = /^#[0-9a-f]{6}$/i;
