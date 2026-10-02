@@ -8,16 +8,19 @@
     <style>
       html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
       canvas { display: block; width: 100vw; height: 100vh; }
+      /* The setup hint is a small label; the picture behind it stays at full brightness, so colors can
+         be judged before going fullscreen. Clicking anywhere still goes fullscreen. */
       #hint {
         position: fixed; inset: 0; display: grid; place-items: center; cursor: pointer;
-        color: #888; font: 16px system-ui, sans-serif; background: rgba(0, 0, 0, 0.6);
+        font: 16px system-ui, sans-serif;
       }
+      #hint span { background: rgba(0, 0, 0, 0.75); color: #ccc; padding: 8px 14px; border-radius: 6px; }
       #hint[hidden] { display: none; }
     </style>
   </head>
   <body>
     <canvas id="stage"></canvas>
-    <div id="hint">Drag this window onto the projector, then click to go fullscreen.</div>
+    <div id="hint"><span>Drag this window onto the projector, then click to go fullscreen.</span></div>
     <script type="module" src="/src/output/main.ts"></script>
   </body>
 </html>
