@@ -9,6 +9,7 @@ export default defineConfig({
       },
       {
         // Shader compile checks need a real WebGL2 context: headless Chromium with SwiftShader.
+        // Sound tests use Chromium's fake microphone (a repeating beep), with autoplay allowed.
         test: {
           name: "browser",
           include: ["src/**/*.browser.test.ts"],
@@ -16,7 +17,10 @@ export default defineConfig({
             enabled: true,
             headless: true,
             provider: playwright({
-              launchOptions: { args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--ignore-gpu-blocklist"] },
+              launchOptions: { args: [
+                "--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--ignore-gpu-blocklist",
+                "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--autoplay-policy=no-user-gesture-required",
+              ] },
             }),
             instances: [{ browser: "chromium" }],
           },

@@ -2,6 +2,7 @@ import { EFFECTS } from "../effects/index";
 import { connect } from "../shared/connection";
 import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys } from "../shared/presentation";
+import { SoundInput } from "../audio/mic";
 import { SceneRenderer } from "./sceneRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
@@ -17,16 +18,21 @@ let scene: SceneMessage | null = null;
 let raf = 0;
 const sceneRenderer = new SceneRenderer(renderer.gl, EFFECTS, (e) => conn.send({ type: "effect_error", ...e }));
 const started = performance.now();
+const sound = new SoundInput();
+let lastFrame = performance.now();
 
 let frames = 0;
 let statsFrom = performance.now();
 function loop() {
-  sceneRenderer.draw((performance.now() - started) / 1000);
-  frames++;
   const now = performance.now();
-  if (now - statsFrom >= 2000) {
+  sceneRenderer.setAudio(sound.frame(Math.min(0.1, (now - lastFrame) / 1000)));
+  lastFrame = now;
+  sceneRenderer.draw((now - started) / 1000);
+  frames++;
+  // Every 2 s; 4 times a second while listening, so the editor's sound meter moves.
+  if (now - statsFrom >= (scene?.sound?.enabled ? 250 : 2000)) {
     // Let the editor see whether the projector keeps up (target: the display's 60 Hz).
-    conn.send({ type: "output_stats", fps: (frames * 1000) / (now - statsFrom) });
+    conn.send({ type: "output_stats", fps: (frames * 1000) / (now - statsFrom), sound: sound.status() });
     frames = 0;
     statsFrom = now;
   }
@@ -38,6 +44,7 @@ function showScene(msg: SceneMessage) {
   const changedScan = !scene || scene.scan_rev !== msg.scan_rev;
   scene = msg;
   sceneRenderer.setScene(msg);
+  void sound.set(msg.sound ?? { enabled: false, device: null });
   if (changedScan) {
     const img = new Image();
     img.onload = () => sceneRenderer.setScanImage(img);
@@ -89,6 +96,7 @@ function syncHint() {
 document.addEventListener("fullscreenchange", syncHint);
 document.addEventListener("click", () => {
   if (!document.fullscreenElement) void document.documentElement.requestFullscreen();
+  void sound.resume(); // browsers may hold audio until a click in the page
 });
 syncHint();
 bindPresentationKeys(() => scene?.presentation.mode ?? "edit");

@@ -10,6 +10,7 @@ describe("controlsFor", () => {
       ["colorB", "color", "#2563eb"],
       ["angle", "range", 45],
       ["brightness", "range", 1],
+      ["react", "range", 0],
     ]);
     expect(controls[2]).toMatchObject({ label: "Gradient angle", min: 0, max: 360, step: 1 });
   });

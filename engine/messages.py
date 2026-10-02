@@ -57,6 +57,11 @@ class ProjectSaveRequest(BaseModel):
     name: Annotated[str, Field(min_length=1, max_length=80)]
 
 
+class SoundRequest(BaseModel):
+    enabled: bool | None = None
+    device: Annotated[str, Field(max_length=200)] | None = None
+
+
 class PresentationRequest(BaseModel):
     mode: Literal["edit", "play"] | None = None
     blackout: bool | None = None

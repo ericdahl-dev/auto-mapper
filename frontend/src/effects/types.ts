@@ -27,7 +27,7 @@ export interface Effect {
 export type UniformValue = number | [number, number, number] | number[]; // number[] = mat3, column-major
 
 /** Uniform names the preamble already declares (without the u_ prefix). */
-export const RESERVED = ["time", "resolution", "bounds", "scan", "poly", "polyCount", "perimeter"];
+export const RESERVED = ["time", "resolution", "bounds", "scan", "poly", "polyCount", "perimeter", "level", "bass", "mid", "treble", "beat"];
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEX = /^#[0-9a-f]{6}$/i;

@@ -28,6 +28,8 @@ class SceneStore:
         self.scan_rev = self._scan_rev()
         # How the output presents the scene. Session state: not saved with the scene.
         self.presentation = {"mode": "edit", "blackout": False}
+        # Sound-reactive effects: whether the output listens, and to which input (a browser device id).
+        self.sound = {"enabled": False, "device": None}
 
     def _load(self) -> dict | None:
         saved = self.scan_dir / "scene.json"
@@ -224,10 +226,16 @@ class SceneStore:
         if blackout is not None:
             self.presentation["blackout"] = blackout
 
+    def set_sound(self, enabled: bool | None = None, device: str | None = None) -> None:
+        if enabled is not None:
+            self.sound["enabled"] = enabled
+        if device is not None:
+            self.sound["device"] = device
+
     def public(self) -> dict | None:
         if not self.scene:
             return None
-        return {**self.scene, "presentation": dict(self.presentation), "scan_rev": self.scan_rev}
+        return {**self.scene, "presentation": dict(self.presentation), "sound": dict(self.sound), "scan_rev": self.scan_rev}
 
     def message(self) -> dict | None:
         return {"type": "scene", **self.public()} if self.scene else None

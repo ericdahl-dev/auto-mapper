@@ -173,9 +173,9 @@ Pick an effect for the selected surface in the surface panel; its controls appea
 | Effect | What it does | Parameters |
 |--------|--------------|------------|
 | **None (dark)** | Leaves the surface black | none |
-| **Fill** | Solid colour, or a linear gradient when the two colours differ | Colour, Gradient to, Gradient angle (0 to 360), Brightness |
-| **Outline trace** | A glowing line around the surface's edge, optionally chasing round it | Colour, Line width (1 to 40 px), Glow, Chase, Speed (0 to 2 laps/s), Segments (1 to 8) |
-| **Noise flow** | Slowly drifting cloud-like texture between two colours | Colour, Second colour, Scale, Speed, Contrast, Brightness |
+| **Fill** | Solid colour, or a linear gradient when the two colours differ | Colour, Gradient to, Gradient angle (0 to 360), Brightness, React to sound |
+| **Outline trace** | A glowing line around the surface's edge, optionally chasing round it | Colour, Line width (1 to 40 px), Glow, Chase, Speed (0 to 2 laps/s), Segments (1 to 8), React to sound |
+| **Noise flow** | Slowly drifting cloud-like texture between two colours | Colour, Second colour, Scale, Speed, Contrast, Brightness, React to sound |
 | **Tint (scan)** | Recolours the real object while keeping its texture (wood grain, fabric) visible | Colour, Texture, Scan gain |
 | **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Colour, Sensitivity, Line width (1 to 8 px), Base light, Pulse |
 | **Posterize (scan)** | Flattens the real surface into a few bands of colour, like a screen print | Bands (2 to 8), Dark colour, Light colour, Scan gain |
@@ -192,6 +192,18 @@ The three "(scan)" effects read the scan image, so they react to what is really 
 **Apply to all N surfaces** copies the selected surface's effect and parameters to every surface. If you have shift-clicked other surfaces, the button becomes **Apply to N selected** and copies to those only. Each surface gets its own copy, so later tweaks stay per surface.
 
 If an effect's shader fails to compile, its surface is outlined red in the editor (and on the projector while editing), and the surface panel shows the shader log.
+
+### Sound
+
+Effects can follow music. In the **Sound** panel, click **React to sound: off** to turn it on, and pick the input (the default microphone, or an audio interface). The output window does the listening, so it asks for microphone permission once; if the browser holds the sound back, click the output window once. The meter and note show what it hears, or why it can't.
+
+Then raise **React to sound** (0 = off) on an effect:
+
+- **Fill**: dims in silence, brightens with loudness, flashes on beats.
+- **Outline trace**: the line thickens on beats and glows with loudness.
+- **Noise flow**: swells with the bass and flashes on beats.
+
+Sound is analysed raw (no echo cancellation or noise suppression), split into bass (20 to 250 Hz), mid (250 Hz to 4 kHz) and treble (4 to 16 kHz), smoothed so effects don't flicker, plus a beat pulse when the bass jumps above its recent average.
 
 ### 7. Play
 
@@ -270,6 +282,8 @@ An effect is one GLSL ES 3.0 fragment shader plus a parameter schema. The editor
 | `polyEdge(p, out along)` | Distance from `p` to the outline, and how far round the outline the nearest point is |
 | `scanAt(px)`, `u_scan` | The scan image at a projector pixel |
 | `luminance(c)` | Brightness of a colour |
+| `u_level`, `u_bass`, `u_mid`, `u_treble` | Sound, 0 to 1, smoothed; all 0 when sound is off |
+| `u_beat` | 1 on a beat, decaying to 0 over a fraction of a second |
 
 Shaders write to `out vec4 color`. Compile errors are reported back to the editor rather than thrown.
 
@@ -347,7 +361,7 @@ Parameter types:
 | `media` | File upload | `sampler2D u_<name>` and `vec2 u_<name>Size` (pixel size) |
 | `quad` | Corner handles on the surface (optional `when`, e.g. `{ fit: "corners" }`) | `mat3 u_<name>`: projector pixels to the quad's 0..1 square (`h = u_<name> * vec3(v_pos, 1.0); uv = h.xy / h.z`); unset uses the outline's corners |
 
-Parameter names must be GLSL identifiers and can't reuse a built-in uniform name (`time`, `resolution`, `bounds`, `scan`, `poly`, `polyCount`, `perimeter`).
+Parameter names must be GLSL identifiers and can't reuse a built-in uniform name (`time`, `resolution`, `bounds`, `scan`, `poly`, `polyCount`, `perimeter`, `level`, `bass`, `mid`, `treble`, `beat`).
 
 A minimal example:
 

@@ -1,6 +1,7 @@
 import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
+import { type AudioValues, SILENT } from "../audio/analysis";
 import { mediaSources, type UniformValue, uniformsFor } from "../effects/types";
 import type { SceneMessage } from "../shared/messages";
 
@@ -61,6 +62,7 @@ export class SceneRenderer {
   private vaos: WebGLVertexArrayObject[] = [];
   private media = new Map<string, MediaTexture>();
   private frame = 0;
+  private audio: AudioValues = SILENT;
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -149,6 +151,11 @@ export class SceneRenderer {
   }
 
   /** Resolves once every media file the scene uses has loaded (or failed to). */
+  /** The latest sound values, used by every following draw. */
+  setAudio(values: AudioValues) {
+    this.audio = values;
+  }
+
   /** A video's playback settings (for tests and diagnostics); null for images or unknown files. */
   playback(src: string): { rate: number; start: number; time: number } | null {
     const m = this.media.get(src);
@@ -296,6 +303,7 @@ export class SceneRenderer {
       const p = compiled.program;
       gl.useProgram(p);
       gl.uniform1f(gl.getUniformLocation(p, "u_time"), timeSeconds);
+      for (const [k, v] of Object.entries(this.audio)) gl.uniform1f(gl.getUniformLocation(p, `u_${k}`), v);
       gl.uniform2f(gl.getUniformLocation(p, "u_resolution"), ...res);
       gl.uniform4f(gl.getUniformLocation(p, "u_bounds"), ...s.bounds);
       gl.uniform2fv(gl.getUniformLocation(p, "u_poly"), s.poly);
