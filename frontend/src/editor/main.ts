@@ -3,6 +3,7 @@ import type { StatusMessage, TestFrameKind } from "../shared/messages";
 import { EFFECTS, effectById } from "../effects/index";
 import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
+import { applyPlan } from "./applyEffect";
 import { controlsFor, parseControlValue } from "./controls";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, moveVertex, removeVertex, toProjector } from "./polygonEdit";
@@ -80,6 +81,7 @@ const patchSurface = (id: number, body: object) =>
 const surfaceName = $<HTMLInputElement>("surface-name");
 const deleteButton = $<HTMLButtonElement>("delete-surface");
 const mergeButton = $<HTMLButtonElement>("merge-surfaces");
+const applyButton = $<HTMLButtonElement>("apply-effect");
 const multi = new Set<number>(); // shift-click selection for merging
 let dragging: { id: number; index: number; polygon: number[][] } | null = null;
 let pendingScene: SceneMessage | null = null; // scene updates held back while dragging
@@ -283,6 +285,14 @@ function renderPanel() {
       }),
     );
   }
+  const plan = applyPlan(surface.id, multi, scene?.surfaces.length ?? 0);
+  applyButton.textContent = plan.label;
+  applyButton.onclick = () =>
+    void fetch("/api/scene/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from: surface.id, ...(plan.to ? { to: plan.to } : {}) }),
+    });
   const log = effectErrors.get(surface.id)?.log;
   effectError.hidden = !log;
   effectError.textContent = log ? `Shader error:\n${log}` : "";

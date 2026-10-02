@@ -92,3 +92,42 @@ def test_merge_needs_two_known_surfaces(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
         assert client.post("/api/scene/merge", json={"ids": [2]}).status_code == 422
         assert client.post("/api/scene/merge", json={"ids": [2, 9]}).status_code == 404
+
+
+def test_one_surfaces_effect_can_be_applied_to_all(rig, scanned):
+    with engine(rig, data_dir=scanned) as client, output(client) as out:
+        out.receive_json()
+        client.patch("/api/scene/surfaces/2", json={"effect": "edgeglow", "params": {"glowColor": "#ff00ff"}})
+        out.receive_json()
+
+        resp = client.post("/api/scene/apply", json={"from": 2})
+
+        assert resp.status_code == 200
+        pushed = out.receive_json()  # one update for the whole scene
+    assert [(s["effect"], s["params"]) for s in pushed["surfaces"]] == [("edgeglow", {"glowColor": "#ff00ff"})] * 3
+
+
+def test_effect_can_be_applied_to_chosen_surfaces_only(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        client.patch("/api/scene/surfaces/3", json={"effect": "noise", "params": {"scale": 9}})
+        client.post("/api/scene/apply", json={"from": 3, "to": [2]})
+        effects = {s["id"]: (s["effect"], s["params"]) for s in client.get("/api/scene").json()["surfaces"]}
+
+    assert effects[2] == ("noise", {"scale": 9})
+    assert effects[1] == ("none", {})  # not chosen, unchanged
+
+
+def test_applying_copies_params_rather_than_sharing_them(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        client.patch("/api/scene/surfaces/2", json={"effect": "fill", "params": {"colorA": "#ff0000"}})
+        client.post("/api/scene/apply", json={"from": 2})
+        client.patch("/api/scene/surfaces/3", json={"params": {"colorA": "#00ff00"}})
+        colours = {s["id"]: s["params"].get("colorA") for s in client.get("/api/scene").json()["surfaces"]}
+
+    assert colours[2] == "#ff0000" and colours[3] == "#00ff00"
+
+
+def test_apply_from_unknown_surface_is_404(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        assert client.post("/api/scene/apply", json={"from": 9}).status_code == 404
+        assert client.post("/api/scene/apply", json={"from": 2, "to": [9]}).status_code == 404

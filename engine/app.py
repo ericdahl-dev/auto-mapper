@@ -25,6 +25,7 @@ from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
 from engine.surfaces import detect_surfaces
 from engine.messages import (
+    ApplyEffectRequest,
     CameraSelectRequest,
     EditorHello,
     Hello,
@@ -285,6 +286,15 @@ def create_app(
     async def update_surface(surface_id: int, req: SurfaceUpdate):
         try:
             scene.update(surface_id, req.effect, req.params, req.polygon, req.name)
+        except UnknownSurface:
+            raise HTTPException(404, "Unknown surface")
+        await app.state.hub.broadcast_scene()
+        return scene.public()
+
+    @app.post("/api/scene/apply")
+    async def apply_effect(req: ApplyEffectRequest):
+        try:
+            scene.apply_effect(req.from_id, req.to)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()
