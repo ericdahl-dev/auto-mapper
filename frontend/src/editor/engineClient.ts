@@ -23,6 +23,9 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     merge: (ids: number[]) => post("/api/show/merge", { ids }),
     applyEffect: (from: number, to?: number[]) => post("/api/show/apply", { from, ...(to ? { to } : {}) }),
     redetect: () => post("/api/show/redetect"),
+    // Realigning the whole show (a bumped projector) and its master brightness
+    align: (body: { corners?: number[][]; brightness?: number }) => post("/api/show/alignment", body),
+    resetAlignment: () => post("/api/show/alignment/reset"),
     uploadMedia: (file: File) => fetchFn(`/api/media?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file }),
     // Sound
     sound: (body: { enabled?: boolean; device?: string; source?: string; output?: string }) => post("/api/sound", body),

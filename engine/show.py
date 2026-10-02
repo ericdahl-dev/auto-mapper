@@ -228,6 +228,8 @@ class CurrentShow:
         result.sort(key=lambda s: s["area"], reverse=True)  # smaller surfaces draw on top
         self.scan_rev = self._scan_rev()
         self.data["surfaces"] = result
+        # A new scan already matches where the projector is now: drop the realignment, keep brightness.
+        self.data.get("alignment", {}).pop("corners", None)
         if not any(s["id"] == self.selected for s in result):
             self.selected = None
         self._save()
@@ -267,11 +269,35 @@ class CurrentShow:
             self.sound["device"] = device
         self._changed()
 
+    def alignment(self) -> dict:
+        """Where the output's corners go (identity = the projector's corners) and the master brightness."""
+        w, h = self.data["width"], self.data["height"]
+        saved = self.data.get("alignment", {})
+        return {
+            "corners": saved.get("corners", [[0, 0], [w, 0], [w, h], [0, h]]),
+            "brightness": saved.get("brightness", 1.0),
+        }
+
+    def set_alignment(self, corners: list[list[float]] | None = None, brightness: float | None = None) -> None:
+        saved = self.data.setdefault("alignment", {})
+        if corners is not None:
+            saved["corners"] = corners
+        if brightness is not None:
+            saved["brightness"] = brightness
+        self._save()
+        self._changed()
+
+    def reset_alignment(self) -> None:
+        self.data.pop("alignment", None)
+        self._save()
+        self._changed()
+
     def public(self) -> dict | None:
         if not self.data:
             return None
-        return {**self.data, "selected": self.selected, "presentation": dict(self.presentation),
-                "sound": dict(self.sound), "scan_rev": self.scan_rev}
+        data = {k: v for k, v in self.data.items() if k != "alignment"}
+        return {**data, "selected": self.selected, "presentation": dict(self.presentation),
+                "sound": dict(self.sound), "alignment": self.alignment(), "scan_rev": self.scan_rev}
 
     def message(self) -> dict | None:
         return {"type": "show", **self.public()} if self.data else None

@@ -51,6 +51,8 @@
       #surfaces rect.handle.anchor { fill: #fff; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
       #surfaces circle.handle.control { fill: #60a5fa; }
       #surfaces line.tangent { stroke: #60a5fa; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+      #surfaces polygon.align { fill: none; stroke: #4ade80; stroke-width: 1.5; stroke-dasharray: 8 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+      #surfaces circle.handle.align { fill: #4ade80; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
       #surfaces polygon.pin { fill: none; stroke: #fb923c; stroke-width: 1.5; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
       #surfaces rect.handle.pin { fill: #fb923c; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
       #surfaces polygon.edge { fill: none; stroke: #fbbf24; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; }
@@ -93,7 +95,16 @@
       <button id="redetect" title="Detect surfaces again; keeps the ones you drew or edited">Redetect</button>
       <button id="play" title="P">Play</button>
       <button id="blackout" title="B">Blackout</button>
+      <button id="realign" title="Projector got bumped? Drag the output's corners back into place, no rescan">Realign</button>
     </header>
+    <div id="realign-bar" class="row" hidden>
+      <span class="muted">Drag the green corners until the show lines up again.</span>
+      <label class="control" title="Dims the whole show">
+        <span>Brightness</span><span id="brightness-readout" class="muted">100%</span>
+        <input id="brightness" type="range" min="0" max="1" step="0.01" value="1" />
+      </label>
+      <button id="reset-alignment">Reset</button>
+    </div>
     <div id="banners"></div>
     <main>
       <div>

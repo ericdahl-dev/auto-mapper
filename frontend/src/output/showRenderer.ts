@@ -8,6 +8,7 @@ import { mediaSources, textSources, type UniformValue, uniformsFor } from "../ef
 import type { ShowMessage } from "../shared/messages";
 import { MediaLibrary } from "./mediaLibrary";
 import { playbackPlan } from "./playback";
+import { AlignmentPass, isNeutral } from "./alignment";
 
 export interface EffectError {
   surface: number;
@@ -57,6 +58,7 @@ export class ShowRenderer {
   /** Images, videos and text textures, shared by every surface showing them. */
   readonly media: MediaLibrary;
   private frame = 0;
+  private aligner: AlignmentPass | null = null;
   private audio: AudioValues = SILENT;
 
   constructor(
@@ -179,7 +181,17 @@ export class ShowRenderer {
     return result;
   }
 
+  /** Draws the show; realigned or dimmed shows are drawn offscreen first, then warped (alignment.ts). */
   draw(timeSeconds: number) {
+    const a = this.show?.alignment;
+    if (!this.show || isNeutral(a, this.show.width, this.show.height)) return this.drawShow(timeSeconds);
+    this.aligner ??= new AlignmentPass(this.gl);
+    this.aligner.begin();
+    this.drawShow(timeSeconds);
+    this.aligner.end(a!, this.show.width, this.show.height);
+  }
+
+  private drawShow(timeSeconds: number) {
     const { gl } = this;
     this.frame++;
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);

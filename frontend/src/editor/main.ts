@@ -283,10 +283,12 @@ function renderSurfaces() {
       return parts;
     }),
     ...pinElements(r),
+    ...alignElements(r),
     ...draftElements(),
   );
   renderPanel();
   renderPresentation();
+  renderAlignment();
 }
 
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
@@ -418,6 +420,83 @@ function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
     out.push(sq);
   });
   return out;
+}
+
+// Realign: corners of the whole output, dragged back into place after the projector moves.
+const realignButton = $<HTMLButtonElement>("realign");
+const realignBar = $("realign-bar");
+const brightness = $<HTMLInputElement>("brightness");
+const brightnessReadout = $("brightness-readout");
+let realigning = false;
+let localAlignment: { corners?: number[][]; brightness?: number } | null = null; // shown at once, saved once per frame
+let alignQueued = false;
+function align(change: { corners?: number[][]; brightness?: number }) {
+  localAlignment = { ...localAlignment, ...change };
+  if (!alignQueued) {
+    alignQueued = true;
+    requestAnimationFrame(() => {
+      alignQueued = false;
+      if (localAlignment) void engine.align(localAlignment);
+    });
+  }
+  renderAlignment();
+  refresh();
+}
+/** Drops local alignment edits once the engine's show has them (its echo), like the editing session. */
+function settleAlignment() {
+  const a = show?.alignment;
+  if (!localAlignment || !a || alignQueued || session.busy) return;
+  const same = (localAlignment.brightness ?? a.brightness) === a.brightness
+    && JSON.stringify(localAlignment.corners ?? a.corners) === JSON.stringify(a.corners);
+  if (same) localAlignment = null;
+}
+const currentAlignment = () => {
+  const w = show?.width ?? 1920, h = show?.height ?? 1080;
+  const saved = show?.alignment ?? { corners: [[0, 0], [w, 0], [w, h], [0, h]], brightness: 1 };
+  return { ...saved, ...localAlignment };
+};
+realignButton.addEventListener("click", () => {
+  realigning = !realigning;
+  renderAlignment();
+  refresh();
+});
+brightness.addEventListener("input", () => align({ brightness: Number(brightness.value) }));
+$("reset-alignment").addEventListener("click", () => {
+  localAlignment = null;
+  void engine.resetAlignment();
+});
+function renderAlignment() {
+  settleAlignment();
+  const a = currentAlignment();
+  realignButton.classList.toggle("on", realigning);
+  realignBar.hidden = !realigning;
+  if (document.activeElement !== brightness) brightness.value = String(a.brightness);
+  brightnessReadout.textContent = `${Math.round(a.brightness * 100)}%`;
+}
+
+/** Green handles on the output's four corners while realigning. */
+function alignElements(r: number): SVGElement[] {
+  if (!realigning || !show) return [];
+  const corners = currentAlignment().corners;
+  const quad = document.createElementNS(SVG_NS, "polygon");
+  quad.classList.add("align");
+  quad.setAttribute("points", corners.map(([x, y]) => `${x},${y}`).join(" "));
+  const handles = corners.map(([x, y], index) => {
+    const c = document.createElementNS(SVG_NS, "circle");
+    c.classList.add("handle", "align");
+    Object.entries({ cx: x, cy: y, r: 1.5 * r }).forEach(([k, v]) => c.setAttribute(k, String(v)));
+    c.addEventListener("click", (ev) => ev.stopPropagation());
+    c.addEventListener("pointerdown", (ev) => {
+      ev.stopPropagation();
+      session.begin();
+      trackPointer(ev.pointerId, (move) => align({ corners: movePin(currentAlignment().corners, index, projectorPoint(move)) }), () => {
+        session.end();
+        refresh();
+      });
+    });
+    return c;
+  });
+  return [quad, ...handles];
 }
 
 const playButton = $<HTMLButtonElement>("play");
