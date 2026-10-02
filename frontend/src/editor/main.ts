@@ -10,6 +10,8 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
+import { EditSession, type SurfaceEdit } from "./editSession";
+import { createEngineClient } from "./engineClient";
 import { canFrame, panAfterDrag, zoomAfterWheel } from "./framing";
 import { movePin, pinHandles } from "./pin";
 import { placeOutput } from "./screens";
@@ -35,7 +37,7 @@ const projectSave = $<HTMLButtonElement>("project-save");
 const projectList = $("project-list");
 
 async function refreshProjects() {
-  const res = await fetch("/api/projects");
+  const res = await engine.projects();
   if (!res.ok) return;
   const projects: { name: string; slug: string; surfaces: number; saved_at: number }[] = await res.json();
   projectList.replaceChildren(
@@ -48,7 +50,7 @@ async function refreshProjects() {
         Object.assign(document.createElement("button"), {
           textContent: "Open",
           onclick: async () => {
-            const r = await fetch(`/api/projects/${p.slug}/open`, { method: "POST" });
+            const r = await engine.openProject(p.slug);
             if (!r.ok) notice(`Cannot open: ${(await r.json()).detail}`);
           },
         }),
@@ -59,7 +61,7 @@ async function refreshProjects() {
 }
 
 async function reloadScan() {
-  const r = await fetch("/api/scan/latest");
+  const r = await engine.latestScan();
   if (r.ok) {
     scanState = scanReducer(initialScan, { type: "scan_result", ...(await r.json()) });
     renderScan();
@@ -82,33 +84,34 @@ const effectControls = $("effect-controls");
 const effectError = $("effect-error");
 effectSelect.replaceChildren(...EFFECTS.map((e) => Object.assign(document.createElement("option"), { value: e.id, textContent: e.name })));
 
-const patchSurface = (id: number, body: object) =>
-  void fetch(`/api/scene/surfaces/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+// The engine, and this Editor's view of the current show (see editSession.ts): edits show at once and
+// save at most once per frame; scene updates that arrive during a drag wait until it ends.
+const engine = createEngineClient();
+const session = new EditSession({ patch: (id, body) => void engine.patchSurface(id, body) });
+/** Edits the shape or settings of a surface (shown at once, saved throttled). */
+const patchSurface = (id: number, body: SurfaceEdit) => session.edit(id, body);
+/** Shows the session's latest view (local edits included). */
+function refresh() {
+  scene = session.view();
+  renderSurfaces();
+}
 const surfaceName = $<HTMLInputElement>("surface-name");
 const deleteButton = $<HTMLButtonElement>("delete-surface");
 const mergeButton = $<HTMLButtonElement>("merge-surfaces");
 const applyButton = $<HTMLButtonElement>("apply-effect");
 const multi = new Set<number>(); // shift-click selection for merging
-let dragging: { id: number; index: number; polygon: number[][]; bezier?: Bezier } | null = null;
-let pendingScene: SceneMessage | null = null; // scene updates held back while dragging
+// Which handle is being dragged (the edited shape itself lives in the session).
+let dragging: { id: number; index: number } | null = null;
 
 function projectorPoint(ev: MouseEvent): number[] {
   const r = surfacesSvg.getBoundingClientRect();
   return toProjector(r, scanState.size ?? { width: scene!.width, height: scene!.height }, ev.clientX, ev.clientY);
 }
 
-let patchFrame = 0;
-function patchPolygonSoon(id: number, polygon: number[][], bezier?: Bezier) {
-  // At most one PATCH per animation frame while dragging.
-  cancelAnimationFrame(patchFrame);
-  patchFrame = requestAnimationFrame(() => patchSurface(id, bezier ? { polygon, bezier } : { polygon }));
-}
-
 /** Saves a Bezier outline: the engine stores it with its flattened polygon. */
 const patchBezier = (id: number, bezier: Bezier) => patchSurface(id, { polygon: flatten(bezier), bezier });
 
-const select = (id: number | null) =>
-  void fetch("/api/scene/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+const select = (id: number | null) => void engine.select(id);
 
 // --- Making an edge bendable -------------------------------------------------
 const curveButton = $<HTMLButtonElement>("curve-edge");
@@ -133,11 +136,7 @@ const SOURCE_TEXT: Record<string, string> = {
 function drawEvent(ev: DrawEvent) {
   draw = drawStep(draw, ev);
   if (draw.finished) {
-    void fetch("/api/scene/surfaces", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ polygon: draw.finished }),
-    });
+    void engine.addSurface(draw.finished);
     draw = idleDraw;
   }
   drawButton.classList.toggle("on", draw.active);
@@ -176,7 +175,7 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === "Escape") drawEvent({ type: "cancel" });
 });
 redetectButton.addEventListener("click", async () => {
-  const r = await fetch("/api/scene/redetect", { method: "POST" });
+  const r = await engine.redetect();
   notice(r.ok ? "Surfaces detected again. Drawn and edited surfaces were kept." : `Cannot redetect: ${(await r.json()).detail}`);
 });
 
@@ -202,8 +201,7 @@ function renderSurfaces() {
   const r = (7 * width) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
   surfacesSvg.replaceChildren(
     ...surfaces.flatMap((s) => {
-      const bezier = dragging?.id === s.id && dragging.bezier ? dragging.bezier : s.bezier;
-      const polygon = dragging?.id === s.id ? dragging.polygon : s.polygon;
+      const { bezier, polygon } = s; // the session's view already includes edits in progress
       const poly = document.createElementNS(SVG_NS, "polygon");
       poly.setAttribute("points", polygon.map(([x, y]) => `${x},${y}`).join(" "));
       poly.classList.toggle("selected", s.id === scene?.selected);
@@ -256,23 +254,20 @@ function renderSurfaces() {
             if (ev.altKey) return;
             ev.stopPropagation();
             handle.setPointerCapture(ev.pointerId);
-            dragging = { id: s.id, index, polygon: s.polygon };
+            dragging = { id: s.id, index };
+            session.begin();
           });
           handle.addEventListener("pointermove", (ev) => {
-            if (!dragging || dragging.index !== index) return;
-            dragging.polygon = moveOnRun(dragging.polygon, index, projectorPoint(ev));
-            patchPolygonSoon(s.id, dragging.polygon);
-            renderSurfaces();
+            if (!dragging || dragging.id !== s.id || dragging.index !== index) return;
+            const current = session.surface(s.id)!.polygon;
+            patchSurface(s.id, { polygon: moveOnRun(current, index, projectorPoint(ev)) });
+            refresh();
           });
           handle.addEventListener("pointerup", () => {
             if (!dragging) return;
-            patchSurface(s.id, { polygon: dragging.polygon });
             dragging = null;
-            if (pendingScene) {
-              scene = pendingScene;
-              pendingScene = null;
-            }
-            renderSurfaces();
+            session.end();
+            refresh();
           });
           parts.push(handle);
         });
@@ -288,14 +283,17 @@ function renderSurfaces() {
 
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
 let framedJustNow = false;
-let framing = false; // a pan drag is in progress: hold scene updates so the SVG isn't rebuilt under it
 function bindFraming(poly: SVGPolygonElement, s: SceneMessage["surfaces"][number]) {
-  const num = (name: string, fallback: number) => (typeof s.params[name] === "number" ? (s.params[name] as number) : fallback);
-  let drag: { start: number[]; moved: boolean } | null = null;
+  // Always read the latest values (local edits included), so fast scrolls build on each other.
+  const num = (name: string, fallback: number) => {
+    const v = session.surface(s.id)?.params[name];
+    return typeof v === "number" ? v : fallback;
+  };
+  let drag: { start: number[]; moved: boolean; pan: { panX: number; panY: number } } | null = null;
   poly.addEventListener("pointerdown", (ev) => {
     if (ev.altKey || ev.shiftKey || ev.button !== 0) return;
-    drag = { start: projectorPoint(ev), moved: false };
-    framing = true;
+    drag = { start: projectorPoint(ev), moved: false, pan: { panX: num("panX", 0), panY: num("panY", 0) } };
+    session.begin();
     poly.setPointerCapture(ev.pointerId);
   });
   poly.addEventListener("pointermove", (ev) => {
@@ -304,30 +302,23 @@ function bindFraming(poly: SVGPolygonElement, s: SceneMessage["surfaces"][number
     const delta = [p[0] - drag.start[0], p[1] - drag.start[1]];
     if (!drag.moved && Math.hypot(delta[0], delta[1]) < 4) return; // still a click
     drag.moved = true;
-    const pan = panAfterDrag({ panX: num("panX", 0), panY: num("panY", 0) }, delta, s.polygon);
-    cancelAnimationFrame(patchFrame);
-    patchFrame = requestAnimationFrame(() => patchSurface(s.id, { params: pan }));
+    patchSurface(s.id, { params: panAfterDrag(drag.pan, delta, s.polygon) });
   });
   poly.addEventListener("pointerup", () => {
-    framedJustNow = !!drag?.moved;
+    if (!drag) return;
+    framedJustNow = drag.moved;
     drag = null;
-    framing = false;
-    if (pendingScene) {
-      scene = pendingScene;
-      pendingScene = null;
-      renderSurfaces();
-    }
+    session.end();
+    refresh();
   });
   poly.addEventListener("wheel", (ev) => {
     ev.preventDefault();
-    const zoom = zoomAfterWheel(num("zoom", 1), ev.deltaY);
-    cancelAnimationFrame(patchFrame);
-    patchFrame = requestAnimationFrame(() => patchSurface(s.id, { params: { zoom } }));
+    patchSurface(s.id, { params: { zoom: zoomAfterWheel(num("zoom", 1), ev.deltaY) } });
   }, { passive: false });
 }
 
-// Corner pin being dragged: shown from here until the engine's scene update arrives.
-let pinDrag: { id: number; name: string; corners: number[][]; index: number } | null = null;
+// Which pin corner is being dragged (the corners themselves live in the session).
+let pinDrag: { id: number; index: number } | null = null;
 
 /** Orange diamonds (and a dashed quad) for the selected surface's corner pin, when its effect uses one.
  *  Drag a corner to pin it; Alt-click any corner to go back to the outline's own corners. */
@@ -336,7 +327,7 @@ function pinElements(r: number): SVGElement[] {
   if (!s) return [];
   const pin = pinHandles(effectById(s.effect), s.params, s.polygon);
   if (!pin) return [];
-  const corners = pinDrag?.id === s.id ? pinDrag.corners : pin.corners;
+  const corners = pin.corners; // the session's view already includes a drag in progress
   const quad = document.createElementNS(SVG_NS, "polygon");
   quad.classList.add("pin");
   quad.setAttribute("points", corners.map(([x, y]) => `${x},${y}`).join(" "));
@@ -353,25 +344,20 @@ function pinElements(r: number): SVGElement[] {
       if (ev.altKey) return;
       ev.stopPropagation();
       d.setPointerCapture(ev.pointerId);
-      pinDrag = { id: s.id, name: pin.name, corners: pin.corners, index };
+      pinDrag = { id: s.id, index };
+      session.begin();
     });
     d.addEventListener("pointermove", (ev) => {
-      if (!pinDrag || pinDrag.index !== index) return;
-      pinDrag.corners = movePin(pinDrag.corners, index, projectorPoint(ev));
-      const { id, name, corners: next } = pinDrag;
-      cancelAnimationFrame(patchFrame); // at most one PATCH per frame, so the projector follows the drag
-      patchFrame = requestAnimationFrame(() => patchSurface(id, { params: { [name]: next } }));
-      renderSurfaces();
+      if (!pinDrag || pinDrag.id !== s.id || pinDrag.index !== index) return;
+      const latest = pinHandles(effectById(s.effect), session.surface(s.id)!.params, s.polygon)!;
+      patchSurface(s.id, { params: { [pin.name]: movePin(latest.corners, index, projectorPoint(ev)) } });
+      refresh();
     });
     d.addEventListener("pointerup", () => {
       if (!pinDrag) return;
-      patchSurface(pinDrag.id, { params: { [pinDrag.name]: pinDrag.corners } });
       pinDrag = null;
-      if (pendingScene) {
-        scene = pendingScene;
-        pendingScene = null;
-      }
-      renderSurfaces();
+      session.end();
+      refresh();
     });
     return d;
   });
@@ -394,24 +380,20 @@ function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
       if ((ev as PointerEvent).altKey) return;
       ev.stopPropagation();
       el.setPointerCapture((ev as PointerEvent).pointerId);
-      dragging = { id, index, polygon: flatten(bezier), bezier };
+      dragging = { id, index };
+      session.begin();
     });
     el.addEventListener("pointermove", (ev) => {
-      if (!dragging || dragging.id !== id || dragging.index !== index || !dragging.bezier) return;
-      dragging.bezier = update(dragging.bezier, projectorPoint(ev as MouseEvent));
-      dragging.polygon = flatten(dragging.bezier);
-      patchPolygonSoon(id, dragging.polygon, dragging.bezier);
-      renderSurfaces();
+      if (!dragging || dragging.id !== id || dragging.index !== index) return;
+      const latest = session.surface(id)?.bezier ?? bezier;
+      patchBezier(id, update(latest, projectorPoint(ev as MouseEvent)));
+      refresh();
     });
     el.addEventListener("pointerup", () => {
-      if (!dragging?.bezier) return;
-      patchBezier(id, dragging.bezier);
+      if (!dragging) return;
       dragging = null;
-      if (pendingScene) {
-        scene = pendingScene;
-        pendingScene = null;
-      }
-      renderSurfaces();
+      session.end();
+      refresh();
     });
   };
   Object.entries(bezier.controls).forEach(([key, [c1, c2]]) => {
@@ -476,10 +458,7 @@ function renderPanel() {
         if (c.kind === "media") return mediaControl(row, surface.id, c.name, c.label, c.value);
         if (c.kind === "text") {
           const area = Object.assign(document.createElement("textarea"), { value: c.value, rows: 3 });
-          area.addEventListener("input", () => {
-            cancelAnimationFrame(patchFrame); // typing: at most one PATCH per frame
-            patchFrame = requestAnimationFrame(() => patchSurface(surface.id, { params: { [c.name]: area.value } }));
-          });
+          area.addEventListener("input", () => patchSurface(surface.id, { params: { [c.name]: area.value } }));
           row.append(Object.assign(document.createElement("span"), { textContent: c.label }), area);
           return row;
         }
@@ -506,11 +485,7 @@ function renderPanel() {
   const plan = applyPlan(surface.id, multi, scene?.surfaces.length ?? 0);
   applyButton.textContent = plan.label;
   applyButton.onclick = () =>
-    void fetch("/api/scene/apply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ from: surface.id, ...(plan.to ? { to: plan.to } : {}) }),
-    });
+    void engine.applyEffect(surface.id, plan.to);
   const log = effectErrors.get(surface.id)?.log;
   effectError.hidden = !log;
   effectError.textContent = log ? `Shader error:\n${log}` : "";
@@ -524,7 +499,7 @@ function mediaControl(row: HTMLLabelElement, surfaceId: number, name: string, la
     const file = input.files?.[0];
     if (!file) return;
     current.textContent = `Uploading ${file.name}…`;
-    const res = await fetch(`/api/media?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file });
+    const res = await engine.uploadMedia(file);
     if (!res.ok) {
       const detail = await res.json().catch(() => null);
       current.textContent = mediaLabel(src);
@@ -541,23 +516,19 @@ function mediaControl(row: HTMLLabelElement, surfaceId: number, name: string, la
 }
 
 effectSelect.addEventListener("change", () => {
-  if (scene?.selected != null) patchSurface(scene.selected, { effect: effectSelect.value });
+  if (scene?.selected != null) void engine.patchSurface(scene.selected, { effect: effectSelect.value });
 });
 surfacesSvg.addEventListener("click", () => select(null));
 surfaceName.addEventListener("change", () => {
-  if (scene?.selected != null) patchSurface(scene.selected, { name: surfaceName.value });
+  if (scene?.selected != null) void engine.patchSurface(scene.selected, { name: surfaceName.value });
 });
 deleteButton.addEventListener("click", () => {
-  if (scene?.selected != null) void fetch(`/api/scene/surfaces/${scene.selected}`, { method: "DELETE" });
+  if (scene?.selected != null) void engine.deleteSurface(scene.selected);
 });
 mergeButton.addEventListener("click", () => {
   const ids = [...multi];
   multi.clear();
-  void fetch("/api/scene/merge", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ids }),
-  });
+  void engine.merge(ids);
 });
 
 const missed = $<HTMLCanvasElement>("missed");
@@ -636,8 +607,7 @@ function render() {
 const soundToggle = $<HTMLButtonElement>("sound-toggle");
 let lastSoundKey = "";
 const soundInput = $<HTMLSelectElement>("sound-input");
-const postSound = (body: object) =>
-  void fetch("/api/sound", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const postSound = (body: Parameters<typeof engine.sound>[0]) => void engine.sound(body);
 soundToggle.addEventListener("click", () => postSound({ enabled: !scene?.sound?.enabled, device: soundInput.value || undefined }));
 soundInput.addEventListener("change", () => postSound({ device: soundInput.value }));
 const soundSource = $<HTMLSelectElement>("sound-source");
@@ -682,6 +652,21 @@ function notice(text: string) {
   setTimeout(() => note.remove(), 6000);
 }
 
+// Every engine scene is applied here, exactly once, whether it arrived idle or during a drag.
+session.subscribe((view) => {
+  scene = view;
+  for (const id of [...multi]) if (!view.surfaces.some((s) => s.id === id)) multi.delete(id);
+  // An error belongs to one effect; switching the surface to another effect clears it.
+  for (const s of view.surfaces) if (effectErrors.get(s.id)?.effect !== s.effect) effectErrors.delete(s.id);
+  renderSurfaces();
+  const soundKey = JSON.stringify(view.sound ?? null);
+  if (soundKey !== lastSoundKey) {
+    lastSoundKey = soundKey; // settings changed: re-list inputs (labels appear once the mic is allowed)
+    void refreshSoundInputs();
+  }
+  renderSound();
+});
+
 connect({
   hello: () => ({ type: "hello", role: "editor" }),
   onMessage(msg) {
@@ -693,21 +678,7 @@ connect({
       renderSound();
       renderScan();
     } else if (msg.type === "scene") {
-      if (dragging || pinDrag || framing) {
-        pendingScene = msg; // don't rebuild the handles under the cursor
-        return;
-      }
-      scene = msg;
-      for (const id of [...multi]) if (!msg.surfaces.some((s) => s.id === id)) multi.delete(id);
-      // An error belongs to one effect; switching the surface to another effect clears it.
-      for (const s of msg.surfaces) if (effectErrors.get(s.id)?.effect !== s.effect) effectErrors.delete(s.id);
-      renderSurfaces();
-      const soundKey = JSON.stringify(msg.sound ?? null);
-      if (soundKey !== lastSoundKey) {
-        lastSoundKey = soundKey; // settings changed: re-list inputs (labels appear once the mic is allowed)
-        void refreshSoundInputs();
-      }
-      renderSound();
+      session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below
     } else if (msg.type === "scan_reload") {
       void reloadScan();
       void refreshProjects();
@@ -730,23 +701,19 @@ connect({
 
 const showPlacement = (note: string | null) => note && notice(note);
 $("open-output").addEventListener("click", () => void placeOutput(status?.hardware.projector ?? null).then(showPlacement));
-$("refresh").addEventListener("click", () => void fetch("/api/hardware/refresh", { method: "POST" }));
+$("refresh").addEventListener("click", () => void engine.refreshHardware());
 for (const btn of document.querySelectorAll<HTMLButtonElement>("[data-test-frame]")) {
   btn.addEventListener("click", () =>
-    void fetch("/api/test-frame", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: btn.dataset.testFrame as TestFrameKind }),
-    }),
+    void engine.testFrame(btn.dataset.testFrame as TestFrameKind),
   );
 }
 scan.addEventListener("click", async () => {
   if (scanState.running) {
-    void fetch("/api/scan/cancel", { method: "POST" });
+    void engine.cancelScan();
     return;
   }
   if (previewTimer !== undefined) previewToggle.click(); // the scan needs the camera to itself
-  const res = await fetch("/api/scan", { method: "POST" });
+  const res = await engine.startScan();
   if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`);
 });
 // Show the last scan, with its surfaces, after a reload.
@@ -756,11 +723,7 @@ void refreshProjects();
 projectSave.addEventListener("click", async () => {
   const name = projectSaveName.value.trim();
   if (!name) return notice("Name the project first.");
-  const r = await fetch("/api/projects", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name }),
-  });
+  const r = await engine.saveProject(name);
   notice(r.ok ? `Saved "${name}".` : `Cannot save: ${(await r.json()).detail}`);
   void refreshProjects();
 });
@@ -769,19 +732,11 @@ projectorSelect.addEventListener("change", () => {
   const display = status?.hardware.displays.find((d) => d.key === projectorSelect.value) ?? null;
   // Move the output first, while the change still counts as a user gesture (permission prompt).
   void placeOutput(display).then(showPlacement);
-  void fetch("/api/projector", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key: projectorSelect.value }),
-  });
+  void engine.selectProjector(projectorSelect.value);
 });
 
 cameraSelect.addEventListener("change", () =>
-  void fetch("/api/camera", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ unique_id: cameraSelect.value }),
-  }),
+  void engine.selectCamera(cameraSelect.value),
 );
 
 // Preview is opt-in: polling keeps the camera running, so it only runs while shown.
@@ -797,7 +752,7 @@ previewToggle.addEventListener("click", () => {
   } else {
     window.clearInterval(previewTimer);
     previewTimer = undefined;
-    void fetch("/api/camera/release", { method: "POST" });
+    void engine.releaseCamera();
   }
 });
 
@@ -805,11 +760,11 @@ calibrate.addEventListener("click", async () => {
   calibrate.disabled = true;
   calibrate.textContent = "Calibrating…";
   try {
-    const res = await fetch("/api/camera/calibrate", { method: "POST" });
+    const res = await engine.calibrate();
     const body = await res.json();
     notice(res.ok ? `Calibrated: exposure ${body.exposure}, white peak ${Math.round(body.p99)}` : `Calibration failed: ${body.detail}`);
   } finally {
-    if (previewTimer === undefined) void fetch("/api/camera/release", { method: "POST" });
+    if (previewTimer === undefined) void engine.releaseCamera();
     calibrate.textContent = "Calibrate exposure";
     render();
   }
