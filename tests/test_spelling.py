@@ -1,4 +1,6 @@
-"""The repo uses American spelling (product text, docs and code). scripts/american_spelling.py guards it."""
+"""spelling: skip-file (this file must contain the words it tests for)
+
+The repo uses American spelling (product text, docs and code). scripts/american_spelling.py guards it."""
 
 from scripts.american_spelling import find_british, repo_problems
 
@@ -36,3 +38,33 @@ def test_a_line_can_opt_out_with_a_marker():
 
 def test_the_repo_is_clean():
     assert repo_problems() == []
+
+
+def _repo(tmp_path, files: dict[str, str]):
+    import subprocess
+
+    for name, text in files.items():
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / name).write_text(text)
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+def test_checks_any_repo_given_its_path(tmp_path):
+    root = _repo(tmp_path, {"README.md": "Pick a colour.\n", "src/app.go": "func centreOf() {}\n"})
+    assert repo_problems(root) == ["README.md:1: colour -> color", "src/app.go:1: centre -> center"]
+
+
+def test_a_repo_can_allow_words_and_skip_paths(tmp_path):
+    root = _repo(tmp_path, {
+        ".american-spelling-allow": "# a third-party API spells it so\nColour\npath: vendor/\n",
+        "main.rb": "led.setColour(1)\nputs 'centre'\n",
+        "vendor/lib.rb": "colour = 1\n",
+    })
+    assert repo_problems(root) == ["main.rb:2: centre -> center"]
+
+
+def test_a_file_can_opt_out_entirely(tmp_path):
+    root = _repo(tmp_path, {"words.py": "# spelling: skip-file\ncolour\n", "app.py": "colour\n"})
+    assert repo_problems(root) == ["app.py:1: colour -> color"]
