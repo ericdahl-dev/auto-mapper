@@ -26,9 +26,6 @@ export function removeVertex(polygon: Pt[], index: number): Pt[] {
   return polygon.length <= 3 ? polygon : polygon.filter((_, i) => i !== index);
 }
 
-export function moveVertex(polygon: Pt[], index: number, point: Pt): Pt[] {
-  return polygon.map((v, i) => (i === index ? [Math.round(point[0]), Math.round(point[1])] : v));
-}
 
 /** Converts a mouse position over the scaled editor view into projector pixels. */
 export function toProjector(

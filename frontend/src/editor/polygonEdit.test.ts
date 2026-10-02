@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { insertVertex, moveVertex, removeVertex, toProjector } from "./polygonEdit";
+import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 
 const square = [[0, 0], [100, 0], [100, 100], [0, 100]];
 
@@ -17,11 +17,6 @@ describe("removeVertex", () => {
   });
 });
 
-describe("moveVertex", () => {
-  it("moves one corner and rounds to whole projector pixels", () => {
-    expect(moveVertex(square, 2, [120.4, 99.6])).toEqual([[0, 0], [100, 0], [120, 100], [0, 100]]);
-  });
-});
 
 describe("toProjector", () => {
   it("maps a click in the scaled-down editor view to projector pixels", () => {

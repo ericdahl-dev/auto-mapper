@@ -1,7 +1,7 @@
 import type { Effect } from "./types";
 
 /** Polygons with more vertices are simplified before upload (see SceneRenderer). */
-export const MAX_POLY = 64;
+export const MAX_POLY = 256;
 
 /** Vertex shader shared by every effect: polygon vertices arrive in projector pixels. */
 export const VERTEX = `#version 300 es
