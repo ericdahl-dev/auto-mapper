@@ -21,6 +21,7 @@ from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
 from engine.show import CurrentShow, UnknownSurface
 from engine.messages import (
+    AlignmentRequest,
     ApplyEffectRequest,
     CameraSelectRequest,
     EditorHello,
@@ -287,6 +288,20 @@ def create_app(
     async def set_presentation(req: PresentationRequest):
         show.present(req.mode, req.blackout)
         return show.presentation
+
+    @app.post("/api/show/alignment")
+    async def set_alignment(req: AlignmentRequest):
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        show.set_alignment(req.corners, req.brightness)
+        return show.alignment()
+
+    @app.post("/api/show/alignment/reset")
+    async def reset_alignment():
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        show.reset_alignment()
+        return show.alignment()
 
     @app.post("/api/sound")
     async def set_sound(req: SoundRequest):

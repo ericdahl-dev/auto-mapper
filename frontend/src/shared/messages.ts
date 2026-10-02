@@ -107,6 +107,7 @@ export interface ShowMessage {
   surfaces: ShowSurface[];
   selected: number | null;
   presentation: { mode: "edit" | "play"; blackout: boolean };
+  alignment?: { corners: number[][]; brightness: number }; // realign the whole show (see output/alignment.ts)
   sound?: { enabled: boolean; device: string | null; source?: "mic" | "video"; output?: string | null };
   scan_rev?: string | null; // changes only when the scan data changes
 }

@@ -58,6 +58,13 @@ class ProjectSaveRequest(BaseModel):
     name: Annotated[str, Field(min_length=1, max_length=80)]
 
 
+class AlignmentRequest(BaseModel):
+    """Realign the whole show: where the output's four corners go (TL, TR, BR, BL, projector pixels)."""
+
+    corners: Annotated[list[Point], Field(min_length=4, max_length=4)] | None = None
+    brightness: Annotated[float, Field(ge=0, le=1)] | None = None
+
+
 class SoundRequest(BaseModel):
     enabled: bool | None = None
     source: Literal["mic", "video"] | None = None
@@ -154,6 +161,7 @@ class ShowOut(_Out):
     selected: int | None
     presentation: dict
     sound: dict
+    alignment: dict
     scan_rev: str | None
 
 

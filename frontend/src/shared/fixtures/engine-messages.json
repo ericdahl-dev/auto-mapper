@@ -108,6 +108,27 @@
     "type": "scan_started"
   },
   "show": {
+    "alignment": {
+      "brightness": 1.0,
+      "corners": [
+        [
+          0,
+          0
+        ],
+        [
+          256,
+          0
+        ],
+        [
+          256,
+          144
+        ],
+        [
+          0,
+          144
+        ]
+      ]
+    },
     "height": 144,
     "presentation": {
       "blackout": false,

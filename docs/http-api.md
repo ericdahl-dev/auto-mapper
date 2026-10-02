@@ -39,13 +39,15 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
 | GET | `/api/show` | | The current show: size, surfaces, selected id, presentation state, `scan_rev`. 404 before the first scan |
-| PATCH | `/api/show/surfaces/{id}` | Any of `effect`, `params`, `polygon` (3+ `[x, y]` points), `name` (up to 80 characters), `bezier` (the editor's curve data, sent together with its flattened `polygon`) | Updates one surface. Changing `effect` resets `params`; changing `polygon` marks a detected surface as edited, and drops any stored `bezier` unless a new one is sent with it |
+| PATCH | `/api/show/surfaces/{id}` | Any of `effect`, `params`, `polygon` (3+ `[x, y]` points), `name` (up to 80 characters), `bezier` (the editor's curve data, sent together with its flattened `polygon`), `edge` (-10..10 px: shrink or grow the lit area past the outline) | Updates one surface. Changing `effect` resets `params`; changing `polygon` marks a detected surface as edited, and drops any stored `bezier` unless a new one is sent with it |
 | DELETE | `/api/show/surfaces/{id}` | | Removes a surface |
 | POST | `/api/show/surfaces` | `{"polygon": [[x, y], ...], "name"?: "..."}` | Adds a hand-drawn surface and selects it |
 | POST | `/api/show/select` | `{"id": 3}` or `{"id": null}` | Selects or deselects a surface |
 | POST | `/api/show/merge` | `{"ids": [3, 5, ...]}` (2 or more) | Merges surfaces into the first one |
 | POST | `/api/show/apply` | `{"from": 3, "to"?: [5, 6]}` | Copies a surface's effect and params to the listed surfaces, or to all of them if `to` is omitted |
 | POST | `/api/show/redetect` | | Reruns detection on the saved scan, keeping drawn and edited surfaces. 404 before a scan, 409 while scanning |
+| POST | `/api/show/alignment` | `{"corners"?: [[x,y]×4], "brightness"?: 0..1}` | Realigns the whole show (where the output's TL, TR, BR, BL go) and sets the master brightness. Saved with the show; a new scan drops the corners, keeps brightness. 404 before a scan |
+| POST | `/api/show/alignment/reset` | | Back to the projector's own corners at full brightness |
 
 Routes that name a surface return 404 for an unknown surface id.
 
