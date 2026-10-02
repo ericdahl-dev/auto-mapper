@@ -32,6 +32,9 @@ describe("engine client", () => {
     await client.openProject("porch");
     await client.align({ brightness: 0.5 });
     await client.resetAlignment();
+    await client.patchSurface(3, { edge: 2 }, "g7");
+    await client.undo();
+    await client.redo();
     expect(calls).toEqual([
       { url: "/api/show/surfaces/3", method: "PATCH", body: { params: { zoom: 2 } } },
       { url: "/api/show/select", method: "POST", body: { id: 3 } },
@@ -50,6 +53,9 @@ describe("engine client", () => {
       { url: "/api/projects/porch/open", method: "POST", body: undefined },
       { url: "/api/show/alignment", method: "POST", body: { brightness: 0.5 } },
       { url: "/api/show/alignment/reset", method: "POST", body: undefined },
+      { url: "/api/show/surfaces/3", method: "PATCH", body: { edge: 2, gesture: "g7" } },
+      { url: "/api/show/undo", method: "POST", body: undefined },
+      { url: "/api/show/redo", method: "POST", body: undefined },
     ]);
   });
 

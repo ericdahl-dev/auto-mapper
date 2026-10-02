@@ -85,6 +85,51 @@ describe("EditSession surface edge", () => {
   });
 });
 
+describe("EditSession undo steps", () => {
+  /** A session that records each save's gesture id, with a clock the test moves. */
+  function steps() {
+    const gestures: string[] = [];
+    let queued: (() => void)[] = [];
+    let now = 0;
+    const session = new EditSession({
+      patch: (_id, _body, gesture) => gestures.push(gesture),
+      nextFrame: (fn) => queued.push(fn),
+      now: () => now,
+    });
+    session.receive(show());
+    const frame = () => { const run = queued; queued = []; run.forEach((fn) => fn()); };
+    return { session, gestures, frame, wait: (ms: number) => { now += ms; } };
+  }
+
+  it("marks every save of one drag with the same gesture, and the next drag with another", () => {
+    const { session, gestures, frame } = steps();
+    session.begin();
+    session.edit(1, { polygon: [[1, 1], [9, 1], [5, 9]] });
+    frame();
+    session.edit(1, { polygon: [[2, 2], [9, 1], [5, 9]] });
+    session.end();
+    session.begin();
+    session.edit(1, { params: { zoom: 2 } });
+    session.end();
+    expect(gestures[0]).toBe(gestures[1]);
+    expect(gestures[2]).not.toBe(gestures[0]);
+  });
+
+  it("groups edits outside a drag (typing, a slider) until a short pause", () => {
+    const { session, gestures, frame, wait } = steps();
+    session.edit(1, { params: { text: "H" } });
+    frame();
+    wait(300);
+    session.edit(1, { params: { text: "Hi" } });
+    frame();
+    wait(2000);
+    session.edit(1, { params: { text: "Hi!" } });
+    frame();
+    expect(gestures[0]).toBe(gestures[1]);
+    expect(gestures[2]).not.toBe(gestures[1]);
+  });
+});
+
 describe("EditSession local view", () => {
   it("shows edits straight away, so the next edit builds on them (e.g. fast wheel zoom)", () => {
     const { session } = setup();

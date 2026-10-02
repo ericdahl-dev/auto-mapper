@@ -108,6 +108,7 @@ export interface ShowMessage {
   selected: number | null;
   presentation: { mode: "edit" | "play"; blackout: boolean };
   alignment?: { corners: number[][]; brightness: number }; // realign the whole show (see output/alignment.ts)
+  history?: { undo: string | null; redo: string | null }; // what Undo and Redo would do ("Merge")
   sound?: { enabled: boolean; device: string | null; source?: "mic" | "video"; output?: string | null };
   scan_rev?: string | null; // changes only when the scan data changes
 }

@@ -20,7 +20,14 @@ DUPLICATE_OVERLAP = 0.5  # a new detection this much inside a kept surface is a 
 MATCH_IOU = 0.5  # overlap needed for a new detection to inherit an old surface's effect
 
 
+HISTORY_STEPS = 100  # undo steps kept
+
+
 class UnknownSurface(LookupError):
+    pass
+
+
+class NothingToUndo(LookupError):
     pass
 
 
@@ -37,6 +44,10 @@ class CurrentShow:
         # source: "mic", or "video" to react to the playing videos' own sound (no mic, no feedback).
         # output: a browser audio output device id for video sound; None = the system default.
         self.sound = {"enabled": False, "device": None, "source": "mic", "output": None}
+        # Undo/redo: (label, the show's data before that change, gesture id). Kept here so every
+        # editor and the output agree. Selection, presentation and sound aren't part of it.
+        self._undo: list[tuple[str, dict, str | None]] = []
+        self._redo: list[tuple[str, dict]] = []
 
     def _load(self) -> dict | None:
         show = _read_json(self.folder.show_file)
@@ -77,7 +88,46 @@ class CurrentShow:
         for listener in self._listeners:
             listener()
 
+    def _record(self, label: str, gesture: str | None = None) -> None:
+        """Keeps the show as it is now, before a change. Changes sharing a gesture id (one drag,
+        a burst of typing) are one step: only the first keeps a snapshot."""
+        if gesture is not None and self._undo and self._undo[-1][2] == gesture:
+            return
+        self._undo.append((label, copy.deepcopy(self.data), gesture))
+        del self._undo[:-HISTORY_STEPS]
+        self._redo.clear()
+
+    def clear_history(self) -> None:
+        self._undo.clear()
+        self._redo.clear()
+
+    def _restore(self, data: dict) -> None:
+        self.data = data
+        if not any(s["id"] == self.selected for s in data["surfaces"]):
+            self.selected = None
+        self._save()
+        self._changed()
+
+    def undo(self) -> None:
+        if not self._undo:
+            raise NothingToUndo
+        label, before, _ = self._undo.pop()
+        self._redo.append((label, copy.deepcopy(self.data)))
+        self._restore(before)
+
+    def redo(self) -> None:
+        if not self._redo:
+            raise NothingToUndo
+        label, after = self._redo.pop()
+        self._undo.append((label, copy.deepcopy(self.data), None))
+        self._restore(after)
+
+    def history(self) -> dict:
+        """What Undo and Redo would do, for the editor's buttons ("Undo merge")."""
+        return {"undo": self._undo[-1][0] if self._undo else None, "redo": self._redo[-1][0] if self._redo else None}
+
     def reload(self) -> None:
+        self.clear_history()
         self.data = self._load()
         self.scan_rev = self._scan_rev()
         self.selected = None
@@ -88,6 +138,7 @@ class CurrentShow:
             self._save()
 
     def reset_from_scan(self, summary: dict) -> None:
+        self.clear_history()  # a different scan: old snapshots don't fit it
         self.data = self._from_scan(summary)
         self.scan_rev = self._scan_rev()
         self.selected = None
@@ -109,8 +160,15 @@ class CurrentShow:
         name: str | None = None,
         bezier: dict | None = None,
         edge: int | None = None,
+        gesture: str | None = None,
     ) -> None:
         surface = self._surface(surface_id)
+        label = ("Change effect" if effect is not None and effect != surface["effect"]
+                 else "Reshape" if polygon is not None
+                 else "Rename" if name is not None
+                 else "Edge" if edge is not None
+                 else "Change settings")
+        self._record(label, gesture)
         if polygon is not None:
             # The Bezier (editor curves) must describe this polygon; a plain polygon edit makes it stale.
             if bezier is not None:
@@ -133,6 +191,7 @@ class CurrentShow:
 
     def delete(self, surface_id: int) -> None:
         surface = self._surface(surface_id)
+        self._record("Delete")
         self.data["surfaces"].remove(surface)
         if self.selected == surface_id:
             self.selected = None
@@ -142,6 +201,7 @@ class CurrentShow:
     def merge(self, ids: list[int]) -> int:
         """Replaces the surfaces with one covering all of them; keeps the first one's id and effect."""
         surfaces = [self._surface(i) for i in ids]
+        self._record("Merge")
         w, h = self.data["width"], self.data["height"]
         mask = np.zeros((h, w), np.uint8)
         for s in surfaces:
@@ -167,6 +227,7 @@ class CurrentShow:
         """Gives other surfaces (all, by default) a copy of one surface's effect and params."""
         source = self._surface(from_id)
         targets = self.data["surfaces"] if to_ids is None else [self._surface(i) for i in to_ids]
+        self._record("Apply to all" if to_ids is None else "Apply effect")
         for t in targets:
             t["effect"] = source["effect"]
             t["params"] = copy.deepcopy(source["params"])  # copies: later edits stay per surface
@@ -175,6 +236,7 @@ class CurrentShow:
 
     def add_manual(self, polygon: list[list[float]], name: str | None = None) -> int:
         """A surface drawn by hand, for areas detection missed."""
+        self._record("Draw surface")
         new_id = self._next_id()
         poly = self._clamp(polygon)
         self.data["surfaces"].append({
@@ -196,6 +258,7 @@ class CurrentShow:
         if self.data is None or (self.data["width"], self.data["height"]) != (summary["width"], summary["height"]):
             self.reset_from_scan(summary)
             return
+        self._record("Redetect")
         w, h = summary["width"], summary["height"]
         kept = [s for s in self.data["surfaces"] if s["source"] != "detected"]
         old = [s for s in self.data["surfaces"] if s["source"] == "detected"]
@@ -278,7 +341,10 @@ class CurrentShow:
             "brightness": saved.get("brightness", 1.0),
         }
 
-    def set_alignment(self, corners: list[list[float]] | None = None, brightness: float | None = None) -> None:
+    def set_alignment(
+        self, corners: list[list[float]] | None = None, brightness: float | None = None, gesture: str | None = None,
+    ) -> None:
+        self._record("Realign", gesture)
         saved = self.data.setdefault("alignment", {})
         if corners is not None:
             saved["corners"] = corners
@@ -288,6 +354,7 @@ class CurrentShow:
         self._changed()
 
     def reset_alignment(self) -> None:
+        self._record("Reset alignment")
         self.data.pop("alignment", None)
         self._save()
         self._changed()
@@ -297,7 +364,7 @@ class CurrentShow:
             return None
         data = {k: v for k, v in self.data.items() if k != "alignment"}
         return {**data, "selected": self.selected, "presentation": dict(self.presentation),
-                "sound": dict(self.sound), "alignment": self.alignment(), "scan_rev": self.scan_rev}
+                "sound": dict(self.sound), "alignment": self.alignment(), "history": self.history(), "scan_rev": self.scan_rev}
 
     def message(self) -> dict | None:
         return {"type": "show", **self.public()} if self.data else None

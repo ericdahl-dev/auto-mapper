@@ -16,6 +16,7 @@ import { createEngineClient } from "./engineClient";
 import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
 import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
+import { bindUndoKeys } from "./undoKeys";
 import { placeOutput } from "./screens";
 import { describeSound } from "./soundView";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
@@ -88,7 +89,7 @@ effectSelect.replaceChildren(...EFFECTS.map((e) => Object.assign(document.create
 // The engine, and this Editor's view of the current show (see editSession.ts): edits show at once and
 // save at most once per frame; show updates that arrive during a drag wait until it ends.
 const engine = createEngineClient();
-const session = new EditSession({ patch: (id, body) => void engine.patchSurface(id, body) });
+const session = new EditSession({ patch: (id, body, gesture) => void engine.patchSurface(id, body, gesture) });
 /** Edits the shape or settings of a surface (shown at once, saved throttled). */
 const patchSurface = (id: number, body: SurfaceEdit) => session.edit(id, body);
 /** Shows the session's latest view (local edits included). */
@@ -289,6 +290,7 @@ function renderSurfaces() {
   renderPanel();
   renderPresentation();
   renderAlignment();
+  renderHistory();
 }
 
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
@@ -430,13 +432,16 @@ const brightnessReadout = $("brightness-readout");
 let realigning = false;
 let localAlignment: { corners?: number[][]; brightness?: number } | null = null; // shown at once, saved once per frame
 let alignQueued = false;
+let alignGesture: string | null = null; // one drag (or one slide) = one undo step
 function align(change: { corners?: number[][]; brightness?: number }) {
   localAlignment = { ...localAlignment, ...change };
+  alignGesture ??= `align-${Date.now().toString(36)}`;
+  const gesture = alignGesture;
   if (!alignQueued) {
     alignQueued = true;
     requestAnimationFrame(() => {
       alignQueued = false;
-      if (localAlignment) void engine.align(localAlignment);
+      if (localAlignment) void engine.align({ ...localAlignment, gesture });
     });
   }
   renderAlignment();
@@ -461,6 +466,7 @@ realignButton.addEventListener("click", () => {
   refresh();
 });
 brightness.addEventListener("input", () => align({ brightness: Number(brightness.value) }));
+brightness.addEventListener("change", () => { alignGesture = null; }); // the slide ended
 $("reset-alignment").addEventListener("click", () => {
   localAlignment = null;
   void engine.resetAlignment();
@@ -489,7 +495,9 @@ function alignElements(r: number): SVGElement[] {
     c.addEventListener("pointerdown", (ev) => {
       ev.stopPropagation();
       session.begin();
+      alignGesture = null;
       trackPointer(ev.pointerId, (move) => align({ corners: movePin(currentAlignment().corners, index, projectorPoint(move)) }), () => {
+        alignGesture = null;
         session.end();
         refresh();
       });
@@ -497,6 +505,25 @@ function alignElements(r: number): SVGElement[] {
     return c;
   });
   return [quad, ...handles];
+}
+
+// Undo and redo, kept by the engine (so every editor and the output agree).
+const undoButton = $<HTMLButtonElement>("undo");
+const redoButton = $<HTMLButtonElement>("redo");
+async function undoRedo(action: "undo" | "redo") {
+  if (session.busy) return; // not mid-drag
+  const r = await (action === "undo" ? engine.undo() : engine.redo());
+  if (r.ok) localAlignment = null; // the engine's show is the truth again
+}
+undoButton.addEventListener("click", () => void undoRedo("undo"));
+redoButton.addEventListener("click", () => void undoRedo("redo"));
+bindUndoKeys((action) => void undoRedo(action));
+function renderHistory() {
+  const h = show?.history;
+  undoButton.disabled = !h?.undo;
+  redoButton.disabled = !h?.redo;
+  undoButton.textContent = h?.undo ? `Undo ${h.undo.toLowerCase()}` : "Undo";
+  redoButton.textContent = h?.redo ? `Redo ${h.redo.toLowerCase()}` : "Redo";
 }
 
 const playButton = $<HTMLButtonElement>("play");

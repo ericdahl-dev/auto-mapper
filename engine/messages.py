@@ -44,6 +44,7 @@ class SurfaceUpdate(BaseModel):
     name: Annotated[str, Field(max_length=80)] | None = None
     bezier: dict | None = None  # editor-only curve data; sent together with its flattened polygon
     edge: Annotated[int, Field(ge=-10, le=10)] | None = None  # grow (+) or shrink (-) the lit area, in pixels
+    gesture: Annotated[str, Field(max_length=64)] | None = None  # edits sharing one are one undo step
 
 
 class MergeRequest(BaseModel):
@@ -63,6 +64,7 @@ class AlignmentRequest(BaseModel):
 
     corners: Annotated[list[Point], Field(min_length=4, max_length=4)] | None = None
     brightness: Annotated[float, Field(ge=0, le=1)] | None = None
+    gesture: Annotated[str, Field(max_length=64)] | None = None  # one drag = one undo step
 
 
 class SoundRequest(BaseModel):
@@ -162,6 +164,7 @@ class ShowOut(_Out):
     presentation: dict
     sound: dict
     alignment: dict
+    history: dict
     scan_rev: str | None
 
 
