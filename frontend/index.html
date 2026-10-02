@@ -6,10 +6,14 @@
     <title>auto-mapper</title>
     <style>
       :root { color-scheme: dark; --bg: #111; --panel: #1b1b1b; --line: #2c2c2c; --text: #ddd; --muted: #888; --ok: #4ade80; --bad: #f87171; --warn: #fbbf24; }
-      body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+      /* Fixed to the window: the side panel scrolls on its own, so opening it never
+         shifts the scan view under the cursor (which broke double-clicks). */
+      html { height: 100%; scrollbar-gutter: stable; }
+      body { margin: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
       header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
       h1 { font-size: 16px; margin: 0 auto 0 0; }
-      main { display: grid; grid-template-columns: 1fr 280px; gap: 16px; padding: 16px; }
+      main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 280px; gap: 16px; padding: 16px; }
+      main > div { min-height: 0; overflow-y: auto; }
       /* Image and overlay share one box with the scan's aspect ratio, so polygons line up. */
       #scan-view { position: relative; max-width: 100%; max-height: 100%; width: 100%; }
       #scan-view[hidden] { display: none; }
@@ -41,7 +45,7 @@
       #surfaces text { pointer-events: none; fill: #fff; font: 600 28px system-ui, sans-serif; paint-order: stroke; stroke: #000; stroke-width: 4px; }
       .muted { color: var(--muted); margin: 8px 0 0; }
       .stage { aspect-ratio: 16 / 9; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
-      aside { background: var(--panel); border: 1px solid var(--line); padding: 12px; }
+      aside { background: var(--panel); border: 1px solid var(--line); padding: 12px; overflow-y: auto; min-height: 0; }
       dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0 0 16px; }
       dt { color: var(--muted); }
       dd { margin: 0; }
@@ -112,8 +116,9 @@
           <div class="row">
             <button id="delete-surface">Delete</button>
             <button id="merge-surfaces" hidden>Merge selected</button>
+            <button id="curve-edge" title="Then click near an edge of this surface to make it bendable">Curve an edge</button>
           </div>
-          <p class="muted hint">Drag corners to adjust. Double-click an edge to add a corner, Alt-click a corner to remove it. Shift-click surfaces to merge them.</p>
+          <p class="muted hint">Drag corners to adjust. Double-click an edge to add a corner, Alt-click a corner to remove it. Shift-click surfaces to merge them. "Curve an edge" adds bend points along an edge; drag one to bend it.</p>
           <div class="row"><select id="effect-select"></select></div>
           <div id="effect-controls"></div>
           <div class="row"><button id="apply-effect">Apply to all surfaces</button></div>

@@ -5,7 +5,7 @@ import type { SceneMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
 import { applyPlan } from "./applyEffect";
 import { controlsFor, mediaLabel, parseControlValue } from "./controls";
-import { handleIndices, moveOnRun } from "./curves";
+import { curveEdge, handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
@@ -102,6 +102,16 @@ function patchPolygonSoon(id: number, polygon: number[][]) {
 const select = (id: number | null) =>
   void fetch("/api/scene/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
 
+// --- Making an edge bendable -------------------------------------------------
+const curveButton = $<HTMLButtonElement>("curve-edge");
+let curving = false;
+function setCurving(on: boolean) {
+  curving = on;
+  curveButton.classList.toggle("on", on);
+  surfacesSvg.classList.toggle("drawing", on);
+}
+curveButton.addEventListener("click", () => setCurving(!curving));
+
 // --- Drawing surfaces by hand -------------------------------------------------
 let draw = idleDraw;
 const drawButton = $<HTMLButtonElement>("draw");
@@ -128,6 +138,17 @@ function drawEvent(ev: DrawEvent) {
 }
 
 drawButton.addEventListener("click", () => drawEvent({ type: draw.active ? "cancel" : "start" }));
+// Capture phase: in curve mode, a click picks the edge to make bendable.
+surfacesSvg.addEventListener("click", (ev) => {
+  if (!curving) return;
+  ev.stopPropagation();
+  const surface = scene?.surfaces.find((x) => x.id === scene?.selected);
+  if (surface) {
+    const edge = nearestEdge(surface.polygon, projectorPoint(ev));
+    patchSurface(surface.id, { polygon: curveEdge(surface.polygon, edge) });
+  }
+  setCurving(false);
+}, true);
 // Capture phase: while drawing, clicks place corners instead of selecting surfaces.
 surfacesSvg.addEventListener("click", (ev) => {
   if (!draw.active) return;
@@ -140,6 +161,7 @@ surfacesSvg.addEventListener("dblclick", (ev) => {
   drawEvent({ type: "finish" });
 }, true);
 window.addEventListener("keydown", (ev) => {
+  if (curving && ev.key === "Escape") setCurving(false);
   if (!draw.active) return;
   if (ev.key === "Enter") drawEvent({ type: "finish" });
   if (ev.key === "Escape") drawEvent({ type: "cancel" });
