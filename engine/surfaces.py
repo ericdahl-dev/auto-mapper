@@ -21,7 +21,9 @@ CANNY_LOW, CANNY_HIGH = 6, 16  # tuned on the rig: a light box against a light w
 BLUR_PX = 3  # smooth speckle before colour edges
 EDGE_DILATE_PX = 7  # tuned on the rig: bridges gaps in faint colour edges
 MIN_AREA_FRACTION = 0.003  # of the projector area
-SIMPLIFY_FRACTION = 0.005  # polygon tolerance, as a fraction of its perimeter
+SIMPLIFY_FRACTION = 0.015  # polygon tolerance, as a fraction of its perimeter
+NOTCH_CLOSE_FRACTION = 0.06  # notch filling, as a fraction of the region's typical size
+NOTCH_CLOSE_MIN, NOTCH_CLOSE_MAX = 9, 41  # px
 
 
 def depth_edges(decoded: DecodeResult) -> np.ndarray:
@@ -94,12 +96,30 @@ def detect_surfaces(decoded: DecodeResult, view: tuple[np.ndarray, np.ndarray]) 
             continue
         # Grow back over the boundary band so neighbouring surfaces meet.
         mask = cv2.dilate((labels == label).astype(np.uint8), k) & covered.astype(np.uint8)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        contour = max(contours, key=cv2.contourArea)
-        eps = max(1.5, SIMPLIFY_FRACTION * cv2.arcLength(contour, True))
-        poly = cv2.approxPolyDP(contour, eps, True).reshape(-1, 2)
+        poly = outline_polygon(mask)
         if len(poly) < 3:
             continue
-        surfaces.append({"polygon": poly.tolist(), "area": float(cv2.contourArea(poly))})
+        surfaces.append({"polygon": poly, "area": float(cv2.contourArea(np.int32(poly)))})
     surfaces.sort(key=lambda s: s["area"], reverse=True)
     return surfaces
+
+
+def outline_polygon(mask: np.ndarray) -> list[list[int]]:
+    """Outline of a region as a polygon with few, straight sides.
+
+    Edge detection leaves notches along real straight edges. A closing sized to the
+    region fills them (closing keeps convex corners sharp), then a coarse simplification
+    turns each straight run into a single side.
+    """
+    mask = mask.astype(np.uint8)
+    size = int(np.sqrt(max(int(mask.sum()), 1)) * NOTCH_CLOSE_FRACTION)
+    size = int(np.clip(size, NOTCH_CLOSE_MIN, NOTCH_CLOSE_MAX)) | 1
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+    padded = cv2.copyMakeBorder(mask, size, size, size, size, cv2.BORDER_CONSTANT, value=0)
+    closed = cv2.morphologyEx(padded, cv2.MORPH_CLOSE, k)[size:-size, size:-size]
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return []
+    contour = max(contours, key=cv2.contourArea)
+    eps = max(1.5, SIMPLIFY_FRACTION * cv2.arcLength(contour, True))
+    return cv2.approxPolyDP(contour, eps, True).reshape(-1, 2).tolist()
