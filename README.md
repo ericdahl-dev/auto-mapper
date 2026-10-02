@@ -1,5 +1,7 @@
 # auto-mapper
 
+![auto-mapper: automatic projection mapping with a projector and a webcam](frontend/public/social.png)
+
 Automatic projection mapping with a projector, a USB webcam and a Mac.
 
 auto-mapper is a Lightform-style projection mapper (Lightform, the commercial product it is modelled on, is discontinued). You point a projector and a webcam at a scene and press **Scan**. The app projects structured-light patterns, works out which camera pixel sees which projector pixel, and finds the surfaces in the scene: walls, boxes, cabinet doors, corbels. You give each surface a live shader effect, and the projector plays them back, each one clipped to its surface.
