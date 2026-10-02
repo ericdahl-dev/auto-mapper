@@ -1,5 +1,5 @@
 import earcut from "earcut";
-import { type CompileResult, compileEffect, linkProgram, VERTEX } from "../effects/compile";
+import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
 import { uniformsFor } from "../effects/types";
 import type { SceneMessage } from "../shared/messages";
@@ -15,6 +15,9 @@ interface PreparedSurface {
   effect: Effect;
   params: Record<string, unknown>;
   bounds: [number, number, number, number];
+  poly: Float32Array; // outline vertices for edge-aware effects (at most MAX_POLY)
+  polyCount: number;
+  perimeter: number;
   fill: WebGLVertexArrayObject; // triangles (earcut: concave polygons are fine)
   fillCount: number;
   outline: WebGLVertexArrayObject; // line loop through pixel centres
@@ -76,7 +79,17 @@ export class SceneRenderer {
       const fillVerts = new Float32Array(tris.flatMap((i) => [flat[2 * i], flat[2 * i + 1]]));
       // Lines are rasterised through pixel centres; nudge inward so edges land on the polygon.
       const lineVerts = new Float32Array(s.polygon.flatMap(([x, y]) => [x + 0.5, y + 0.5]));
+      const outline = limitVertices(s.polygon, MAX_POLY);
+      const poly = new Float32Array(MAX_POLY * 2);
+      poly.set(outline.flat());
+      const perimeter = outline.reduce((sum, [x, y], i) => {
+        const [nx, ny] = outline[(i + 1) % outline.length];
+        return sum + Math.hypot(nx - x, ny - y);
+      }, 0);
       return {
+        poly,
+        polyCount: outline.length,
+        perimeter,
         id: s.id,
         effect: this.effects.find((e) => e.id === s.effect) ?? this.effects[0],
         params: s.params,
@@ -138,6 +151,9 @@ export class SceneRenderer {
       gl.uniform1f(gl.getUniformLocation(p, "u_time"), timeSeconds);
       gl.uniform2f(gl.getUniformLocation(p, "u_resolution"), ...res);
       gl.uniform4f(gl.getUniformLocation(p, "u_bounds"), ...s.bounds);
+      gl.uniform2fv(gl.getUniformLocation(p, "u_poly"), s.poly);
+      gl.uniform1i(gl.getUniformLocation(p, "u_polyCount"), s.polyCount);
+      gl.uniform1f(gl.getUniformLocation(p, "u_perimeter"), s.perimeter);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.scanTexture);
       gl.uniform1i(gl.getUniformLocation(p, "u_scan"), 0);
@@ -175,4 +191,11 @@ export class SceneRenderer {
     }
     gl.bindVertexArray(null);
   }
+}
+
+/** Keeps every k-th vertex so the outline fits the shader's fixed-size array. */
+export function limitVertices(polygon: number[][], max: number): number[][] {
+  if (polygon.length <= max) return polygon;
+  const step = polygon.length / max;
+  return Array.from({ length: max }, (_, i) => polygon[Math.floor(i * step)]);
 }

@@ -51,8 +51,8 @@ describe("uniformsFor", () => {
 });
 
 describe("built-in registry", () => {
-  it("has none and fill, all valid, with unique ids", () => {
-    expect(EFFECTS.map((e) => e.id)).toEqual(["none", "fill"]);
+  it("has the built-in effects, all valid, with unique ids", () => {
+    expect(EFFECTS.map((e) => e.id)).toEqual(["none", "fill", "outline", "noise"]);
     for (const e of EFFECTS) expect(validateEffect(e), e.id).toEqual([]);
   });
 

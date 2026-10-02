@@ -16,7 +16,7 @@ export interface Effect {
 export type UniformValue = number | [number, number, number];
 
 /** Uniform names the preamble already declares (without the u_ prefix). */
-export const RESERVED = ["time", "resolution", "bounds", "scan", "highlight"];
+export const RESERVED = ["time", "resolution", "bounds", "scan", "highlight", "poly", "polyCount", "perimeter"];
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const HEX = /^#[0-9a-f]{6}$/i;
