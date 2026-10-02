@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { SceneMessage } from "../shared/messages";
+import type { ShowMessage } from "../shared/messages";
 import { EditSession } from "./editSession";
 
 const SQUARE = [[0, 0], [10, 0], [10, 10], [0, 10]];
 
-function scene(over: { polygon?: number[][]; params?: Record<string, unknown> } = {}, id = 1): SceneMessage {
+function show(over: { polygon?: number[][]; params?: Record<string, unknown> } = {}, id = 1): ShowMessage {
   return {
-    type: "scene", width: 100, height: 100, selected: null, presentation: { mode: "edit", blackout: false },
+    type: "show", width: 100, height: 100, selected: null, presentation: { mode: "edit", blackout: false },
     surfaces: [{ id, polygon: over.polygon ?? SQUARE, area: 100, effect: "media", params: over.params ?? {} }],
   };
 }
@@ -24,7 +24,7 @@ function setup() {
     queued = [];
     run.forEach((fn) => fn());
   };
-  const seen: SceneMessage[] = [];
+  const seen: ShowMessage[] = [];
   session.subscribe((s) => seen.push(s));
   return { session, sent, frame, seen };
 }
@@ -32,7 +32,7 @@ function setup() {
 describe("EditSession saving", () => {
   it("sends one PATCH per frame per surface for settings, with the latest values merged", () => {
     const { session, sent, frame } = setup();
-    session.receive(scene());
+    session.receive(show());
     session.edit(1, { params: { panX: 0.1 } });
     session.edit(1, { params: { panX: 0.2 } });
     session.edit(1, { params: { zoom: 2 } });
@@ -43,7 +43,7 @@ describe("EditSession saving", () => {
 
   it("doesn't let one kind of edit cancel another: shape and settings, or two surfaces", () => {
     const { session, sent, frame } = setup();
-    session.receive({ ...scene(), surfaces: [...scene().surfaces, ...scene({}, 2).surfaces] });
+    session.receive({ ...show(), surfaces: [...show().surfaces, ...show({}, 2).surfaces] });
     session.edit(1, { polygon: [[1, 1], [9, 1], [5, 9]] });
     session.edit(1, { params: { text: "Hi" } });
     session.edit(2, { params: { zoom: 3 } });
@@ -56,7 +56,7 @@ describe("EditSession saving", () => {
 
   it("sends a shape edit with its Bezier together", () => {
     const { session, sent, frame } = setup();
-    session.receive(scene());
+    session.receive(show());
     const bezier = { anchors: SQUARE, controls: {} };
     session.edit(1, { polygon: SQUARE, bezier });
     frame();
@@ -65,7 +65,7 @@ describe("EditSession saving", () => {
 
   it("sends pending edits straight away when a gesture ends", () => {
     const { session, sent } = setup();
-    session.receive(scene());
+    session.receive(show());
     session.begin();
     session.edit(1, { polygon: [[2, 2], [8, 2], [5, 8]] });
     session.end();
@@ -76,7 +76,7 @@ describe("EditSession saving", () => {
 describe("EditSession local view", () => {
   it("shows edits straight away, so the next edit builds on them (e.g. fast wheel zoom)", () => {
     const { session } = setup();
-    session.receive(scene({ params: { zoom: 1 } }));
+    session.receive(show({ params: { zoom: 1 } }));
     session.edit(1, { params: { zoom: 1.5 } });
     expect(session.surface(1)?.params.zoom).toBe(1.5);
     session.edit(1, { params: { zoom: (session.surface(1)?.params.zoom as number) * 1.5 } });
@@ -85,36 +85,36 @@ describe("EditSession local view", () => {
 
   it("goes back to the engine's values once its saves are confirmed", () => {
     const { session, frame } = setup();
-    session.receive(scene({ params: { zoom: 1 } }));
+    session.receive(show({ params: { zoom: 1 } }));
     session.edit(1, { params: { zoom: 2 } });
     frame(); // sent
-    session.receive(scene({ params: { zoom: 2 } })); // the engine's echo
-    session.receive(scene({ params: { zoom: 4 } })); // another editor changed it
+    session.receive(show({ params: { zoom: 2 } })); // the engine's echo
+    session.receive(show({ params: { zoom: 4 } })); // another editor changed it
     expect(session.surface(1)?.params.zoom).toBe(4);
   });
 
-  it("keeps an edit not yet sent on top of an incoming scene", () => {
+  it("keeps an edit not yet sent on top of an incoming show", () => {
     const { session } = setup();
-    session.receive(scene({ params: { zoom: 1 } }));
+    session.receive(show({ params: { zoom: 1 } }));
     session.edit(1, { params: { zoom: 3 } }); // not sent yet
-    session.receive(scene({ params: { zoom: 1, panX: 0.5 } }));
+    session.receive(show({ params: { zoom: 1, panX: 0.5 } }));
     expect(session.surface(1)?.params).toMatchObject({ zoom: 3, panX: 0.5 });
   });
 });
 
 describe("EditSession gestures", () => {
-  it("applies a scene that arrives when idle straight away", () => {
+  it("applies a show that arrives when idle straight away", () => {
     const { session, seen } = setup();
-    session.receive(scene());
+    session.receive(show());
     expect(seen).toHaveLength(1);
   });
 
-  it("holds scenes that arrive during a gesture and applies only the latest when it ends, through the same path", () => {
+  it("holds show updates that arrive during a gesture and applies only the latest when it ends, through the same path", () => {
     const { session, seen } = setup();
-    session.receive(scene());
+    session.receive(show());
     session.begin();
-    session.receive(scene({ polygon: [[0, 0], [20, 0], [20, 20]] }));
-    session.receive(scene({ polygon: [[0, 0], [30, 0], [30, 30]] }));
+    session.receive(show({ polygon: [[0, 0], [20, 0], [20, 20]] }));
+    session.receive(show({ polygon: [[0, 0], [30, 0], [30, 30]] }));
     expect(seen).toHaveLength(1); // nothing rebuilt under the pointer
     session.end();
     expect(seen).toHaveLength(2);

@@ -16,13 +16,13 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
   return {
     // The current show's surfaces
     patchSurface: (id: number, body: SurfaceEdit & { effect?: string; name?: string }) =>
-      fetchFn(`/api/scene/surfaces/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
-    select: (id: number | null) => post("/api/scene/select", { id }),
-    addSurface: (polygon: number[][]) => post("/api/scene/surfaces", { polygon }),
-    deleteSurface: (id: number) => fetchFn(`/api/scene/surfaces/${id}`, { method: "DELETE" }),
-    merge: (ids: number[]) => post("/api/scene/merge", { ids }),
-    applyEffect: (from: number, to?: number[]) => post("/api/scene/apply", { from, ...(to ? { to } : {}) }),
-    redetect: () => post("/api/scene/redetect"),
+      fetchFn(`/api/show/surfaces/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
+    select: (id: number | null) => post("/api/show/select", { id }),
+    addSurface: (polygon: number[][]) => post("/api/show/surfaces", { polygon }),
+    deleteSurface: (id: number) => fetchFn(`/api/show/surfaces/${id}`, { method: "DELETE" }),
+    merge: (ids: number[]) => post("/api/show/merge", { ids }),
+    applyEffect: (from: number, to?: number[]) => post("/api/show/apply", { from, ...(to ? { to } : {}) }),
+    redetect: () => post("/api/show/redetect"),
     uploadMedia: (file: File) => fetchFn(`/api/media?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file }),
     // Sound
     sound: (body: { enabled?: boolean; device?: string; source?: string; output?: string }) => post("/api/sound", body),

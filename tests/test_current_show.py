@@ -6,7 +6,7 @@ import pytest
 
 from engine.projects import ProjectStore
 from engine.scan_folder import ScanFolder
-from engine.scene import SceneStore
+from engine.show import CurrentShow
 
 WALL = {"polygon": [[0, 0], [100, 0], [100, 50], [0, 50]], "area": 5000.0}
 BOX = {"polygon": [[10, 10], [30, 10], [30, 30], [10, 30]], "area": 400.0}
@@ -23,7 +23,7 @@ def folder(tmp_path):
 
 @pytest.fixture
 def show(folder):
-    show = SceneStore(folder)
+    show = CurrentShow(folder)
     show.announced = 0
 
     def count():
@@ -88,6 +88,6 @@ def test_old_shows_with_manual_surfaces_load_as_drawn(folder):
         "surfaces": [{"id": 3, "name": "Mine", "polygon": SQUARE, "area": 400, "effect": "none", "params": {},
                       "source": "manual"}],
     }))
-    show = SceneStore(folder)
+    show = CurrentShow(folder)
     assert show.public()["surfaces"][0]["source"] == "drawn"
     assert show.public()["selected"] is None  # selection isn't restored from disk

@@ -41,13 +41,13 @@ def scanned(tmp_path):
 
 
 def surfaces(client):
-    return client.get("/api/scene").json()["surfaces"]
+    return client.get("/api/show").json()["surfaces"]
 
 
 def test_drawing_a_surface_adds_a_drawn_one(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         out.receive_json()
-        resp = client.post("/api/scene/surfaces", json={"polygon": MANUAL})
+        resp = client.post("/api/show/surfaces", json={"polygon": MANUAL})
 
         assert resp.status_code == 200
         pushed = out.receive_json()
@@ -62,21 +62,21 @@ def test_detected_surfaces_become_edited_when_reshaped(rig, scanned):
         assert {s["source"] for s in surfaces(client)} == {"detected"}
         box = surfaces(client)[1]
         x, y = box["polygon"][0]
-        client.patch(f"/api/scene/surfaces/{box['id']}", json={"polygon": [[x + 4, y - 3]] + box["polygon"][1:]})
+        client.patch(f"/api/show/surfaces/{box['id']}", json={"polygon": [[x + 4, y - 3]] + box["polygon"][1:]})
         assert surfaces(client)[1]["source"] == "edited"
 
 
 def test_redetect_keeps_drawn_and_edited_surfaces_and_effects(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
         wall, box = surfaces(client)
-        client.patch(f"/api/scene/surfaces/{wall['id']}", json={"effect": "noise"})
+        client.patch(f"/api/show/surfaces/{wall['id']}", json={"effect": "noise"})
         # A realistic touch-up: one corner dragged a few pixels.
         x, y = box["polygon"][0]
         edited_poly = [[x + 4, y - 3]] + box["polygon"][1:]
-        client.patch(f"/api/scene/surfaces/{box['id']}", json={"polygon": edited_poly, "effect": "fill"})
-        drawn = client.post("/api/scene/surfaces", json={"polygon": MANUAL}).json()["selected"]
+        client.patch(f"/api/show/surfaces/{box['id']}", json={"polygon": edited_poly, "effect": "fill"})
+        drawn = client.post("/api/show/surfaces", json={"polygon": MANUAL}).json()["selected"]
 
-        resp = client.post("/api/scene/redetect")
+        resp = client.post("/api/show/redetect")
         after = surfaces(client)
 
     assert resp.status_code == 200
@@ -90,4 +90,4 @@ def test_redetect_keeps_drawn_and_edited_surfaces_and_effects(rig, scanned):
 
 def test_redetect_without_a_scan_is_404(rig, tmp_path):
     with engine(rig, data_dir=tmp_path) as client:
-        assert client.post("/api/scene/redetect").status_code == 404
+        assert client.post("/api/show/redetect").status_code == 404

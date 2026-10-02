@@ -10,7 +10,7 @@ from engine.cameras import CameraSettings
 from engine.hub import OutputNotResponding
 from engine.scan_folder import ScanFolder
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning
-from engine.scene import SceneStore
+from engine.show import CurrentShow
 from tests.helpers import AC410
 from tests.synthetic import Scene
 
@@ -47,8 +47,8 @@ class FakeHub:
     async def send_to_output(self, msg: dict) -> None:
         self.to_output.append(msg)
 
-    async def broadcast_scene(self) -> None:
-        self.sent.append({"type": "scene"})
+    async def broadcast_show(self) -> None:
+        self.sent.append({"type": "show"})
 
     async def broadcast_status(self) -> None:
         self.sent.append({"type": "status"})
@@ -67,12 +67,12 @@ def rig(tmp_path):
         return scene.frame()
 
     latest = ScanFolder(tmp_path / "scans" / "latest")
-    show = SceneStore(latest)
+    show = CurrentShow(latest)
     job = ScanJob(
         session=CameraSession(FakeCameraFactory(frame=frame), (320, 240)),
         settings=CameraSettings(tmp_path),
         latest=latest,
-        scene=show,
+        show=show,
         make_uvc=lambda address: uvc,
         data_dir=tmp_path,
         settle_seconds=0, drop_frames=0, frames_per_pattern=1, ack_timeout=1,
@@ -100,9 +100,9 @@ def test_a_scan_saves_the_scan_updates_the_show_and_reports_each_step(rig):
     result = next(m for m in hub.sent if m["type"] == "scan_result")
     assert result["coverage"] > 0.5 and len(result["surfaces"]) >= 2 and result["image"].startswith("/api/scan/latest.png")
     assert latest.has_scan() and latest.meta()["surfaces"] == result["surfaces"]
-    assert len(show.scene["surfaces"]) == len(result["surfaces"])  # detection applied to the show
+    assert len(show.data["surfaces"]) == len(result["surfaces"])  # detection applied to the show
     assert hub.to_output[-1] == {"type": "show_test_frame", "kind": "black"}  # projector blanked after
-    assert types[-2:] == ["scene", "status"]  # back to the projected show, status refreshed
+    assert types[-2:] == ["show", "status"]  # back to the projected show, status refreshed
     assert not job.busy
 
 

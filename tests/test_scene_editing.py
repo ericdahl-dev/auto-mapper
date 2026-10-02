@@ -25,13 +25,13 @@ def scanned(tmp_path):
 
 
 def surface(client, sid):
-    return next(s for s in client.get("/api/scene").json()["surfaces"] if s["id"] == sid)
+    return next(s for s in client.get("/api/show").json()["surfaces"] if s["id"] == sid)
 
 
 def test_surfaces_have_default_names_and_can_be_renamed(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
         assert surface(client, 2)["name"] == "Surface 2"
-        client.patch("/api/scene/surfaces/2", json={"name": "Box top"})
+        client.patch("/api/show/surfaces/2", json={"name": "Box top"})
         assert surface(client, 2)["name"] == "Box top"
 
 
@@ -39,7 +39,7 @@ def test_moving_vertices_updates_polygon_and_area_live(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         out.receive_json()
         moved = [[1200, 800], [1400, 800], [1400, 1100], [1200, 1000]]
-        resp = client.patch("/api/scene/surfaces/2", json={"polygon": moved})
+        resp = client.patch("/api/show/surfaces/2", json={"polygon": moved})
 
         assert resp.status_code == 200
         pushed = out.receive_json()
@@ -51,34 +51,34 @@ def test_moving_vertices_updates_polygon_and_area_live(rig, scanned):
 
 def test_degenerate_polygons_are_rejected(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        assert client.patch("/api/scene/surfaces/2", json={"polygon": [[0, 0], [10, 10]]}).status_code == 422
-        assert client.patch("/api/scene/surfaces/2", json={"polygon": [[0, 0], ["a", 1], [5, 5]]}).status_code == 422
+        assert client.patch("/api/show/surfaces/2", json={"polygon": [[0, 0], [10, 10]]}).status_code == 422
+        assert client.patch("/api/show/surfaces/2", json={"polygon": [[0, 0], ["a", 1], [5, 5]]}).status_code == 422
         assert surface(client, 2)["polygon"] == LEFT["polygon"]
 
 
 def test_deleting_a_surface_removes_it_and_its_selection(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         out.receive_json()
-        client.post("/api/scene/select", json={"id": 2})
+        client.post("/api/show/select", json={"id": 2})
         out.receive_json()
 
-        assert client.delete("/api/scene/surfaces/2").status_code == 200
+        assert client.delete("/api/show/surfaces/2").status_code == 200
 
         pushed = out.receive_json()
         assert [s["id"] for s in pushed["surfaces"]] == [1, 3]
         assert pushed["selected"] is None
-        assert client.delete("/api/scene/surfaces/2").status_code == 404
+        assert client.delete("/api/show/surfaces/2").status_code == 404
 
 
 def test_merging_surfaces_covers_both_and_keeps_the_first_effect(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/2", json={"effect": "fill", "params": {"colorA": "#ff0000"}})
-        client.patch("/api/scene/surfaces/3", json={"effect": "noise"})
+        client.patch("/api/show/surfaces/2", json={"effect": "fill", "params": {"colorA": "#ff0000"}})
+        client.patch("/api/show/surfaces/3", json={"effect": "noise"})
 
-        resp = client.post("/api/scene/merge", json={"ids": [2, 3]})
+        resp = client.post("/api/show/merge", json={"ids": [2, 3]})
 
         assert resp.status_code == 200
-        scene = client.get("/api/scene").json()
+        scene = client.get("/api/show").json()
     assert [s["id"] for s in scene["surfaces"]] == [1, 2]
     merged = scene["surfaces"][1]
     assert merged["effect"] == "fill" and merged["params"] == {"colorA": "#ff0000"}
@@ -90,17 +90,17 @@ def test_merging_surfaces_covers_both_and_keeps_the_first_effect(rig, scanned):
 
 def test_merge_needs_two_known_surfaces(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        assert client.post("/api/scene/merge", json={"ids": [2]}).status_code == 422
-        assert client.post("/api/scene/merge", json={"ids": [2, 9]}).status_code == 404
+        assert client.post("/api/show/merge", json={"ids": [2]}).status_code == 422
+        assert client.post("/api/show/merge", json={"ids": [2, 9]}).status_code == 404
 
 
 def test_one_surfaces_effect_can_be_applied_to_all(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         out.receive_json()
-        client.patch("/api/scene/surfaces/2", json={"effect": "edgeglow", "params": {"glowColor": "#ff00ff"}})
+        client.patch("/api/show/surfaces/2", json={"effect": "edgeglow", "params": {"glowColor": "#ff00ff"}})
         out.receive_json()
 
-        resp = client.post("/api/scene/apply", json={"from": 2})
+        resp = client.post("/api/show/apply", json={"from": 2})
 
         assert resp.status_code == 200
         pushed = out.receive_json()  # one update for the whole scene
@@ -109,9 +109,9 @@ def test_one_surfaces_effect_can_be_applied_to_all(rig, scanned):
 
 def test_effect_can_be_applied_to_chosen_surfaces_only(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/3", json={"effect": "noise", "params": {"scale": 9}})
-        client.post("/api/scene/apply", json={"from": 3, "to": [2]})
-        effects = {s["id"]: (s["effect"], s["params"]) for s in client.get("/api/scene").json()["surfaces"]}
+        client.patch("/api/show/surfaces/3", json={"effect": "noise", "params": {"scale": 9}})
+        client.post("/api/show/apply", json={"from": 3, "to": [2]})
+        effects = {s["id"]: (s["effect"], s["params"]) for s in client.get("/api/show").json()["surfaces"]}
 
     assert effects[2] == ("noise", {"scale": 9})
     assert effects[1] == ("none", {})  # not chosen, unchanged
@@ -119,18 +119,18 @@ def test_effect_can_be_applied_to_chosen_surfaces_only(rig, scanned):
 
 def test_applying_copies_params_rather_than_sharing_them(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/2", json={"effect": "fill", "params": {"colorA": "#ff0000"}})
-        client.post("/api/scene/apply", json={"from": 2})
-        client.patch("/api/scene/surfaces/3", json={"params": {"colorA": "#00ff00"}})
-        colors = {s["id"]: s["params"].get("colorA") for s in client.get("/api/scene").json()["surfaces"]}
+        client.patch("/api/show/surfaces/2", json={"effect": "fill", "params": {"colorA": "#ff0000"}})
+        client.post("/api/show/apply", json={"from": 2})
+        client.patch("/api/show/surfaces/3", json={"params": {"colorA": "#00ff00"}})
+        colors = {s["id"]: s["params"].get("colorA") for s in client.get("/api/show").json()["surfaces"]}
 
     assert colors[2] == "#ff0000" and colors[3] == "#00ff00"
 
 
 def test_apply_from_unknown_surface_is_404(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        assert client.post("/api/scene/apply", json={"from": 9}).status_code == 404
-        assert client.post("/api/scene/apply", json={"from": 2, "to": [9]}).status_code == 404
+        assert client.post("/api/show/apply", json={"from": 9}).status_code == 404
+        assert client.post("/api/show/apply", json={"from": 2, "to": [9]}).status_code == 404
 
 
 BEZ = {"anchors": [[1200, 800], [1400, 800], [1400, 1000], [1200, 1000]], "controls": {"0": [[1260, 760], [1340, 760]]}}
@@ -139,7 +139,7 @@ BEZ = {"anchors": [[1200, 800], [1400, 800], [1400, 1000], [1200, 1000]], "contr
 def test_a_bezier_outline_is_stored_with_its_flattened_polygon(rig, scanned):
     flat = [[1200, 800], [1300, 770], [1400, 800], [1400, 1000], [1200, 1000]]
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/2", json={"polygon": flat, "bezier": BEZ})
+        client.patch("/api/show/surfaces/2", json={"polygon": flat, "bezier": BEZ})
         box = surface(client, 2)
 
     assert box["polygon"] == flat  # what everything renders and detects with
@@ -148,13 +148,13 @@ def test_a_bezier_outline_is_stored_with_its_flattened_polygon(rig, scanned):
 
 def test_a_plain_polygon_edit_drops_a_stale_bezier(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/2", json={"polygon": BEZ["anchors"], "bezier": BEZ})
-        client.patch("/api/scene/surfaces/2", json={"polygon": [[1200, 800], [1450, 800], [1400, 1000]]})
+        client.patch("/api/show/surfaces/2", json={"polygon": BEZ["anchors"], "bezier": BEZ})
+        client.patch("/api/show/surfaces/2", json={"polygon": [[1200, 800], [1450, 800], [1400, 1000]]})
         assert surface(client, 2).get("bezier") is None
 
 
 def test_merging_drops_the_bezier(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/2", json={"polygon": BEZ["anchors"], "bezier": BEZ})
-        client.post("/api/scene/merge", json={"ids": [2, 3]})
+        client.patch("/api/show/surfaces/2", json={"polygon": BEZ["anchors"], "bezier": BEZ})
+        client.post("/api/show/merge", json={"ids": [2, 3]})
         assert surface(client, 2).get("bezier") is None

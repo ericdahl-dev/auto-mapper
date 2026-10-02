@@ -19,7 +19,7 @@ from engine import media
 from engine.scan_folder import ScanFolder
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
-from engine.scene import SceneStore, UnknownSurface
+from engine.show import CurrentShow, UnknownSurface
 from engine.messages import (
     ApplyEffectRequest,
     CameraSelectRequest,
@@ -50,7 +50,7 @@ def create_app(
     uvc_factory: Callable[[UsbAddress], Uvc] | None = None,
     settle_seconds: float = 0.5,
     # At 4K the AC410 delivers ~20 fps and buffers frames; less than this captured stale
-    # patterns (coverage 0.61 vs 0.88 with these values, same scene).
+    # patterns (coverage 0.61 vs 0.88 with these values, same space).
     scan_settle_seconds: float = 0.2,
     scan_drop_frames: int = 5,
     scan_frames_per_pattern: int = 3,  # quality over speed: average out sensor noise
@@ -63,17 +63,17 @@ def create_app(
     make_uvc = uvc_factory or (lambda address: UvcUtil(address.location))
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
     latest = ScanFolder(data_path / "scans" / "latest")  # the working scan and its show
-    scene = SceneStore(latest)
-    projects = ProjectStore(data_path, latest, scene)
+    show = CurrentShow(latest)
+    projects = ProjectStore(data_path, latest, show)
     job = ScanJob(  # one scan at a time; other work on the working scan holds it with job.exclusive()
-        session=session, settings=settings, latest=latest, scene=scene, make_uvc=make_uvc, data_dir=data_path,
+        session=session, settings=settings, latest=latest, show=show, make_uvc=make_uvc, data_dir=data_path,
         settle_seconds=scan_settle_seconds, drop_frames=scan_drop_frames,
         frames_per_pattern=scan_frames_per_pattern, ack_timeout=ack_timeout,
     )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.hub = Hub(await asyncio.to_thread(probe.probe), settings, scene)
+        app.state.hub = Hub(await asyncio.to_thread(probe.probe), settings, show)
         app.state.hub.projects = projects
         # A scan killed mid-way leaves the webcam locked; put its settings back.
         # Assumes the selected camera is the one that was locked.
@@ -214,85 +214,85 @@ def create_app(
             raise HTTPException(404, "No scan yet")
         return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
-    @app.get("/api/scene")
-    async def get_scene():
-        if scene.scene is None:
+    @app.get("/api/show")
+    async def get_show():
+        if show.data is None:
             raise HTTPException(404, "No scan yet")
-        return scene.public()
+        return show.public()
 
-    @app.patch("/api/scene/surfaces/{surface_id}")
+    @app.patch("/api/show/surfaces/{surface_id}")
     async def update_surface(surface_id: int, req: SurfaceUpdate):
         try:
-            scene.update(surface_id, req.effect, req.params, req.polygon, req.name, req.bezier)
+            show.update(surface_id, req.effect, req.params, req.polygon, req.name, req.bezier)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
-        return scene.public()
+        return show.public()
 
-    @app.post("/api/scene/apply")
+    @app.post("/api/show/apply")
     async def apply_effect(req: ApplyEffectRequest):
         try:
-            scene.apply_effect(req.from_id, req.to)
+            show.apply_effect(req.from_id, req.to)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
-        return scene.public()
+        return show.public()
 
-    @app.post("/api/scene/surfaces")
+    @app.post("/api/show/surfaces")
     async def add_surface(req: NewSurfaceRequest):
-        if scene.scene is None:
+        if show.data is None:
             raise HTTPException(404, "No scan yet")
-        scene.add_manual(req.polygon, req.name)
-        return scene.public()
+        show.add_manual(req.polygon, req.name)
+        return show.public()
 
-    @app.post("/api/scene/redetect")
+    @app.post("/api/show/redetect")
     async def redetect():
-        if scene.scene is None or not latest.can_redetect():
+        if show.data is None or not latest.can_redetect():
             raise HTTPException(404, "No scan yet")
         if job.busy:
             raise HTTPException(409, "A scan is running")
         async with job.exclusive():  # a scan can't start halfway through
             summary = await asyncio.to_thread(latest.redetect)
-            scene.apply_detection(summary)
+            show.apply_detection(summary)
         await app.state.hub.broadcast({"type": "scan_reload"})
-        return scene.public()
+        return show.public()
 
-    @app.delete("/api/scene/surfaces/{surface_id}")
+    @app.delete("/api/show/surfaces/{surface_id}")
     async def delete_surface(surface_id: int):
         try:
-            scene.delete(surface_id)
+            show.delete(surface_id)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
-        return scene.public()
+        return show.public()
 
-    @app.post("/api/scene/merge")
+    @app.post("/api/show/merge")
     async def merge_surfaces(req: MergeRequest):
         try:
-            scene.merge(req.ids)
+            show.merge(req.ids)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
-        return scene.public()
+        return show.public()
 
-    @app.post("/api/scene/select")
+    @app.post("/api/show/select")
     async def select_surface(req: SelectRequest):
         try:
-            scene.select(req.id)
+            show.select(req.id)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
-        return scene.public()
+        return show.public()
 
     @app.post("/api/presentation")
     async def set_presentation(req: PresentationRequest):
-        scene.present(req.mode, req.blackout)
-        return scene.presentation
+        show.present(req.mode, req.blackout)
+        return show.presentation
 
     @app.post("/api/sound")
     async def set_sound(req: SoundRequest):
-        scene.set_sound(req.enabled, req.device, req.source, req.output)
-        return scene.sound
+        show.set_sound(req.enabled, req.device, req.source, req.output)
+        return show.sound
 
     @app.post("/api/presentation/blackout/toggle")
     async def toggle_blackout():
-        scene.present(blackout=not scene.presentation["blackout"])
-        return scene.presentation
+        show.present(blackout=not show.presentation["blackout"])
+        return show.presentation
 
     @app.post("/api/media")
     async def upload_media(name: str, request: Request):

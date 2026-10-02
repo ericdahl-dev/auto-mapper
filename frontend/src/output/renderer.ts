@@ -102,7 +102,7 @@ export class OutputRenderer {
 
   private draw() {
     const { gl } = this;
-    gl.useProgram(this.prog); // the scene renderer shares this context
+    gl.useProgram(this.prog); // the show renderer shares this context
     gl.bindVertexArray(null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.uniform1i(this.uKind, this.kind);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AudioValues } from "../audio/analysis";
-import { SceneRenderer } from "../output/sceneRenderer";
-import type { SceneMessage } from "../shared/messages";
+import { ShowRenderer } from "../output/showRenderer";
+import type { ShowMessage } from "../shared/messages";
 import { EFFECTS } from "./index";
 
 const W = 48, H = 48;
@@ -12,12 +12,12 @@ const LOUD: AudioValues = { level: 1, bass: 1, mid: 1, treble: 1, beat: 1 };
 function brightness(effect: string, params: Record<string, unknown>, audio: AudioValues): number {
   const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H });
   const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true })!;
-  const r = new SceneRenderer(gl, EFFECTS, () => {});
-  const scene: SceneMessage = {
-    type: "scene", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
+  const r = new ShowRenderer(gl, EFFECTS, () => {});
+  const show: ShowMessage = {
+    type: "show", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
     surfaces: [{ id: 1, polygon: [[4, 4], [44, 4], [44, 44], [4, 44]], area: 1600, effect, params }],
   };
-  r.setScene(scene);
+  r.setShow(show);
   r.setAudio(audio);
   r.draw(0.5);
   const px = new Uint8Array(W * H * 4);

@@ -49,19 +49,19 @@ describe("parseServerMessage", () => {
     }
   });
 
-  it("accepts scene updates and effect errors", () => {
-    const scene = {
-      type: "scene",
+  it("accepts show updates and effect errors", () => {
+    const show = {
+      type: "show",
       width: 1920,
       height: 1080,
       surfaces: [{ id: 2, polygon: [[0, 0], [10, 0], [10, 10]], area: 50, effect: "fill", params: { colorA: "#ff0000" } }],
       selected: 2,
       presentation: { mode: "edit", blackout: false },
     };
-    expect(parseServerMessage(JSON.stringify(scene))).toEqual(scene);
+    expect(parseServerMessage(JSON.stringify(show))).toEqual(show);
     const err = { type: "effect_error", surface: 2, effect: "fill", log: "ERROR: 0:3: 'nope' : undeclared identifier" };
     expect(parseServerMessage(JSON.stringify(err))).toEqual(err);
-    expect(parseServerMessage('{"type":"scene","width":1920,"height":1080}')).toBeNull();
+    expect(parseServerMessage('{"type":"show","width":1920,"height":1080}')).toBeNull();
   });
 
   it("accepts the scan reload notice sent when a project opens", () => {

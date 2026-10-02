@@ -1,10 +1,10 @@
-// The Editor's view of the current show while you edit it: the engine's latest scene plus your
+// The Editor's view of the current show while you edit it: the engine's latest show plus your
 // edits that haven't been confirmed yet, gestures (drags) that hold incoming updates back, and
 // throttled saving. DOM-free, so it's unit-tested; editor/main.ts only renders and binds events.
 
-import type { SceneMessage, SceneSurface } from "../shared/messages";
+import type { ShowMessage, ShowSurface } from "../shared/messages";
 
-type Bezier = NonNullable<SceneSurface["bezier"]>;
+type Bezier = NonNullable<ShowSurface["bezier"]>;
 
 /** A change to one surface: its shape (outline, optionally with Bezier curves) and/or settings. */
 export interface SurfaceEdit {
@@ -14,7 +14,7 @@ export interface SurfaceEdit {
 }
 
 export interface EditSessionOptions {
-  /** Saves a change to the engine (PATCH /api/scene/surfaces/{id}). */
+  /** Saves a change to the engine (PATCH /api/show/surfaces/{id}). */
   patch: (id: number, body: SurfaceEdit) => void;
   /** Runs fn on the next frame; saves are sent at most once per frame. */
   nextFrame?: (fn: () => void) => void;
@@ -26,13 +26,13 @@ interface Pending {
 }
 
 export class EditSession {
-  private committed: SceneMessage | null = null;
-  private held: SceneMessage | null = null; // latest engine scene that arrived during a gesture
+  private committed: ShowMessage | null = null;
+  private held: ShowMessage | null = null; // latest engine show that arrived during a gesture
   private local = new Map<number, Pending>(); // shown on top of committed until confirmed
   private pending = new Map<number, Pending>(); // not sent yet
   private flushQueued = false;
   private gestures = 0;
-  private listeners: ((scene: SceneMessage) => void)[] = [];
+  private listeners: ((show: ShowMessage) => void)[] = [];
   private readonly sendPatch: EditSessionOptions["patch"];
   private readonly nextFrame: NonNullable<EditSessionOptions["nextFrame"]>;
 
@@ -41,8 +41,8 @@ export class EditSession {
     this.nextFrame = options.nextFrame ?? ((fn) => void requestAnimationFrame(fn));
   }
 
-  /** Called each time an engine scene is applied (once per scene, never mid-gesture). */
-  subscribe(listener: (scene: SceneMessage) => void): void {
+  /** Called each time an engine show is applied (once per show, never mid-gesture). */
+  subscribe(listener: (show: ShowMessage) => void): void {
     this.listeners.push(listener);
   }
 
@@ -51,8 +51,8 @@ export class EditSession {
     return this.gestures > 0;
   }
 
-  /** An engine scene message. Applied now, or after the current gesture ends. */
-  receive(msg: SceneMessage): void {
+  /** An engine show message. Applied now, or after the current gesture ends. */
+  receive(msg: ShowMessage): void {
     if (this.busy) {
       this.held = msg; // don't rebuild what's under the pointer; only the latest matters
       return;
@@ -64,7 +64,7 @@ export class EditSession {
     this.gestures++;
   }
 
-  /** Ends a gesture: sends its last edits now and applies any scene that arrived meanwhile. */
+  /** Ends a gesture: sends its last edits now and applies any show that arrived meanwhile. */
   end(): void {
     if (!this.busy) return;
     this.gestures--;
@@ -90,18 +90,18 @@ export class EditSession {
     }
   }
 
-  /** The current show as this Editor sees it: the engine's scene with unconfirmed edits on top. */
-  view(): SceneMessage | null {
+  /** The current show as this Editor sees it: the engine's show with unconfirmed edits on top. */
+  view(): ShowMessage | null {
     if (!this.committed) return null;
     return { ...this.committed, surfaces: this.committed.surfaces.map((s) => this.withLocal(s)) };
   }
 
-  surface(id: number): SceneSurface | undefined {
+  surface(id: number): ShowSurface | undefined {
     const s = this.committed?.surfaces.find((x) => x.id === id);
     return s && this.withLocal(s);
   }
 
-  private withLocal(s: SceneSurface): SceneSurface {
+  private withLocal(s: ShowSurface): ShowSurface {
     const l = this.local.get(s.id);
     if (!l) return s;
     return {
@@ -120,9 +120,9 @@ export class EditSession {
     this.pending.clear();
   }
 
-  private commit(msg: SceneMessage): void {
+  private commit(msg: ShowMessage): void {
     this.committed = msg;
-    // Sent edits are confirmed by the engine's scene; edits still waiting to be sent stay on top.
+    // Sent edits are confirmed by the engine's show; edits still waiting to be sent stay on top.
     for (const id of [...this.local.keys()]) {
       if (!this.pending.has(id)) this.local.delete(id);
     }

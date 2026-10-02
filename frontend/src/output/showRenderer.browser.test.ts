@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { EFFECTS } from "../effects/index";
 import type { Effect } from "../effects/types";
-import type { SceneMessage } from "../shared/messages";
-import { SceneRenderer } from "./sceneRenderer";
+import type { ShowMessage } from "../shared/messages";
+import { ShowRenderer } from "./showRenderer";
 
 const W = 64, H = 36;
 
@@ -10,7 +10,7 @@ function setup(extra: Effect[] = []) {
   const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H });
   const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true })!;
   const errors: { surface: number; effect: string; log: string }[] = [];
-  const r = new SceneRenderer(gl, [...EFFECTS, ...extra], (e) => errors.push(e));
+  const r = new ShowRenderer(gl, [...EFFECTS, ...extra], (e) => errors.push(e));
   const pixel = (x: number, y: number) => {
     const out = new Uint8Array(4);
     gl.readPixels(x, H - 1 - y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, out); // y from the top, like the engine
@@ -19,9 +19,9 @@ function setup(extra: Effect[] = []) {
   return { r, pixel, errors };
 }
 
-function scene(boxEffect: string, boxParams: Record<string, unknown> = {}, selected: number | null = null): SceneMessage {
+function show(boxEffect: string, boxParams: Record<string, unknown> = {}, selected: number | null = null): ShowMessage {
   return {
-    type: "scene",
+    type: "show",
     presentation: { mode: "edit", blackout: false },
     width: W,
     height: H,
@@ -33,10 +33,10 @@ function scene(boxEffect: string, boxParams: Record<string, unknown> = {}, selec
   };
 }
 
-describe("SceneRenderer", () => {
+describe("ShowRenderer", () => {
   it("fills each surface with its effect, smaller surfaces on top", () => {
     const { r, pixel } = setup();
-    r.setScene(scene("fill", { colorA: "#00ff00", colorB: "#00ff00" }));
+    r.setShow(show("fill", { colorA: "#00ff00", colorB: "#00ff00" }));
     r.draw(0);
     expect(pixel(10, 10)).toEqual([255, 0, 0]);
     expect(pixel(50, 27)).toEqual([0, 255, 0]);
@@ -44,7 +44,7 @@ describe("SceneRenderer", () => {
 
   it("projects in projector pixels with the origin at the top left", () => {
     const { r, pixel } = setup();
-    r.setScene({ ...scene("none"), surfaces: [scene("fill", { colorA: "#00ff00", colorB: "#00ff00" }).surfaces[1]] });
+    r.setShow({ ...show("none"), surfaces: [show("fill", { colorA: "#00ff00", colorB: "#00ff00" }).surfaces[1]] });
     r.draw(0);
     expect(pixel(50, 27)).toEqual([0, 255, 0]); // inside the box, near the bottom right
     expect(pixel(50, 5)).toEqual([0, 0, 0]); // same x, top of the frame: dark
@@ -52,7 +52,7 @@ describe("SceneRenderer", () => {
 
   it("leaves surfaces with no effect dark", () => {
     const { r, pixel } = setup();
-    r.setScene({ ...scene("none"), surfaces: [scene("none").surfaces[1]] });
+    r.setShow({ ...show("none"), surfaces: [show("none").surfaces[1]] });
     r.draw(0);
     expect(pixel(50, 27)).toEqual([0, 0, 0]);
   });
@@ -60,7 +60,7 @@ describe("SceneRenderer", () => {
   it("isolates a broken shader to its own surface and reports it once", () => {
     const broken: Effect = { id: "broken", name: "Broken", params: [], fragment: "void main() { color = nope; }" };
     const { r, pixel, errors } = setup([broken]);
-    r.setScene(scene("broken"));
+    r.setShow(show("broken"));
     r.draw(0);
     r.draw(0.1);
     expect(pixel(10, 10)).toEqual([255, 0, 0]); // the wall still renders
@@ -75,30 +75,30 @@ describe("SceneRenderer", () => {
 
   it("highlights the selected surface", () => {
     const { r, pixel } = setup();
-    r.setScene({ ...scene("none", {}, 2), surfaces: [scene("none").surfaces[1]] });
+    r.setShow({ ...show("none", {}, 2), surfaces: [show("none").surfaces[1]] });
     r.draw(0);
     expect(pixel(50, 27)[0]).toBeGreaterThan(40); // a dark surface becomes visible when selected
   });
 
   it("hides the selection highlight in play mode", () => {
     const { r, pixel } = setup();
-    const dark = { ...scene("none", {}, 2), surfaces: [scene("none").surfaces[1]] };
-    r.setScene({ ...dark, presentation: { mode: "play", blackout: false } });
+    const dark = { ...show("none", {}, 2), surfaces: [show("none").surfaces[1]] };
+    r.setShow({ ...dark, presentation: { mode: "play", blackout: false } });
     r.draw(0);
     expect(pixel(50, 27)).toEqual([0, 0, 0]);
   });
 
   it("draws nothing at all during blackout", () => {
     const { r, pixel } = setup();
-    r.setScene({ ...scene("fill", { colorA: "#00ff00", colorB: "#00ff00" }), presentation: { mode: "play", blackout: true } });
+    r.setShow({ ...show("fill", { colorA: "#00ff00", colorB: "#00ff00" }), presentation: { mode: "play", blackout: true } });
     r.draw(0);
     expect(pixel(10, 10)).toEqual([0, 0, 0]);
     expect(pixel(50, 27)).toEqual([0, 0, 0]);
   });
 });
 
-describe("SceneRenderer resources", () => {
-  it("frees the previous scene's vertex arrays when a new scene arrives", () => {
+describe("ShowRenderer resources", () => {
+  it("frees the previous show's vertex arrays when a new show arrives", () => {
     const canvas = Object.assign(document.createElement("canvas"), { width: 64, height: 36 });
     const gl = canvas.getContext("webgl2")!;
     let live = 0;
@@ -106,9 +106,9 @@ describe("SceneRenderer resources", () => {
     const del = gl.deleteVertexArray.bind(gl);
     gl.createVertexArray = () => { live++; return create(); };
     gl.deleteVertexArray = (v) => { live--; del(v); };
-    const r = new SceneRenderer(gl, EFFECTS, () => {});
-    for (let i = 0; i < 20; i++) r.setScene(scene("fill", { colorA: "#00ff00" }));
+    const r = new ShowRenderer(gl, EFFECTS, () => {});
+    for (let i = 0; i < 20; i++) r.setShow(show("fill", { colorA: "#00ff00" }));
 
-    expect(live).toBe(4); // 2 surfaces x (fill + outline): only the current scene's
+    expect(live).toBe(4); // 2 surfaces x (fill + outline): only the current show's
   });
 });

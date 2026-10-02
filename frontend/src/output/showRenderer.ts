@@ -4,7 +4,7 @@ import type { Effect } from "../effects/types";
 import { type AudioValues, SILENT } from "../audio/analysis";
 import { drawText, TEXT_KEY } from "../effects/textTexture";
 import { mediaSources, textSources, type UniformValue, uniformsFor } from "../effects/types";
-import type { SceneMessage } from "../shared/messages";
+import type { ShowMessage } from "../shared/messages";
 
 export interface EffectError {
   surface: number;
@@ -50,13 +50,13 @@ void main() { color = u_color; }`;
 
 const ERROR_RGBA = [1, 0.15, 0.15, 1];
 
-/** Draws a scene: each surface polygon filled with its effect, in projector pixels. */
-export class SceneRenderer {
+/** Draws a show: each surface polygon filled with its effect, in projector pixels. */
+export class ShowRenderer {
   private programs = new Map<string, CompileResult>();
   private reported = new Set<string>();
   private solid: WebGLProgram;
   private surfaces: PreparedSurface[] = [];
-  private scene: SceneMessage | null = null;
+  private show: ShowMessage | null = null;
   private scanTexture: WebGLTexture;
   private blank: WebGLTexture; // 1x1 black, for media params with no file
   private buffers: WebGLBuffer[] = [];
@@ -91,15 +91,15 @@ export class SceneRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
 
-  setScene(scene: SceneMessage) {
+  setShow(show: ShowMessage) {
     const { gl } = this;
-    // Scenes arrive on every slider move and drag frame: free the previous one's GPU objects.
+    // Show updates arrive on every slider move and drag frame: free the previous one's GPU objects.
     this.buffers.forEach((b) => gl.deleteBuffer(b));
     this.vaos.forEach((v) => gl.deleteVertexArray(v));
     this.buffers = [];
     this.vaos = [];
-    this.scene = scene;
-    this.surfaces = scene.surfaces.map((s) => {
+    this.show = show;
+    this.surfaces = show.surfaces.map((s) => {
       const flat = s.polygon.flat();
       const xs = s.polygon.map((p) => p[0]);
       const ys = s.polygon.map((p) => p[1]);
@@ -129,14 +129,14 @@ export class SceneRenderer {
         outline: this.vao(lineVerts),
         outlineCount: lineVerts.length / 2,
         media: [...Object.entries(mediaSources(effect, s.params)), ...Object.entries(textSources(effect, s.params))],
-        uniforms: uniformsFor(effect, s.params, outline), // once per scene update, not per frame
+        uniforms: uniformsFor(effect, s.params, outline), // once per show update, not per frame
       };
     });
     this.syncMedia(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
     // Video playback settings. One element per file is shared by every surface showing it, so the
     // first surface's speed and start win. Sound: on if any surface showing the file turns it on, at
     // the loudest of their volumes, and only in Play mode without blackout.
-    const audible = scene.presentation.mode === "play" && !scene.presentation.blackout;
+    const audible = show.presentation.mode === "play" && !show.presentation.blackout;
     const loudest = new Map<string, number>();
     for (const s of this.surfaces) {
       if (s.uniforms.u_sound !== 1) continue;
@@ -166,7 +166,7 @@ export class SceneRenderer {
     }
   }
 
-  /** Resolves once every media file the scene uses has loaded (or failed to). */
+  /** Resolves once every media file the show uses has loaded (or failed to). */
   /** The latest sound values, used by every following draw. */
   setAudio(values: AudioValues) {
     this.audio = values;
@@ -345,9 +345,9 @@ export class SceneRenderer {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    if (!this.scene || this.scene.presentation?.blackout) return;
-    const editing = this.scene.presentation?.mode !== "play";
-    const res: [number, number] = [this.scene.width, this.scene.height];
+    if (!this.show || this.show.presentation?.blackout) return;
+    const editing = this.show.presentation?.mode !== "play";
+    const res: [number, number] = [this.show.width, this.show.height];
     const failed: PreparedSurface[] = [];
 
     for (const s of this.surfaces) {
@@ -394,7 +394,7 @@ export class SceneRenderer {
       gl.drawArrays(gl.LINE_LOOP, 0, s.outlineCount);
     }
 
-    const selected = editing ? this.surfaces.find((s) => s.id === this.scene!.selected) : undefined;
+    const selected = editing ? this.surfaces.find((s) => s.id === this.show!.selected) : undefined;
     if (selected) {
       // Pulse a translucent white over the selected surface so it can be found on the wall.
       const a = 0.3 + 0.15 * Math.sin(timeSeconds * 4);

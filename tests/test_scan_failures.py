@@ -164,7 +164,7 @@ def test_scan_data_is_not_touched_while_a_scan_runs(tmp_path):
 
         assert client.post("/api/projects", json={"name": "Mid scan"}).status_code == 409
         assert client.post("/api/projects/anything/open").status_code == 409
-        assert client.post("/api/scene/redetect").status_code in (404, 409)
+        assert client.post("/api/show/redetect").status_code in (404, 409)
 
         out.send_json({"type": "pattern_shown", "seq": msg["seq"]})
         scene.pattern = msg["pattern"]

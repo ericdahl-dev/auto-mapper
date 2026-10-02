@@ -1,6 +1,6 @@
 import type { Effect } from "./types";
 
-/** Polygons with more vertices are simplified before upload (see SceneRenderer). */
+/** Polygons with more vertices are simplified before upload (see ShowRenderer). */
 export const MAX_POLY = 256;
 
 /** Vertex shader shared by every effect: polygon vertices arrive in projector pixels. */
@@ -22,7 +22,7 @@ precision highp float;
 uniform float u_time;        // seconds
 uniform vec2 u_resolution;   // projector size in pixels
 uniform vec4 u_bounds;       // surface bounding box in projector pixels
-uniform sampler2D u_scan;    // the scan image (scene as the projector sees it)
+uniform sampler2D u_scan;    // the scan image (the space as the projector sees it)
 // Sound (0..1, all 0 without a mic): smoothed loudness, bands, and a pulse that decays after each beat.
 uniform float u_level;
 uniform float u_bass;
@@ -39,7 +39,7 @@ uniform vec2 u_poly[MAX_POLY];
 uniform int u_polyCount;
 uniform float u_perimeter;
 
-// The scan image (the real scene as the projector sees it) at a projector pixel.
+// The scan image (the space as the projector sees it) at a projector pixel.
 vec3 scanAt(vec2 px) { return texture(u_scan, px / u_resolution).rgb; }
 float luminance(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 
