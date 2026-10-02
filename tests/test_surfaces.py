@@ -43,3 +43,26 @@ def test_polygons_are_in_projector_pixels():
         assert pts.shape[1] == 2 and len(pts) >= 3
         assert (pts[:, 0] >= 0).all() and (pts[:, 0] < 256).all()
         assert (pts[:, 1] >= 0).all() and (pts[:, 1] < 144).all()
+
+
+def test_straight_edges_with_noisy_notches_come_out_straight():
+    import cv2
+
+    from engine.surfaces import outline_polygon
+
+    rng = np.random.default_rng(1)
+    mask = np.zeros((600, 900), np.uint8)
+    corners = np.array([[200, 150], [700, 170], [690, 450], [210, 430]])
+    cv2.fillPoly(mask, [corners.astype(np.int32)], 1)
+    # Bite notches 4-12 px deep out of the edges, like noisy edge detection does.
+    for _ in range(40):
+        i = rng.integers(4)
+        a, b = corners[i], corners[(i + 1) % 4]
+        p = a + (b - a) * rng.uniform(0.1, 0.9)
+        cv2.circle(mask, (int(p[0]), int(p[1])), int(rng.integers(4, 12)), 0, -1)
+
+    poly = np.array(outline_polygon(mask))
+
+    assert 4 <= len(poly) <= 6
+    for c in corners:
+        assert np.min(np.linalg.norm(poly - c, axis=1)) < 15

@@ -16,12 +16,18 @@ from engine.scan import DecodeResult
 DEPTH_JUMP_FACTOR = 3.0  # a camera step this many times the typical one is a depth edge
 DEPTH_JUMP_MIN = 2.5  # camera px; ignore jumps smaller than this whatever the median
 DEPTH_HYSTERESIS = 0.6  # weaker jumps count if connected to a strong one
+MIN_DECODE_DENSITY = 0.2  # fraction of projector pixels with a decoded camera sample, locally
+DENSITY_SIGMA = 6
+MIN_DEPTH_EDGE_PX = 40  # tuned on a real room: 99% of noise fragments were under 13 px
 FILL_SIGMA = 1.5  # projector px; spreads sparse camera samples across empty projector pixels
 CANNY_LOW, CANNY_HIGH = 6, 16  # tuned on the rig: a light box against a light wall is subtle
 BLUR_PX = 3  # smooth speckle before colour edges
 EDGE_DILATE_PX = 7  # tuned on the rig: bridges gaps in faint colour edges
 MIN_AREA_FRACTION = 0.003  # of the projector area
-SIMPLIFY_FRACTION = 0.005  # polygon tolerance, as a fraction of its perimeter
+SIMPLIFY_FRACTION = 0.015  # polygon tolerance, as a fraction of its perimeter
+NOTCH_CLOSE_FRACTION = 0.06  # notch filling, as a fraction of the region's typical size
+NOTCH_CLOSE_MIN, NOTCH_CLOSE_MAX = 9, 41  # px
+HULL_SOLIDITY = 0.9  # regions at least this convex are outlined by their convex hull
 
 
 def depth_edges(decoded: DecodeResult) -> np.ndarray:
@@ -64,7 +70,15 @@ def depth_edges(decoded: DecodeResult) -> np.ndarray:
     keep = np.zeros(count, bool)
     keep[np.unique(labels[strong])] = True
     keep[0] = False
-    return keep[labels]
+    edges = keep[labels]
+    # Where decoding is sparse (dark or distant surfaces), decode errors look like jumps
+    # everywhere. Ignore those areas, and keep only line-sized edges, not speckle.
+    density = cv2.GaussianBlur((counts > 0).astype(np.float32), (0, 0), DENSITY_SIGMA)
+    edges &= density >= MIN_DECODE_DENSITY
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(edges.astype(np.uint8), connectivity=8)
+    long_enough = stats[:, cv2.CC_STAT_AREA] >= MIN_DEPTH_EDGE_PX
+    long_enough[0] = False
+    return long_enough[labels]
 
 
 def colour_edges(image: np.ndarray, covered: np.ndarray) -> np.ndarray:
@@ -94,12 +108,33 @@ def detect_surfaces(decoded: DecodeResult, view: tuple[np.ndarray, np.ndarray]) 
             continue
         # Grow back over the boundary band so neighbouring surfaces meet.
         mask = cv2.dilate((labels == label).astype(np.uint8), k) & covered.astype(np.uint8)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        contour = max(contours, key=cv2.contourArea)
-        eps = max(1.5, SIMPLIFY_FRACTION * cv2.arcLength(contour, True))
-        poly = cv2.approxPolyDP(contour, eps, True).reshape(-1, 2)
+        poly = outline_polygon(mask)
         if len(poly) < 3:
             continue
-        surfaces.append({"polygon": poly.tolist(), "area": float(cv2.contourArea(poly))})
+        surfaces.append({"polygon": poly, "area": float(cv2.contourArea(np.int32(poly)))})
     surfaces.sort(key=lambda s: s["area"], reverse=True)
     return surfaces
+
+
+def outline_polygon(mask: np.ndarray) -> list[list[int]]:
+    """Outline of a region as a polygon with few, straight sides.
+
+    Edge detection leaves notches along real straight edges. A closing sized to the
+    region fills them (closing keeps convex corners sharp), then a coarse simplification
+    turns each straight run into a single side.
+    """
+    mask = mask.astype(np.uint8)
+    size = int(np.sqrt(max(int(mask.sum()), 1)) * NOTCH_CLOSE_FRACTION)
+    size = int(np.clip(size, NOTCH_CLOSE_MIN, NOTCH_CLOSE_MAX)) | 1
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+    padded = cv2.copyMakeBorder(mask, size, size, size, size, cv2.BORDER_CONSTANT, value=0)
+    closed = cv2.morphologyEx(padded, cv2.MORPH_CLOSE, k)[size:-size, size:-size]
+    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return []
+    contour = max(contours, key=cv2.contourArea)
+    hull = cv2.convexHull(contour)
+    if cv2.contourArea(contour) >= HULL_SOLIDITY * cv2.contourArea(hull):
+        contour = hull  # nearly convex: the dents are noise, not shape
+    eps = max(1.5, SIMPLIFY_FRACTION * cv2.arcLength(contour, True))
+    return cv2.approxPolyDP(contour, eps, True).reshape(-1, 2).tolist()

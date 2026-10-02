@@ -22,7 +22,8 @@ from engine.scan_runner import ScanError, capture_scan
 from engine.scene import SceneStore, UnknownSurface
 from engine.surfaces import detect_surfaces
 from engine.messages import (
-    CameraSelectRequest, EditorHello, Hello, OutputHello, SelectRequest, SurfaceUpdate, TestFrameRequest,
+    CameraSelectRequest, EditorHello, Hello, MergeRequest, OutputHello, SelectRequest, SurfaceUpdate,
+    TestFrameRequest,
 )
 
 
@@ -230,7 +231,25 @@ def create_app(
     @app.patch("/api/scene/surfaces/{surface_id}")
     async def update_surface(surface_id: int, req: SurfaceUpdate):
         try:
-            scene.update(surface_id, req.effect, req.params)
+            scene.update(surface_id, req.effect, req.params, req.polygon, req.name)
+        except UnknownSurface:
+            raise HTTPException(404, "Unknown surface")
+        await app.state.hub.broadcast_scene()
+        return scene.scene
+
+    @app.delete("/api/scene/surfaces/{surface_id}")
+    async def delete_surface(surface_id: int):
+        try:
+            scene.delete(surface_id)
+        except UnknownSurface:
+            raise HTTPException(404, "Unknown surface")
+        await app.state.hub.broadcast_scene()
+        return scene.scene
+
+    @app.post("/api/scene/merge")
+    async def merge_surfaces(req: MergeRequest):
+        try:
+            scene.merge(req.ids)
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         await app.state.hub.broadcast_scene()

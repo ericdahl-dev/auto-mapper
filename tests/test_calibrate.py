@@ -76,3 +76,22 @@ def test_engine_start_restores_camera_left_locked_by_a_crash(rig, tmp_path):
 
     with engine(rig, data_dir=tmp_path, uvc_factory=lambda address: uvc):
         assert uvc.values == DEFAULTS
+
+
+def test_dim_surface_raises_gain_once_exposure_is_maxed(rig, tmp_path):
+    """A dark surface: even the longest exposure leaves the white frame dim, so use gain."""
+    uvc = FakeUvc(DEFAULTS)
+
+    def brightness():
+        level = int(uvc.values["exposure-time-abs"]) * 0.25 * (1 + int(uvc.values["gain"]) * 0.25)
+        return min(255, int(level))
+
+    with engine(rig, data_dir=tmp_path, camera_factory=FakeCameraFactory(brightness=brightness),
+                uvc_factory=lambda address: uvc) as client, output(client):
+        result = client.post("/api/camera/calibrate").json()
+
+    assert result["exposure"] == 330
+    assert result["gain"] > 0
+    assert result["p99"] >= 150  # bright enough to separate lit from unlit
+    assert result["p99"] < 250  # but still not clipped
+    assert uvc.values == DEFAULTS

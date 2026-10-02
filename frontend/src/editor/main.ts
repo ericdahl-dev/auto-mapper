@@ -3,6 +3,7 @@ import type { StatusMessage, TestFrameKind } from "../shared/messages";
 import { EFFECTS, effectById } from "../effects/index";
 import type { SceneMessage } from "../shared/messages";
 import { controlsFor, parseControlValue } from "./controls";
+import { insertVertex, moveVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
 import { cameraOptions, describeStatus } from "./statusView";
 
@@ -38,27 +39,100 @@ effectSelect.replaceChildren(...EFFECTS.map((e) => Object.assign(document.create
 
 const patchSurface = (id: number, body: object) =>
   void fetch(`/api/scene/surfaces/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const surfaceName = $<HTMLInputElement>("surface-name");
+const deleteButton = $<HTMLButtonElement>("delete-surface");
+const mergeButton = $<HTMLButtonElement>("merge-surfaces");
+const multi = new Set<number>(); // shift-click selection for merging
+let dragging: { id: number; index: number; polygon: number[][] } | null = null;
+let pendingScene: SceneMessage | null = null; // scene updates held back while dragging
+
+function projectorPoint(ev: MouseEvent): number[] {
+  const r = surfacesSvg.getBoundingClientRect();
+  return toProjector(r, scanState.size ?? { width: scene!.width, height: scene!.height }, ev.clientX, ev.clientY);
+}
+
+let patchFrame = 0;
+function patchPolygonSoon(id: number, polygon: number[][]) {
+  // At most one PATCH per animation frame while dragging.
+  cancelAnimationFrame(patchFrame);
+  patchFrame = requestAnimationFrame(() => patchSurface(id, { polygon }));
+}
+
 const select = (id: number | null) =>
   void fetch("/api/scene/select", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
 
 function renderSurfaces() {
   const surfaces = scene?.surfaces ?? [];
+  const width = scene?.width ?? 1920;
+  // Handle size in projector pixels that looks ~7 screen px whatever the editor's scale.
+  const r = (7 * width) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
   surfacesSvg.replaceChildren(
     ...surfaces.flatMap((s) => {
+      const polygon = dragging?.id === s.id ? dragging.polygon : s.polygon;
       const poly = document.createElementNS(SVG_NS, "polygon");
-      poly.setAttribute("points", s.polygon.map(([x, y]) => `${x},${y}`).join(" "));
+      poly.setAttribute("points", polygon.map(([x, y]) => `${x},${y}`).join(" "));
       poly.classList.toggle("selected", s.id === scene?.selected);
+      poly.classList.toggle("multi", multi.has(s.id));
       poly.classList.toggle("error", effectErrors.has(s.id));
       poly.addEventListener("click", (ev) => {
         ev.stopPropagation();
+        if (ev.shiftKey) {
+          multi.has(s.id) ? multi.delete(s.id) : multi.add(s.id);
+          if (scene?.selected != null) multi.add(scene.selected);
+          renderSurfaces();
+          return;
+        }
+        multi.clear();
         select(s.id === scene?.selected ? null : s.id);
       });
-      const [x, y] = s.polygon[0];
+      poly.addEventListener("dblclick", (ev) => {
+        if (s.id !== scene?.selected) return;
+        ev.stopPropagation();
+        patchSurface(s.id, { polygon: insertVertex(s.polygon, projectorPoint(ev)) });
+      });
+      const [x, y] = polygon[0];
       const label = document.createElementNS(SVG_NS, "text");
       label.setAttribute("x", String(x + 12));
       label.setAttribute("y", String(y + 34));
       label.textContent = String(s.id);
-      return [poly, label];
+      const parts: SVGElement[] = [poly, label];
+      if (s.id === scene?.selected) {
+        polygon.forEach(([hx, hy], index) => {
+          const handle = document.createElementNS(SVG_NS, "circle");
+          handle.classList.add("handle");
+          handle.setAttribute("cx", String(hx));
+          handle.setAttribute("cy", String(hy));
+          handle.setAttribute("r", String(r));
+          handle.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            if (ev.altKey) patchSurface(s.id, { polygon: removeVertex(s.polygon, index) });
+          });
+          handle.addEventListener("pointerdown", (ev) => {
+            if (ev.altKey) return;
+            ev.stopPropagation();
+            handle.setPointerCapture(ev.pointerId);
+            dragging = { id: s.id, index, polygon: s.polygon };
+          });
+          handle.addEventListener("pointermove", (ev) => {
+            if (!dragging || dragging.index !== index) return;
+            dragging.polygon = moveVertex(dragging.polygon, index, projectorPoint(ev));
+            patchPolygonSoon(s.id, dragging.polygon);
+            renderSurfaces();
+          });
+          handle.addEventListener("pointerup", () => {
+            if (!dragging) return;
+            patchSurface(s.id, { polygon: dragging.polygon });
+            dragging = null;
+            if (pendingScene) {
+              scene = pendingScene;
+              pendingScene = null;
+            }
+            renderSurfaces();
+          });
+          parts.push(handle);
+        });
+      }
+      return parts;
     }),
   );
   renderPanel();
@@ -67,8 +141,11 @@ function renderSurfaces() {
 function renderPanel() {
   const surface = scene?.surfaces.find((s) => s.id === scene?.selected);
   surfacePanel.hidden = !surface;
+  mergeButton.hidden = multi.size < 2;
+  mergeButton.textContent = `Merge ${multi.size} surfaces`;
   if (!surface) return;
   surfaceTitle.textContent = `Surface ${surface.id}`;
+  if (document.activeElement !== surfaceName) surfaceName.value = surface.name ?? `Surface ${surface.id}`;
   effectSelect.value = surface.effect;
   const effect = effectById(surface.effect);
   // Don't rebuild controls under the user's cursor while they drag; only when the surface/effect changes.
@@ -99,6 +176,21 @@ effectSelect.addEventListener("change", () => {
   if (scene?.selected != null) patchSurface(scene.selected, { effect: effectSelect.value });
 });
 surfacesSvg.addEventListener("click", () => select(null));
+surfaceName.addEventListener("change", () => {
+  if (scene?.selected != null) patchSurface(scene.selected, { name: surfaceName.value });
+});
+deleteButton.addEventListener("click", () => {
+  if (scene?.selected != null) void fetch(`/api/scene/surfaces/${scene.selected}`, { method: "DELETE" });
+});
+mergeButton.addEventListener("click", () => {
+  const ids = [...multi];
+  multi.clear();
+  void fetch("/api/scene/merge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids }),
+  });
+});
 
 function renderScan() {
   scanText.textContent = scanLabel(scanState);
@@ -147,7 +239,12 @@ connect({
       render();
       renderScan();
     } else if (msg.type === "scene") {
+      if (dragging) {
+        pendingScene = msg; // don't rebuild the handles under the cursor
+        return;
+      }
       scene = msg;
+      for (const id of [...multi]) if (!msg.surfaces.some((s) => s.id === id)) multi.delete(id);
       // An error belongs to one effect; switching the surface to another effect clears it.
       for (const s of msg.surfaces) if (effectErrors.get(s.id)?.effect !== s.effect) effectErrors.delete(s.id);
       renderSurfaces();

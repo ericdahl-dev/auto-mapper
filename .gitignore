@@ -6,3 +6,6 @@ node_modules/
 frontend/dist/
 projects/
 .DS_Store
+
+# Real scans of the user's room: local test fixtures only, never committed.
+fixtures/local/
