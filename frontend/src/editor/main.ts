@@ -13,6 +13,7 @@ import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState
 import { EditSession, type SurfaceEdit } from "./editSession";
 import { createEngineClient } from "./engineClient";
 import { canFrame, panAfterDrag, zoomAfterWheel } from "./framing";
+import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
 import { placeOutput } from "./screens";
 import { describeSound } from "./soundView";
@@ -100,8 +101,6 @@ const deleteButton = $<HTMLButtonElement>("delete-surface");
 const mergeButton = $<HTMLButtonElement>("merge-surfaces");
 const applyButton = $<HTMLButtonElement>("apply-effect");
 const multi = new Set<number>(); // shift-click selection for merging
-// Which handle is being dragged (the edited shape itself lives in the session).
-let dragging: { id: number; index: number } | null = null;
 
 function projectorPoint(ev: MouseEvent): number[] {
   const r = surfacesSvg.getBoundingClientRect();
@@ -253,21 +252,16 @@ function renderSurfaces() {
           handle.addEventListener("pointerdown", (ev) => {
             if (ev.altKey) return;
             ev.stopPropagation();
-            handle.setPointerCapture(ev.pointerId);
-            dragging = { id: s.id, index };
             session.begin();
-          });
-          handle.addEventListener("pointermove", (ev) => {
-            if (!dragging || dragging.id !== s.id || dragging.index !== index) return;
-            const current = session.surface(s.id)!.polygon;
-            patchSurface(s.id, { polygon: moveOnRun(current, index, projectorPoint(ev)) });
-            refresh();
-          });
-          handle.addEventListener("pointerup", () => {
-            if (!dragging) return;
-            dragging = null;
-            session.end();
-            refresh();
+            // Follow the pointer at the window: redraws replace this handle on every move.
+            trackPointer(ev.pointerId, (move) => {
+              const current = session.surface(s.id)!.polygon;
+              patchSurface(s.id, { polygon: moveOnRun(current, index, projectorPoint(move)) });
+              refresh();
+            }, () => {
+              session.end();
+              refresh();
+            });
           });
           parts.push(handle);
         });
@@ -294,31 +288,29 @@ function bindFraming(poly: SVGPolygonElement, s: SceneMessage["surfaces"][number
     if (ev.altKey || ev.shiftKey || ev.button !== 0) return;
     drag = { start: projectorPoint(ev), moved: false, pan: { panX: num("panX", 0), panY: num("panY", 0) } };
     session.begin();
-    poly.setPointerCapture(ev.pointerId);
+    trackPointer(ev.pointerId, (move) => panTo(move), () => {
+      if (!drag) return;
+      framedJustNow = drag.moved;
+      drag = null;
+      session.end();
+      refresh();
+    });
   });
-  poly.addEventListener("pointermove", (ev) => {
+  const panTo = (ev: PointerEvent) => {
     if (!drag) return;
     const p = projectorPoint(ev);
     const delta = [p[0] - drag.start[0], p[1] - drag.start[1]];
     if (!drag.moved && Math.hypot(delta[0], delta[1]) < 4) return; // still a click
     drag.moved = true;
     patchSurface(s.id, { params: panAfterDrag(drag.pan, delta, s.polygon) });
-  });
-  poly.addEventListener("pointerup", () => {
-    if (!drag) return;
-    framedJustNow = drag.moved;
-    drag = null;
-    session.end();
     refresh();
-  });
+  };
   poly.addEventListener("wheel", (ev) => {
     ev.preventDefault();
     patchSurface(s.id, { params: { zoom: zoomAfterWheel(num("zoom", 1), ev.deltaY) } });
   }, { passive: false });
 }
 
-// Which pin corner is being dragged (the corners themselves live in the session).
-let pinDrag: { id: number; index: number } | null = null;
 
 /** Orange diamonds (and a dashed quad) for the selected surface's corner pin, when its effect uses one.
  *  Drag a corner to pin it; Alt-click any corner to go back to the outline's own corners. */
@@ -343,21 +335,15 @@ function pinElements(r: number): SVGElement[] {
     d.addEventListener("pointerdown", (ev) => {
       if (ev.altKey) return;
       ev.stopPropagation();
-      d.setPointerCapture(ev.pointerId);
-      pinDrag = { id: s.id, index };
       session.begin();
-    });
-    d.addEventListener("pointermove", (ev) => {
-      if (!pinDrag || pinDrag.id !== s.id || pinDrag.index !== index) return;
-      const latest = pinHandles(effectById(s.effect), session.surface(s.id)!.params, s.polygon)!;
-      patchSurface(s.id, { params: { [pin.name]: movePin(latest.corners, index, projectorPoint(ev)) } });
-      refresh();
-    });
-    d.addEventListener("pointerup", () => {
-      if (!pinDrag) return;
-      pinDrag = null;
-      session.end();
-      refresh();
+      trackPointer(ev.pointerId, (move) => {
+        const latest = pinHandles(effectById(s.effect), session.surface(s.id)!.params, s.polygon)!;
+        patchSurface(s.id, { params: { [pin.name]: movePin(latest.corners, index, projectorPoint(move)) } });
+        refresh();
+      }, () => {
+        session.end();
+        refresh();
+      });
     });
     return d;
   });
@@ -375,25 +361,19 @@ function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
     return l;
   };
   // Drag a handle: `update` computes the new Bezier from the pointer position.
-  const draggable = (el: SVGElement, index: number, update: (b: Bezier, p: number[]) => Bezier) => {
+  const draggable = (el: SVGElement, update: (b: Bezier, p: number[]) => Bezier) => {
     el.addEventListener("pointerdown", (ev) => {
       if ((ev as PointerEvent).altKey) return;
       ev.stopPropagation();
-      el.setPointerCapture((ev as PointerEvent).pointerId);
-      dragging = { id, index };
       session.begin();
-    });
-    el.addEventListener("pointermove", (ev) => {
-      if (!dragging || dragging.id !== id || dragging.index !== index) return;
-      const latest = session.surface(id)?.bezier ?? bezier;
-      patchBezier(id, update(latest, projectorPoint(ev as MouseEvent)));
-      refresh();
-    });
-    el.addEventListener("pointerup", () => {
-      if (!dragging) return;
-      dragging = null;
-      session.end();
-      refresh();
+      trackPointer((ev as PointerEvent).pointerId, (move) => {
+        const latest = session.surface(id)?.bezier ?? bezier;
+        patchBezier(id, update(latest, projectorPoint(move)));
+        refresh();
+      }, () => {
+        session.end();
+        refresh();
+      });
     });
   };
   Object.entries(bezier.controls).forEach(([key, [c1, c2]]) => {
@@ -405,8 +385,7 @@ function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
       const dot = document.createElementNS(SVG_NS, "circle");
       dot.classList.add("handle", "control");
       Object.entries({ cx: c[0], cy: c[1], r: r * 0.8 }).forEach(([k, v]) => dot.setAttribute(k, String(v)));
-      // Control handles get indices after the anchors so drags don't mix them up.
-      draggable(dot, n + edge * 2 + which, (bz, p) => moveControl(bz, edge, which as 0 | 1, p));
+      draggable(dot, (bz, p) => moveControl(bz, edge, which as 0 | 1, p));
       out.push(dot);
     });
   });
@@ -418,7 +397,7 @@ function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
       ev.stopPropagation();
       if (ev.altKey) patchBezier(id, removeAnchor(bezier, index));
     });
-    draggable(sq, index, (bz, p) => moveAnchor(bz, index, p));
+    draggable(sq, (bz, p) => moveAnchor(bz, index, p));
     out.push(sq);
   });
   return out;
