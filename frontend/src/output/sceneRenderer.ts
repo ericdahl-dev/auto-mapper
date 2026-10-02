@@ -1,7 +1,7 @@
 import earcut from "earcut";
 import { type CompileResult, compileEffect, linkProgram, MAX_POLY, VERTEX } from "../effects/compile";
 import type { Effect } from "../effects/types";
-import { uniformsFor } from "../effects/types";
+import { mediaSources, uniformsFor } from "../effects/types";
 import type { SceneMessage } from "../shared/messages";
 
 export interface EffectError {
@@ -22,7 +22,20 @@ interface PreparedSurface {
   fillCount: number;
   outline: WebGLVertexArrayObject; // line loop through pixel centres
   outlineCount: number;
+  media: [string, string][]; // [param name, src] for each media param that has a file
 }
+
+/** An image or video shown on surfaces; one texture per file, shared by every surface showing it. */
+interface MediaTexture {
+  texture: WebGLTexture;
+  size: [number, number]; // 0x0 until loaded
+  video: HTMLVideoElement | null;
+  uploadedFrame: number; // videos: the draw() that last uploaded a frame
+  ready: Promise<void>; // settles on load or on error
+}
+
+// Texture unit 0 is the scan; media params take the units after it.
+const FIRST_MEDIA_UNIT = 1;
 
 // Plain colour, used for outlines and the selection highlight.
 const SOLID = `#version 300 es
@@ -41,8 +54,11 @@ export class SceneRenderer {
   private surfaces: PreparedSurface[] = [];
   private scene: SceneMessage | null = null;
   private scanTexture: WebGLTexture;
+  private blank: WebGLTexture; // 1x1 black, for media params with no file
   private buffers: WebGLBuffer[] = [];
   private vaos: WebGLVertexArrayObject[] = [];
+  private media = new Map<string, MediaTexture>();
+  private frame = 0;
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -54,6 +70,9 @@ export class SceneRenderer {
     this.solid = solid.program;
     this.scanTexture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, this.scanTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    this.blank = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.blank);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
   }
 
@@ -86,6 +105,7 @@ export class SceneRenderer {
       const outline = resampleOutline(s.polygon, MAX_POLY);
       const poly = new Float32Array(MAX_POLY * 2);
       poly.set(outline.flat());
+      const effect = this.effects.find((e) => e.id === s.effect) ?? this.effects[0];
       const perimeter = outline.reduce((sum, [x, y], i) => {
         const [nx, ny] = outline[(i + 1) % outline.length];
         return sum + Math.hypot(nx - x, ny - y);
@@ -95,15 +115,98 @@ export class SceneRenderer {
         polyCount: outline.length,
         perimeter,
         id: s.id,
-        effect: this.effects.find((e) => e.id === s.effect) ?? this.effects[0],
+        effect,
         params: s.params,
         bounds: [x0, y0, Math.max(1, Math.max(...xs) - x0), Math.max(1, Math.max(...ys) - y0)],
         fill: this.vao(fillVerts),
         fillCount: fillVerts.length / 2,
         outline: this.vao(lineVerts),
         outlineCount: lineVerts.length / 2,
+        media: Object.entries(mediaSources(effect, s.params)),
       };
     });
+    this.syncMedia(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
+  }
+
+  /** Resolves once every media file the scene uses has loaded (or failed to). */
+  async whenMediaLoaded(): Promise<void> {
+    await Promise.all([...this.media.values()].map((m) => m.ready));
+  }
+
+  private syncMedia(wanted: Set<string>) {
+    const { gl } = this;
+    for (const [src, m] of this.media) {
+      if (wanted.has(src)) continue;
+      m.video?.pause();
+      m.video?.removeAttribute("src");
+      m.video?.load(); // lets the browser drop the decoder
+      gl.deleteTexture(m.texture);
+      this.media.delete(src);
+    }
+    for (const src of wanted) {
+      if (!this.media.has(src)) this.media.set(src, this.loadMedia(src));
+    }
+  }
+
+  private loadMedia(src: string): MediaTexture {
+    const { gl } = this;
+    const texture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 255]));
+    const el = createMediaElement(src);
+    const video = el instanceof HTMLVideoElement ? el : null;
+    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve() };
+    m.ready = new Promise<void>((settle) => {
+      el.addEventListener("error", () => settle(), { once: true });
+      if (video) {
+        video.addEventListener("loadeddata", () => {
+          m.size = [video.videoWidth, video.videoHeight];
+          settle();
+        }, { once: true });
+        void video.play().catch(() => {}); // muted, so autoplay is allowed
+      } else {
+        el.addEventListener("load", () => {
+          const img = el as HTMLImageElement;
+          if (this.media.get(src) === m) this.upload(m, img);
+          m.size = [img.naturalWidth, img.naturalHeight];
+          settle();
+        }, { once: true });
+      }
+    });
+    return m;
+  }
+
+  private upload(m: MediaTexture, source: TexImageSource) {
+    const { gl } = this;
+    gl.bindTexture(gl.TEXTURE_2D, m.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+
+  private bindMedia(p: WebGLProgram, s: PreparedSurface) {
+    const { gl } = this;
+    s.media.forEach(([name, src], i) => {
+      const m = this.media.get(src)!;
+      const v = m.video;
+      // Videos: the current frame, uploaded once per draw however many surfaces show it.
+      if (v && m.uploadedFrame !== this.frame && v.readyState >= v.HAVE_CURRENT_DATA && v.videoWidth > 0) {
+        this.upload(m, v);
+        m.uploadedFrame = this.frame;
+      }
+      gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT + i);
+      gl.bindTexture(gl.TEXTURE_2D, m.texture);
+      gl.uniform1i(gl.getUniformLocation(p, `u_${name}`), FIRST_MEDIA_UNIT + i);
+      gl.uniform2f(gl.getUniformLocation(p, `u_${name}Size`), ...m.size);
+    });
+    // Media params without a file still need their sampler off unit 0 (the scan): give them a black texture.
+    for (const param of s.effect.params) {
+      if (param.type !== "media" || s.media.some(([name]) => name === param.name)) continue;
+      gl.uniform1i(gl.getUniformLocation(p, `u_${param.name}`), FIRST_MEDIA_UNIT + s.media.length);
+      gl.activeTexture(gl.TEXTURE0 + FIRST_MEDIA_UNIT + s.media.length);
+      gl.bindTexture(gl.TEXTURE_2D, this.blank);
+    }
   }
 
   private vao(data: Float32Array): WebGLVertexArrayObject {
@@ -132,6 +235,7 @@ export class SceneRenderer {
 
   draw(timeSeconds: number) {
     const { gl } = this;
+    this.frame++;
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -163,6 +267,7 @@ export class SceneRenderer {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.scanTexture);
       gl.uniform1i(gl.getUniformLocation(p, "u_scan"), 0);
+      this.bindMedia(p, s);
       for (const [name, value] of Object.entries(uniformsFor(s.effect, s.params))) {
         const loc = gl.getUniformLocation(p, name);
         if (Array.isArray(value)) gl.uniform3f(loc, ...value);
@@ -218,4 +323,19 @@ export function resampleOutline(polygon: number[][], max: number): number[][] {
     out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
   }
   return out;
+}
+
+const VIDEO = /\.(mp4|m4v|mov|webm)([?#]|$)/i;
+
+/** The element that decodes a media file: a looping, muted, inline video, or an image. */
+export function createMediaElement(src: string): HTMLImageElement | HTMLVideoElement {
+  if (VIDEO.test(src) || src.startsWith("data:video/")) {
+    const video = document.createElement("video");
+    Object.assign(video, { muted: true, loop: true, playsInline: true, autoplay: true, preload: "auto" });
+    video.src = src;
+    return video;
+  }
+  const img = new Image();
+  img.src = src;
+  return img;
 }

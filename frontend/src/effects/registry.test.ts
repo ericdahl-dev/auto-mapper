@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { EFFECTS, effectById } from "./index";
 import type { Effect } from "./types";
-import { uniformsFor, validateEffect } from "./types";
+import { mediaSources, uniformsFor, validateEffect } from "./types";
 
 const sample: Effect = {
   id: "sample",
@@ -50,9 +50,41 @@ describe("uniformsFor", () => {
   });
 });
 
+const withMedia: Effect = {
+  id: "withMedia",
+  name: "With media",
+  params: [
+    { name: "src", label: "Image or video", type: "media", default: "" },
+    { name: "fit", label: "Fit", type: "choice", default: "cover", options: [
+      { value: "cover", label: "Cover" },
+      { value: "stretch", label: "Stretch" },
+    ] },
+  ],
+  fragment: "void main() { color = texture(u_src, v_uv); }",
+};
+
+describe("media and choice params", () => {
+  it("validates a choice default against its options", () => {
+    expect(validateEffect(withMedia)).toEqual([]);
+    const bad: Effect = { ...withMedia, params: [{ ...withMedia.params[1], default: "tile" } as Effect["params"][number]] };
+    expect(validateEffect(bad)).toEqual(['param "fit" default "tile" is not one of cover, stretch']);
+  });
+
+  it("passes a choice as its option index and leaves media to the renderer", () => {
+    expect(uniformsFor(withMedia, { src: "/api/media/a.png", fit: "stretch" })).toEqual({ u_fit: 1 });
+    expect(uniformsFor(withMedia, { fit: "bogus" })).toEqual({ u_fit: 0 });
+  });
+
+  it("lists the media sources an effect's params point at", () => {
+    expect(mediaSources(withMedia, { src: "/api/media/a.png" })).toEqual({ src: "/api/media/a.png" });
+    expect(mediaSources(withMedia, {})).toEqual({});
+    expect(mediaSources(withMedia, { src: 7 })).toEqual({});
+  });
+});
+
 describe("built-in registry", () => {
   it("has the built-in effects, all valid, with unique ids", () => {
-    expect(EFFECTS.map((e) => e.id)).toEqual(["none", "fill", "outline", "noise", "tint", "edgeglow", "posterize"]);
+    expect(EFFECTS.map((e) => e.id)).toEqual(["none", "fill", "outline", "noise", "tint", "edgeglow", "posterize", "media"]);
     for (const e of EFFECTS) expect(validateEffect(e), e.id).toEqual([]);
   });
 
