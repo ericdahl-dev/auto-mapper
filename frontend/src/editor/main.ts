@@ -10,6 +10,7 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
+import { canFrame, panAfterDrag, zoomAfterWheel } from "./framing";
 import { movePin, pinHandles } from "./pin";
 import { placeOutput } from "./screens";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
@@ -207,8 +208,13 @@ function renderSurfaces() {
       poly.classList.toggle("selected", s.id === scene?.selected);
       poly.classList.toggle("multi", multi.has(s.id));
       poly.classList.toggle("error", effectErrors.has(s.id));
+      if (s.id === scene?.selected && canFrame(effectById(s.effect))) bindFraming(poly, s);
       poly.addEventListener("click", (ev) => {
         ev.stopPropagation();
+        if (framedJustNow) {
+          framedJustNow = false; // the click that ends a framing drag isn't a selection click
+          return;
+        }
         if (ev.shiftKey) {
           multi.has(s.id) ? multi.delete(s.id) : multi.add(s.id);
           if (scene?.selected != null) multi.add(scene.selected);
@@ -277,6 +283,46 @@ function renderSurfaces() {
   );
   renderPanel();
   renderPresentation();
+}
+
+// Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
+let framedJustNow = false;
+let framing = false; // a pan drag is in progress: hold scene updates so the SVG isn't rebuilt under it
+function bindFraming(poly: SVGPolygonElement, s: SceneMessage["surfaces"][number]) {
+  const num = (name: string, fallback: number) => (typeof s.params[name] === "number" ? (s.params[name] as number) : fallback);
+  let drag: { start: number[]; moved: boolean } | null = null;
+  poly.addEventListener("pointerdown", (ev) => {
+    if (ev.altKey || ev.shiftKey || ev.button !== 0) return;
+    drag = { start: projectorPoint(ev), moved: false };
+    framing = true;
+    poly.setPointerCapture(ev.pointerId);
+  });
+  poly.addEventListener("pointermove", (ev) => {
+    if (!drag) return;
+    const p = projectorPoint(ev);
+    const delta = [p[0] - drag.start[0], p[1] - drag.start[1]];
+    if (!drag.moved && Math.hypot(delta[0], delta[1]) < 4) return; // still a click
+    drag.moved = true;
+    const pan = panAfterDrag({ panX: num("panX", 0), panY: num("panY", 0) }, delta, s.polygon);
+    cancelAnimationFrame(patchFrame);
+    patchFrame = requestAnimationFrame(() => patchSurface(s.id, { params: pan }));
+  });
+  poly.addEventListener("pointerup", () => {
+    framedJustNow = !!drag?.moved;
+    drag = null;
+    framing = false;
+    if (pendingScene) {
+      scene = pendingScene;
+      pendingScene = null;
+      renderSurfaces();
+    }
+  });
+  poly.addEventListener("wheel", (ev) => {
+    ev.preventDefault();
+    const zoom = zoomAfterWheel(num("zoom", 1), ev.deltaY);
+    cancelAnimationFrame(patchFrame);
+    patchFrame = requestAnimationFrame(() => patchSurface(s.id, { params: { zoom } }));
+  }, { passive: false });
 }
 
 // Corner pin being dragged: shown from here until the engine's scene update arrives.
@@ -592,7 +638,7 @@ connect({
       render();
       renderScan();
     } else if (msg.type === "scene") {
-      if (dragging || pinDrag) {
+      if (dragging || pinDrag || framing) {
         pendingScene = msg; // don't rebuild the handles under the cursor
         return;
       }
