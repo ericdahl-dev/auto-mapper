@@ -23,16 +23,20 @@ from engine.show import CurrentShow, UnknownSurface
 from engine.messages import (
     ApplyEffectRequest,
     CameraSelectRequest,
-    ProjectorSelectRequest,
     EditorHello,
+    EffectErrorReport,
     Hello,
     MergeRequest,
     NewSurfaceRequest,
     OutputHello,
+    OutputMessage,
+    OutputStats,
+    PatternShown,
     PresentationRequest,
-    SoundRequest,
+    ProjectorSelectRequest,
     ProjectSaveRequest,
     SelectRequest,
+    SoundRequest,
     SurfaceUpdate,
     TestFrameRequest,
 )
@@ -362,35 +366,33 @@ def create_app(
             await hub.set_output(ws, hello.width, hello.height)
         try:
             while True:
-                msg = await ws.receive_json()
-                if ws is hub.output and msg.get("type") == "pattern_shown":
-                    hub.pattern_shown(int(msg.get("seq", -1)))
-                elif ws is hub.output and msg.get("type") == "output_stats":
-                    fps = msg.get("fps")
-                    if isinstance(fps, (int, float)):
-                        hub.output_fps = round(float(fps), 1)
-                    if "sound_output_error" in msg:
-                        error = msg.get("sound_output_error")
-                        hub.output_sound_output_error = str(error)[:200] if error else None
-                    if isinstance(msg.get("video_sound_blocked"), bool):
-                        hub.output_video_sound_blocked = msg["video_sound_blocked"]
-                    sound = msg.get("sound")
-                    if isinstance(sound, dict):
-                        level, error = sound.get("level"), sound.get("error")
+                raw = await ws.receive_json()
+                if ws is not hub.output:
+                    continue  # editors only listen
+                try:
+                    msg = OutputMessage.validate_python(raw)
+                except ValidationError as e:
+                    log.warning("ignoring malformed message from the output window: %s", e.errors()[:1])
+                    continue
+                if isinstance(msg, PatternShown):
+                    hub.pattern_shown(msg.seq)
+                elif isinstance(msg, OutputStats):
+                    if msg.fps is not None:
+                        hub.output_fps = round(msg.fps, 1)
+                    if "sound_output_error" in msg.model_fields_set:
+                        hub.output_sound_output_error = (msg.sound_output_error or "")[:200] or None
+                    if msg.video_sound_blocked is not None:
+                        hub.output_video_sound_blocked = msg.video_sound_blocked
+                    if msg.sound is not None:
                         hub.output_sound = {
-                            "level": round(min(1.0, max(0.0, float(level))), 3) if isinstance(level, (int, float)) else 0,
-                            "error": str(error)[:200] if error else None,
+                            "level": round(min(1.0, max(0.0, msg.sound.level)), 3),
+                            "error": (msg.sound.error or "")[:200] or None,
                         }
                     await hub.broadcast_status()
-                elif ws is hub.output and msg.get("type") == "effect_error":
-                    await hub.broadcast({k: msg.get(k) for k in ("type", "surface", "effect", "log")})
-                elif ws is hub.output and msg.get("type") == "hello":
-                    # The output window re-sends hello when resized (e.g. going fullscreen).
-                    try:
-                        again = OutputHello.model_validate(msg)
-                    except ValidationError:
-                        continue
-                    await hub.set_output(ws, again.width, again.height)
+                elif isinstance(msg, EffectErrorReport):
+                    await hub.broadcast(msg.model_dump())
+                else:  # the output window re-sends hello when resized (e.g. going fullscreen)
+                    await hub.set_output(ws, msg.width, msg.height)
         except WebSocketDisconnect:
             pass
         finally:

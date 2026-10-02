@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 TestFrameKind = Literal["white", "black", "grid"]
 
@@ -77,3 +77,139 @@ class NewSurfaceRequest(BaseModel):
 class ApplyEffectRequest(BaseModel):
     from_id: int = Field(alias="from")
     to: list[int] | None = None  # omitted: every surface
+
+
+# --- From the output window ------------------------------------------------------------------------
+
+class PatternShown(BaseModel):
+    type: Literal["pattern_shown"]
+    seq: int
+
+
+class OutputSound(BaseModel):
+    level: float = 0
+    error: str | None = None
+
+
+class OutputStats(BaseModel):
+    type: Literal["output_stats"]
+    fps: float | None = None
+    sound: OutputSound | None = None
+    video_sound_blocked: bool | None = None
+    sound_output_error: str | None = None
+
+
+class EffectErrorReport(BaseModel):
+    type: Literal["effect_error"]
+    surface: int
+    effect: str
+    log: str
+
+
+OutputMessage = TypeAdapter(
+    Annotated[PatternShown | OutputStats | EffectErrorReport | OutputHello, Field(discriminator="type")]
+)
+
+
+# --- From the engine (to editors and the output window) --------------------------------------------
+# Checked before sending (Hub._send), and pinned by tests/test_message_contract.py together with the
+# browser's parser (frontend/src/shared/messages.ts).
+
+class _Out(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class StatusOut(_Out):
+    type: Literal["status"]
+    hardware: dict
+    output_connected: bool
+    output_resolution: dict | None
+    output_fps: float | None
+    output_sound: dict | None
+    output_video_sound_blocked: bool
+    output_sound_output_error: str | None
+    camera: dict
+    project: dict | None
+    can_scan: bool
+
+
+class ShowSurfaceOut(_Out):
+    id: int
+    name: str
+    polygon: list[list[float]]
+    area: float
+    effect: str
+    params: dict
+    source: Literal["detected", "edited", "drawn"]
+    bezier: dict | None = None
+
+
+class ShowOut(_Out):
+    type: Literal["show"]
+    width: int
+    height: int
+    surfaces: list[ShowSurfaceOut]
+    selected: int | None
+    presentation: dict
+    sound: dict
+    scan_rev: str | None
+
+
+class ScanStarted(_Out):
+    type: Literal["scan_started"]
+
+
+class ScanProgress(_Out):
+    type: Literal["scan_progress"]
+    done: int
+    total: int
+
+
+class ScanResult(_Out):
+    type: Literal["scan_result"]
+    width: int
+    height: int
+    coverage: float
+    seconds: float
+    bit_reliability: dict
+    surfaces: list[dict]
+    warnings: list[str]
+    image: str
+
+
+class ScanFailed(_Out):
+    type: Literal["scan_failed"]
+    error: str
+
+
+class ScanCanceledOut(_Out):
+    type: Literal["scan_canceled"]
+
+
+class ScanReload(_Out):
+    type: Literal["scan_reload"]
+
+
+class EffectErrorOut(_Out):
+    type: Literal["effect_error"]
+    surface: int
+    effect: str
+    log: str
+
+
+class ShowPatternOut(_Out):
+    type: Literal["show_pattern"]
+    seq: int
+    pattern: dict
+
+
+class ShowTestFrameOut(_Out):
+    type: Literal["show_test_frame"]
+    kind: TestFrameKind
+
+
+EngineMessage = TypeAdapter(Annotated[
+    StatusOut | ShowOut | ScanStarted | ScanProgress | ScanResult | ScanFailed | ScanCanceledOut | ScanReload
+    | EffectErrorOut | ShowPatternOut | ShowTestFrameOut,
+    Field(discriminator="type"),
+])

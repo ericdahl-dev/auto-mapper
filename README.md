@@ -347,6 +347,8 @@ make test
    - **unit**: `src/**/*.test.ts` in Node;
    - **browser**: `src/**/*.browser.test.ts` in headless Chromium with SwiftShader, because shader compilation and rendering need a real WebGL2 context.
 
+**Message contract.** `tests/test_message_contract.py` records one real example of every message the engine sends (`frontend/src/shared/fixtures/engine-messages.json`) and fails if a message changes shape; the browser's tests parse the same examples. After an intended change to a message, run `UPDATE_MESSAGE_FIXTURES=1 uv run pytest tests/test_message_contract.py` and commit the updated fixture. Messages from the output window are validated by the engine (`engine/messages.py`), and the browser's `ClientMessage` type mirrors them.
+
 **Real-scan fixtures.** `tests/test_real_scan.py` runs regression tests against a real scan of the rig in `fixtures/local/room1/`. That directory is gitignored because it is a scan of a real room; without it those tests are skipped (you'll see them as skipped in the pytest summary).
 
 ### CI

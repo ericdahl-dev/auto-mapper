@@ -1,15 +1,9 @@
 import { describe, expect, it } from "vitest";
+import examples from "./fixtures/engine-messages.json";
 import { parseServerMessage } from "./messages";
 
-const status = {
-  type: "status",
-  hardware: { projector: { name: "AML TV", width: 1920, height: 1080 }, cameras: [{ name: "Webcam AC410", unique_id: "0x2110000f1311306", device_type: "external" }], issues: [] },
-  output_connected: true,
-  output_resolution: { width: 1920, height: 1080 },
-  camera: { selected: "0x2110000f1311306", calibration: null },
-  project: null,
-  can_scan: true,
-};
+// A status the engine really sent (recorded by tests/test_message_contract.py), not a hand-written copy.
+const status = examples.status;
 
 describe("parseServerMessage", () => {
   it("accepts a status message from the engine", () => {
