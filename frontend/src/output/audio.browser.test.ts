@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Effect } from "../effects/types";
 import { validateEffect } from "../effects/types";
-import type { SceneMessage } from "../shared/messages";
-import { SceneRenderer } from "./sceneRenderer";
+import type { ShowMessage } from "../shared/messages";
+import { ShowRenderer } from "./showRenderer";
 
 const W = 16, H = 16;
 const meter: Effect = {
@@ -14,12 +14,12 @@ function setup() {
   const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H });
   const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true })!;
   const errors: string[] = [];
-  const r = new SceneRenderer(gl, [meter], (e) => errors.push(e.log));
-  const scene: SceneMessage = {
-    type: "scene", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
+  const r = new ShowRenderer(gl, [meter], (e) => errors.push(e.log));
+  const show: ShowMessage = {
+    type: "show", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
     surfaces: [{ id: 1, polygon: [[0, 0], [16, 0], [16, 16], [0, 16]], area: 256, effect: "meter", params: {} }],
   };
-  r.setScene(scene);
+  r.setShow(show);
   const pixel = () => {
     const p = new Uint8Array(4);
     gl.readPixels(8, 8, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, p);

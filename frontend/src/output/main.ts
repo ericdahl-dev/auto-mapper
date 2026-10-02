@@ -1,9 +1,9 @@
 import { EFFECTS } from "../effects/index";
 import { connect } from "../shared/connection";
-import type { SceneMessage } from "../shared/messages";
+import type { ShowMessage } from "../shared/messages";
 import { bindPresentationKeys } from "../shared/presentation";
 import { SoundInput, setVideoSoundOutput } from "../audio/mic";
-import { SceneRenderer } from "./sceneRenderer";
+import { ShowRenderer } from "./showRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
 
@@ -12,11 +12,11 @@ const hint = document.getElementById("hint")!;
 const renderer = new OutputRenderer(canvas);
 let size = renderer.resize();
 
-// "frames": test frames and scan patterns, drawn once. "scene": effects, animated.
-let mode: "frames" | "scene" = "frames";
-let scene: SceneMessage | null = null;
+// "frames": test frames and scan patterns, drawn once. "show": effects, animated.
+let mode: "frames" | "show" = "frames";
+let show: ShowMessage | null = null;
 let raf = 0;
-const sceneRenderer = new SceneRenderer(renderer.gl, EFFECTS, (e) => conn.send({ type: "effect_error", ...e }));
+const showRenderer = new ShowRenderer(renderer.gl, EFFECTS, (e) => conn.send({ type: "effect_error", ...e }));
 const started = performance.now();
 const sound = new SoundInput();
 let soundOutput: string | null = null;
@@ -27,18 +27,18 @@ let frames = 0;
 let statsFrom = performance.now();
 function loop() {
   const now = performance.now();
-  sceneRenderer.setAudio(sound.frame(Math.min(0.1, (now - lastFrame) / 1000)));
+  showRenderer.setAudio(sound.frame(Math.min(0.1, (now - lastFrame) / 1000)));
   lastFrame = now;
-  sceneRenderer.draw((now - started) / 1000);
+  showRenderer.draw((now - started) / 1000);
   frames++;
   // Every 2 s; 4 times a second while listening, so the editor's sound meter moves.
-  if (now - statsFrom >= (scene?.sound?.enabled ? 250 : 2000)) {
+  if (now - statsFrom >= (show?.sound?.enabled ? 250 : 2000)) {
     // Let the editor see whether the projector keeps up (target: the display's 60 Hz).
     conn.send({
       type: "output_stats",
       fps: (frames * 1000) / (now - statsFrom),
       sound: sound.status(),
-      video_sound_blocked: sceneRenderer.soundBlocked(),
+      video_sound_blocked: showRenderer.soundBlocked(),
       sound_output_error: soundOutputError,
     });
     frames = 0;
@@ -47,26 +47,26 @@ function loop() {
   raf = requestAnimationFrame(loop);
 }
 
-function showScene(msg: SceneMessage) {
+function applyShow(msg: ShowMessage) {
   // Reload the scan image only when the engine says the scan data changed, not on every edit.
-  const changedScan = !scene || scene.scan_rev !== msg.scan_rev;
-  scene = msg;
-  sceneRenderer.setScene(msg);
-  void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(sceneRenderer.audibleVideos()));
+  const changedScan = !show || show.scan_rev !== msg.scan_rev;
+  show = msg;
+  showRenderer.setShow(msg);
+  void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(showRenderer.audibleVideos()));
   const output = msg.sound?.output ?? null;
   if (output !== soundOutput) {
     soundOutput = output; // both paths: plain video elements, and video sound routed through Web Audio
-    void Promise.all([sceneRenderer.setOutputDevice(output), setVideoSoundOutput(output)]).then(([a, b]) => {
+    void Promise.all([showRenderer.setOutputDevice(output), setVideoSoundOutput(output)]).then(([a, b]) => {
       soundOutputError = a ?? b;
     });
   }
   if (changedScan) {
     const img = new Image();
-    img.onload = () => sceneRenderer.setScanImage(img);
+    img.onload = () => showRenderer.setScanImage(img);
     img.src = `/api/scan/latest.png?t=${Date.now()}`;
   }
-  if (mode !== "scene") {
-    mode = "scene";
+  if (mode !== "show") {
+    mode = "show";
     raf = requestAnimationFrame(loop);
   }
 }
@@ -79,7 +79,7 @@ function showFrames() {
 const conn = connect({
   hello: () => ({ type: "hello", role: "output", ...size }),
   onMessage(msg) {
-    if (msg.type === "scene") showScene(msg);
+    if (msg.type === "show") applyShow(msg);
     if (msg.type === "show_test_frame") {
       showFrames();
       renderer.showTestFrame(msg.kind);
@@ -112,7 +112,7 @@ document.addEventListener("fullscreenchange", syncHint);
 document.addEventListener("click", () => {
   if (!document.fullscreenElement) void document.documentElement.requestFullscreen();
   void sound.resume(); // browsers may hold audio until a click in the page
-  void sceneRenderer.resumeMedia(); // ...and pause unmuted videos until then
+  void showRenderer.resumeMedia(); // ...and pause unmuted videos until then
 });
 syncHint();
-bindPresentationKeys(() => scene?.presentation.mode ?? "edit");
+bindPresentationKeys(() => show?.presentation.mode ?? "edit");

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SceneRenderer } from "../output/sceneRenderer";
-import type { SceneMessage } from "../shared/messages";
+import { ShowRenderer } from "../output/showRenderer";
+import type { ShowMessage } from "../shared/messages";
 import { EFFECTS } from "./index";
 
 const W = 96, H = 96;
@@ -11,12 +11,12 @@ function render(params: Record<string, unknown>, time = 0, polygon = SQUARE) {
   const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H });
   const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true })!;
   const errors: string[] = [];
-  const r = new SceneRenderer(gl, EFFECTS, (e) => errors.push(e.log));
-  const scene: SceneMessage = {
-    type: "scene", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
+  const r = new ShowRenderer(gl, EFFECTS, (e) => errors.push(e.log));
+  const show: ShowMessage = {
+    type: "show", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
     surfaces: [{ id: 1, polygon, area: 4096, effect: "text", params }],
   };
-  r.setScene(scene);
+  r.setShow(show);
   r.draw(time);
   expect(errors).toEqual([]);
   const px = new Uint8Array(W * H * 4);

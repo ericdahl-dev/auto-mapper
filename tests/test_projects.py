@@ -26,20 +26,20 @@ def scanned(tmp_path):
 
 def test_saved_project_reopens_with_the_same_scene(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/2", json={"effect": "outline", "params": {"width": 9}, "name": "Box"})
-        saved_scene = client.get("/api/scene").json()
+        client.patch("/api/show/surfaces/2", json={"effect": "outline", "params": {"width": 9}, "name": "Box"})
+        saved_scene = client.get("/api/show").json()
 
         resp = client.post("/api/projects", json={"name": "Kitchen island"})
         assert resp.status_code == 200
         assert resp.json()["slug"] == "kitchen-island"
 
-        client.patch("/api/scene/surfaces/2", json={"effect": "none"})  # later changes...
+        client.patch("/api/show/surfaces/2", json={"effect": "none"})  # later changes...
         listed = client.get("/api/projects").json()
         assert [p["name"] for p in listed] == ["Kitchen island"]
         assert listed[0]["surfaces"] == 2
 
         assert client.post("/api/projects/kitchen-island/open").status_code == 200
-        reopened = client.get("/api/scene").json()
+        reopened = client.get("/api/show").json()
         # ...are discarded by reopening. Presentation (session state) and scan_rev (derived on
         # load) are not part of the project.
         session = {"presentation", "scan_rev"}
@@ -53,7 +53,7 @@ def test_saved_project_reopens_with_the_same_scene(rig, scanned):
 
 def test_opening_a_project_plays_without_a_camera(scanned):
     with engine(FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=[AC410]), data_dir=scanned) as client:
-        client.patch("/api/scene/surfaces/1", json={"effect": "noise"})
+        client.patch("/api/show/surfaces/1", json={"effect": "noise"})
         client.post("/api/projects", json={"name": "Show"})
 
     no_camera = FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=[])
@@ -62,7 +62,7 @@ def test_opening_a_project_plays_without_a_camera(scanned):
         assert client.post("/api/projects/show/open").status_code == 200
         pushed = out.receive_json()
 
-    assert pushed["type"] == "scene"
+    assert pushed["type"] == "show"
     assert pushed["surfaces"][0]["effect"] == "noise"
 
 
@@ -89,7 +89,7 @@ def test_saving_again_after_a_rescan_updates_the_project(rig, scanned):
         (latest / "scan.png").write_bytes(b"new png")
         (latest / "meta.json").write_text(json.dumps(meta))
         (latest / "scene.json").unlink()
-        client.app.state.hub.scene.reload()
+        client.app.state.hub.show.reload()
         # ...and saving under the same name overwrites the project.
         client.post("/api/projects", json={"name": "Island"})
         listed = client.get("/api/projects").json()

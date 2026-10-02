@@ -58,7 +58,7 @@ def test_opening_a_project_goes_straight_to_play(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
         client.post("/api/projects", json={"name": "Show"})
         client.post("/api/projects/show/open")
-        assert client.get("/api/scene").json()["presentation"]["mode"] == "play"
+        assert client.get("/api/show").json()["presentation"]["mode"] == "play"
 
 
 def test_output_frame_rate_is_reported_in_status(rig, scanned):

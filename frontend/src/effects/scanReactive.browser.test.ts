@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { SceneRenderer } from "../output/sceneRenderer";
-import type { SceneMessage } from "../shared/messages";
+import { ShowRenderer } from "../output/showRenderer";
+import type { ShowMessage } from "../shared/messages";
 import { EFFECTS } from "./index";
 
 const W = 64, H = 32;
@@ -21,13 +21,13 @@ function render(effect: string, params: Record<string, unknown>, scan: HTMLCanva
   const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H });
   const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true })!;
   const errors: string[] = [];
-  const r = new SceneRenderer(gl, EFFECTS, (e) => errors.push(e.log));
+  const r = new ShowRenderer(gl, EFFECTS, (e) => errors.push(e.log));
   r.setScanImage(scan);
-  const scene: SceneMessage = {
-    type: "scene", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
+  const show: ShowMessage = {
+    type: "show", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
     surfaces: [{ id: 1, polygon: [[0, 0], [W, 0], [W, H], [0, H]], area: W * H, effect, params }],
   };
-  r.setScene(scene);
+  r.setShow(show);
   r.draw(0);
   const px = new Uint8Array(W * H * 4);
   gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);

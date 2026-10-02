@@ -22,7 +22,7 @@ from engine.hub import OutputNotResponding
 from engine.scan import block_coverage, diagnose, projector_space_image
 from engine.scan_folder import ScanFolder
 from engine.scan_runner import ScanCanceled, ScanError, capture_scan
-from engine.scene import SceneStore
+from engine.show import CurrentShow
 from engine.surfaces import detect_surfaces
 
 log = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class ScanHub(Protocol):
     async def show_pattern(self, pattern: dict, timeout: float) -> None: ...
     async def send_to_output(self, msg: dict) -> None: ...
     async def broadcast(self, msg: dict) -> None: ...
-    async def broadcast_scene(self) -> None: ...
+    async def broadcast_show(self) -> None: ...
     async def broadcast_status(self) -> None: ...
 
 
@@ -60,7 +60,7 @@ class ScanJob:
         session: CameraSession,
         settings: CameraSettings,
         latest: ScanFolder,
-        scene: SceneStore,
+        show: CurrentShow,
         make_uvc: Callable[[UsbAddress], Uvc],
         data_dir: Path,
         settle_seconds: float,
@@ -68,7 +68,7 @@ class ScanJob:
         frames_per_pattern: int,
         ack_timeout: float,
     ):
-        self.session, self.settings, self.latest, self.scene = session, settings, latest, scene
+        self.session, self.settings, self.latest, self.show = session, settings, latest, show
         self.make_uvc, self.data_dir = make_uvc, Path(data_dir)
         self.settle_seconds, self.drop_frames = settle_seconds, drop_frames
         self.frames_per_pattern, self.ack_timeout = frames_per_pattern, ack_timeout
@@ -150,7 +150,7 @@ class ScanJob:
                     "warnings": diagnose(decoded, coverage),
                 }
                 await asyncio.to_thread(self.latest.save, decoded, image, covered, summary)
-                self.scene.apply_detection(summary)  # keeps drawn/edited surfaces and carries effects
+                self.show.apply_detection(summary)  # keeps drawn/edited surfaces and carries effects
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except ScanCanceled:
                 await hub.broadcast({"type": "scan_canceled"})
@@ -164,5 +164,5 @@ class ScanJob:
             finally:
                 await asyncio.to_thread(self.session.close)
                 await hub.send_to_output({"type": "show_test_frame", "kind": "black"})
-                await hub.broadcast_scene()  # back to the projected show
+                await hub.broadcast_show()  # back to the projected show
                 await hub.broadcast_status()

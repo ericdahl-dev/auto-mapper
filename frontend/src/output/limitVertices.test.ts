@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { resampleOutline } from "./sceneRenderer";
+import { resampleOutline } from "./showRenderer";
 
 it("keeps outlines that fit as they are", () => {
   const square = [[0, 0], [1, 0], [1, 1], [0, 1]];

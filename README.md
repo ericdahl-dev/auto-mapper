@@ -8,7 +8,7 @@ auto-mapper is a [Lightform](https://lightform.com/)-style projection mapper (Li
 
 A session looks like this:
 
-1. **Scan**: about a minute of black-and-white stripe patterns on the scene.
+1. **Scan**: about a minute of black-and-white stripe patterns on the space.
 2. **Surfaces**: outlines are detected automatically; you fix, merge, draw or curve them.
 3. **Effects**: pick an effect per surface (color fills, outline chases, scan-based tints, images and video) and tune its parameters.
 4. **Play**: switch the projector from the editing view to the show, and save it as a project.
@@ -68,7 +68,7 @@ This starts two processes:
 
 | Process | Address | What it is |
 |---------|---------|------------|
-| Engine (FastAPI + uvicorn) | `http://127.0.0.1:8765` | Camera, scanning, surface detection, scene and project storage |
+| Engine (FastAPI + uvicorn) | `http://127.0.0.1:8765` | Camera, scanning, surface detection, show and project storage |
 | Editor (Vite) | `http://localhost:5173` | **Open this one.** Vite proxies `/api` and `/ws` to the engine. |
 
 You can also run them separately with `make engine` and `make frontend`.
@@ -99,11 +99,12 @@ Everything is plain files under `~/.auto-mapper/`:
 │                          crashed): the camera's original settings, restored automatically
 │                          on the next engine start
 ├── scans/latest/          the working scan, which the editor and output show
-│   ├── scan.png           the scene as the projector sees it (projector pixels)
+│   ├── scan.png           the space as the projector sees it (projector pixels)
 │   ├── mask.png           which projector pixels were decoded
 │   ├── map.npz            camera-to-projector correspondence map
 │   ├── meta.json          scan summary: size, coverage, timing, warnings, detected surfaces
-│   ├── scene.json         surfaces with names, outlines, effects and params
+│   ├── scene.json         the show: surfaces with names, outlines, effects and settings
+│   │                      (the file keeps its older name so existing projects still open)
 │   └── media/             images and videos uploaded for the Image / video effect
 └── projects/<slug>/       a saved project: project.json plus copies of the files above,
                            including media/
@@ -137,7 +138,7 @@ If you skip this step, Scan calibrates first.
 
 Click **Scan**. The projector shows a white frame, a black frame, then Gray-code stripe patterns, each followed by its inverse, for both axes (46 patterns for a 1920x1080 projector). Each pattern is captured as an average of 3 frames to cut sensor noise. This is deliberately quality over speed: a scan takes about a minute on the dev rig. Progress shows below the scan view, and the Scan button becomes **Cancel scan** while it runs.
 
-When it finishes, the editor shows the scene from the projector's point of view, the coverage (the share of the projection that decoded) and the time taken. If coverage is under 40%, a warning explains the likely cause: a bright room, faint projection, or a camera that can't see much of the projection. Tick **Show missed areas** to tint the undecoded parts of the projection red.
+When it finishes, the editor shows the space from the projector's point of view, the coverage (the share of the projection that decoded) and the time taken. If coverage is under 40%, a warning explains the likely cause: a bright room, faint projection, or a camera that can't see much of the projection. Tick **Show missed areas** to tint the undecoded parts of the projection red.
 
 ### 5. Edit surfaces
 
@@ -298,7 +299,7 @@ Shaders write to `out vec4 color`. Compile errors are reported back to the edito
 |--------|------|
 | `__main__.py` | Entry point: reads the environment variables, serves on 127.0.0.1:8765 |
 | `app.py` | FastAPI app: all HTTP routes and the `/ws` WebSocket (see [docs/http-api.md](docs/http-api.md)) |
-| `hub.py` | Tracks the editors and the output window, pushes status and scene, pattern acks |
+| `hub.py` | Tracks the editors and the output window, pushes status and the show (whenever it changes), pattern acks |
 | `hardware.py` | Finds displays (`system_profiler`) and cameras (AVFoundation metadata; never opens a camera) |
 | `cameras.py` | Camera catalog, USB address parsing, default camera choice, `settings.json` |
 | `camera_device.py` | Opens and reads the selected camera through OpenCV, one at a time |
@@ -309,7 +310,7 @@ Shaders write to `out vec4 color`. Compile errors are reported back to the edito
 | `scan_folder.py` | A saved scan on disk (scan image, mask, map, summary, its show, media): save, read, redetect, copy |
 | `scan.py` | Gray-code patterns, decoding, projector-space image, coverage, low-coverage hints |
 | `surfaces.py` | Surface detection and curve-aware outlines |
-| `scene.py` | The scene: surfaces, effects, edits, merges, redetect merging, play/blackout state |
+| `show.py` | The current show (`CurrentShow`): surfaces, effects, edits, merges, redetect merging; announces every change; play/blackout, sound and selection as session state |
 | `projects.py` | Saving and opening named projects |
 | `media.py` | Storing and serving uploaded images and videos |
 | `messages.py` | Request and WebSocket message shapes (mirrored in `frontend/src/shared/messages.ts`) |
@@ -324,9 +325,9 @@ Shaders write to `out vec4 color`. Compile errors are reported back to the edito
 | `editor/curves.ts`, `bezier.ts`, `polygonEdit.ts`, `drawing.ts` | Outline editing: handles on curves, Bezier edges, corner add/remove, drawing |
 | `editor/controls.ts`, `applyEffect.ts` | Effect controls from the schema; "apply to" targets |
 | `editor/pin.ts`, `framing.ts` | Corner-pin handles; drag-to-pan and scroll-to-zoom framing |
-| `output/main.ts` | The output page (`output.html`): patterns, test frames, the animated scene, fullscreen hint |
+| `output/main.ts` | The output page (`output.html`): patterns, test frames, the animated show, fullscreen hint |
 | `output/patterns.ts`, `renderer.ts` | Gray-code stripes (mirrors `engine/scan.py`) and test frames in WebGL2 |
-| `output/sceneRenderer.ts` | Draws every surface with its effect shader, media textures, selection highlight |
+| `output/showRenderer.ts` | Draws every surface with its effect shader, media textures, selection highlight |
 | `effects/` | Effect definitions, the registry (`index.ts`), schema types and shader compilation |
 | `shared/` | WebSocket connection with reconnect, message types, Play/Blackout keys |
 
@@ -418,7 +419,7 @@ Effect ids are stored in each project's `scene.json`, so don't rename an existin
 ## Limitations and roadmap
 
 - **macOS only.** Hardware detection and camera control depend on `system_profiler`, AVFoundation and `uvc-util`.
-- **One projector.** A scene maps a single projector.
+- **One projector.** A show maps a single projector.
 - **iPhone LiDAR depth** as an extra source for plane-based surface detection is an open idea ([#22](https://github.com/ericdahl-dev/auto-mapper/issues/22)).
 - **Real-rig validation** of scanning and detection, with a committed scan check and fixture, is in progress ([#15](https://github.com/ericdahl-dev/auto-mapper/issues/15)).
 

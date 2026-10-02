@@ -7,7 +7,7 @@ from fastapi import WebSocket
 
 from engine.cameras import CameraSettings
 from engine.hardware import HardwareSnapshot
-from engine.scene import SceneStore
+from engine.show import CurrentShow
 
 
 class OutputNotResponding(Exception):
@@ -23,10 +23,10 @@ NOT_CONNECTED = "The output window is not connected. Open it fullscreen on the p
 
 
 class Hub:
-    def __init__(self, hardware: HardwareSnapshot, settings: CameraSettings, scene: SceneStore):
+    def __init__(self, hardware: HardwareSnapshot, settings: CameraSettings, show: CurrentShow):
         self.settings = settings
         self.hardware = hardware
-        self.scene = scene
+        self.show = show
         self.projects = None  # set by the app; status reports the open project
         self.editors: set[WebSocket] = set()
         self.output: WebSocket | None = None
@@ -37,6 +37,10 @@ class Hub:
         self.output_sound_output_error: str | None = None  # the chosen sound output couldn't be used
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
+        # Every change to the show is announced to editors and the output window from here.
+        self._loop = asyncio.get_running_loop()
+        self._show_queued = False
+        show.subscribe(self._show_changed)
 
     @property
     def hardware(self) -> HardwareSnapshot:
@@ -81,16 +85,16 @@ class Hub:
     async def add_editor(self, ws: WebSocket) -> None:
         self.editors.add(ws)
         await self._send(ws, self.status())
-        if (scene := self.scene.message()) is not None:
-            await self._send(ws, scene)
+        if (show := self.show.message()) is not None:
+            await self._send(ws, show)
 
     async def set_output(self, ws: WebSocket, width: int, height: int) -> None:
         # A newer output window replaces the old one; only one owns the projector.
         first_hello = ws is not self.output
         self.output = ws
         self.output_resolution = {"width": width, "height": height}
-        if first_hello and (scene := self.scene.message()) is not None:
-            await self._send(ws, scene)  # a reconnecting output shows the scene straight away
+        if first_hello and (show := self.show.message()) is not None:
+            await self._send(ws, show)  # a reconnecting output shows the show straight away
         await self.broadcast_status()
 
     async def remove(self, ws: WebSocket) -> None:
@@ -132,11 +136,23 @@ class Hub:
         if fut is not None and not fut.done():
             fut.set_result(None)
 
-    async def broadcast_scene(self) -> None:
-        if (scene := self.scene.message()) is None:
+    def _show_changed(self) -> None:
+        """The show changed (possibly on a worker thread): send it once, soon, on the event loop.
+        Several changes in a row coalesce into one message."""
+        if self._show_queued:
             return
-        await self.send_to_output(scene)
-        await self.broadcast(scene)
+        self._show_queued = True
+        self._loop.call_soon_threadsafe(self._send_show_soon)
+
+    def _send_show_soon(self) -> None:
+        self._show_queued = False
+        asyncio.ensure_future(self.broadcast_show())
+
+    async def broadcast_show(self) -> None:
+        if (show := self.show.message()) is None:
+            return
+        await self.send_to_output(show)
+        await self.broadcast(show)
 
     async def broadcast(self, msg: dict) -> None:
         for ws in list(self.editors):

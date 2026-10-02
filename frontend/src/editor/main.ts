@@ -1,7 +1,7 @@
 import { connect } from "../shared/connection";
 import type { StatusMessage, TestFrameKind } from "../shared/messages";
 import { EFFECTS, effectById } from "../effects/index";
-import type { SceneMessage } from "../shared/messages";
+import type { ShowMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
 import { applyPlan } from "./applyEffect";
 import { controlsFor, mediaLabel, parseControlValue } from "./controls";
@@ -75,7 +75,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const stageEmpty = $("stage-empty");
 const scanText = $("scan-label");
 
-let scene: SceneMessage | null = null;
+let show: ShowMessage | null = null;
 const effectErrors = new Map<number, { effect: string; log: string }>(); // surface id -> failing effect
 const surfacePanel = $("surface-panel");
 const surfaceTitle = $("surface-title");
@@ -85,14 +85,14 @@ const effectError = $("effect-error");
 effectSelect.replaceChildren(...EFFECTS.map((e) => Object.assign(document.createElement("option"), { value: e.id, textContent: e.name })));
 
 // The engine, and this Editor's view of the current show (see editSession.ts): edits show at once and
-// save at most once per frame; scene updates that arrive during a drag wait until it ends.
+// save at most once per frame; show updates that arrive during a drag wait until it ends.
 const engine = createEngineClient();
 const session = new EditSession({ patch: (id, body) => void engine.patchSurface(id, body) });
 /** Edits the shape or settings of a surface (shown at once, saved throttled). */
 const patchSurface = (id: number, body: SurfaceEdit) => session.edit(id, body);
 /** Shows the session's latest view (local edits included). */
 function refresh() {
-  scene = session.view();
+  show = session.view();
   renderSurfaces();
 }
 const surfaceName = $<HTMLInputElement>("surface-name");
@@ -103,7 +103,7 @@ const multi = new Set<number>(); // shift-click selection for merging
 
 function projectorPoint(ev: MouseEvent): number[] {
   const r = surfacesSvg.getBoundingClientRect();
-  return toProjector(r, scanState.size ?? { width: scene!.width, height: scene!.height }, ev.clientX, ev.clientY);
+  return toProjector(r, scanState.size ?? { width: show!.width, height: show!.height }, ev.clientX, ev.clientY);
 }
 
 /** Saves a Bezier outline: the engine stores it with its flattened polygon. */
@@ -128,7 +128,7 @@ const redetectButton = $<HTMLButtonElement>("redetect");
 const SOURCE_TEXT: Record<string, string> = {
   detected: "Detected automatically",
   edited: "Detected, then edited by you (kept on redetect)",
-  manual: "Drawn by you (kept on redetect)",
+  drawn: "Drawn by you (kept on redetect)",
 };
 
 function drawEvent(ev: DrawEvent) {
@@ -147,7 +147,7 @@ drawButton.addEventListener("click", () => drawEvent({ type: draw.active ? "canc
 surfacesSvg.addEventListener("click", (ev) => {
   if (!curving) return;
   ev.stopPropagation();
-  const surface = scene?.surfaces.find((x) => x.id === scene?.selected);
+  const surface = show?.surfaces.find((x) => x.id === show?.selected);
   if (surface) {
     const bezier = surface.bezier ?? fromPolygon(surface.polygon);
     const edge = nearestEdge(bezier.anchors, projectorPoint(ev));
@@ -182,7 +182,7 @@ function draftElements(): SVGElement[] {
   const line = document.createElementNS(SVG_NS, "polyline");
   line.classList.add("draft");
   line.setAttribute("points", draw.points.map(([x, y]) => `${x},${y}`).join(" "));
-  const r = (4 * (scene?.width ?? 1920)) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
+  const r = (4 * (show?.width ?? 1920)) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
   const dots = draw.points.map(([x, y]) => {
     const c = document.createElementNS(SVG_NS, "circle");
     c.classList.add("draft");
@@ -193,8 +193,8 @@ function draftElements(): SVGElement[] {
 }
 
 function renderSurfaces() {
-  const surfaces = scene?.surfaces ?? [];
-  const width = scene?.width ?? 1920;
+  const surfaces = show?.surfaces ?? [];
+  const width = show?.width ?? 1920;
   // Handle size in projector pixels that looks ~7 screen px whatever the editor's scale.
   const r = (7 * width) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
   surfacesSvg.replaceChildren(
@@ -202,10 +202,10 @@ function renderSurfaces() {
       const { bezier, polygon } = s; // the session's view already includes edits in progress
       const poly = document.createElementNS(SVG_NS, "polygon");
       poly.setAttribute("points", polygon.map(([x, y]) => `${x},${y}`).join(" "));
-      poly.classList.toggle("selected", s.id === scene?.selected);
+      poly.classList.toggle("selected", s.id === show?.selected);
       poly.classList.toggle("multi", multi.has(s.id));
       poly.classList.toggle("error", effectErrors.has(s.id));
-      if (s.id === scene?.selected && canFrame(effectById(s.effect))) bindFraming(poly, s);
+      if (s.id === show?.selected && canFrame(effectById(s.effect))) bindFraming(poly, s);
       poly.addEventListener("click", (ev) => {
         ev.stopPropagation();
         if (framedJustNow) {
@@ -214,15 +214,15 @@ function renderSurfaces() {
         }
         if (ev.shiftKey) {
           multi.has(s.id) ? multi.delete(s.id) : multi.add(s.id);
-          if (scene?.selected != null) multi.add(scene.selected);
+          if (show?.selected != null) multi.add(show.selected);
           renderSurfaces();
           return;
         }
         multi.clear();
-        select(s.id === scene?.selected ? null : s.id);
+        select(s.id === show?.selected ? null : s.id);
       });
       poly.addEventListener("dblclick", (ev) => {
-        if (s.id !== scene?.selected) return;
+        if (s.id !== show?.selected) return;
         ev.stopPropagation();
         if (s.bezier) patchBezier(s.id, insertAnchor(s.bezier, projectorPoint(ev)));
         else patchSurface(s.id, { polygon: insertVertex(s.polygon, projectorPoint(ev)) });
@@ -233,9 +233,9 @@ function renderSurfaces() {
       label.setAttribute("y", String(y + 34));
       label.textContent = String(s.id);
       const parts: SVGElement[] = [poly, label];
-      if (s.id === scene?.selected && bezier) {
+      if (s.id === show?.selected && bezier) {
         parts.push(...bezierHandles(s.id, bezier, r));
-      } else if (s.id === scene?.selected) {
+      } else if (s.id === show?.selected) {
         // Handles on corners and a few along curves; a curve isn't dozens of tiny handles.
         handleIndices(polygon).forEach((index) => {
           const [hx, hy] = polygon[index];
@@ -276,7 +276,7 @@ function renderSurfaces() {
 
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
 let framedJustNow = false;
-function bindFraming(poly: SVGPolygonElement, s: SceneMessage["surfaces"][number]) {
+function bindFraming(poly: SVGPolygonElement, s: ShowMessage["surfaces"][number]) {
   // Always read the latest values (local edits included), so fast scrolls build on each other.
   const num = (name: string, fallback: number) => {
     const v = session.surface(s.id)?.params[name];
@@ -314,7 +314,7 @@ function bindFraming(poly: SVGPolygonElement, s: SceneMessage["surfaces"][number
 /** Orange diamonds (and a dashed quad) for the selected surface's corner pin, when its effect uses one.
  *  Drag a corner to pin it; Alt-click any corner to go back to the outline's own corners. */
 function pinElements(r: number): SVGElement[] {
-  const s = scene?.surfaces.find((x) => x.id === scene?.selected);
+  const s = show?.surfaces.find((x) => x.id === show?.selected);
   if (!s) return [];
   const pin = pinHandles(effectById(s.effect), s.params, s.polygon);
   if (!pin) return [];
@@ -404,19 +404,19 @@ function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
 
 const playButton = $<HTMLButtonElement>("play");
 const blackoutButton = $<HTMLButtonElement>("blackout");
-playButton.addEventListener("click", () => void setMode(scene?.presentation.mode === "play" ? "edit" : "play"));
+playButton.addEventListener("click", () => void setMode(show?.presentation.mode === "play" ? "edit" : "play"));
 blackoutButton.addEventListener("click", () => void toggleBlackout());
-bindPresentationKeys(() => scene?.presentation.mode ?? "edit");
+bindPresentationKeys(() => show?.presentation.mode ?? "edit");
 
 function renderPresentation() {
-  const p = scene?.presentation;
+  const p = show?.presentation;
   playButton.textContent = p?.mode === "play" ? "Edit" : "Play";
   playButton.classList.toggle("on", p?.mode === "play");
   blackoutButton.classList.toggle("on", !!p?.blackout);
 }
 
 function renderPanel() {
-  const surface = scene?.surfaces.find((s) => s.id === scene?.selected);
+  const surface = show?.surfaces.find((s) => s.id === show?.selected);
   surfacePanel.hidden = !surface;
   mergeButton.hidden = multi.size < 2;
   mergeButton.textContent = `Merge ${multi.size} surfaces`;
@@ -460,7 +460,7 @@ function renderPanel() {
       }),
     );
   }
-  const plan = applyPlan(surface.id, multi, scene?.surfaces.length ?? 0);
+  const plan = applyPlan(surface.id, multi, show?.surfaces.length ?? 0);
   applyButton.textContent = plan.label;
   applyButton.onclick = () =>
     void engine.applyEffect(surface.id, plan.to);
@@ -494,14 +494,14 @@ function mediaControl(row: HTMLLabelElement, surfaceId: number, name: string, la
 }
 
 effectSelect.addEventListener("change", () => {
-  if (scene?.selected != null) void engine.patchSurface(scene.selected, { effect: effectSelect.value });
+  if (show?.selected != null) void engine.patchSurface(show.selected, { effect: effectSelect.value });
 });
 surfacesSvg.addEventListener("click", () => select(null));
 surfaceName.addEventListener("change", () => {
-  if (scene?.selected != null) void engine.patchSurface(scene.selected, { name: surfaceName.value });
+  if (show?.selected != null) void engine.patchSurface(show.selected, { name: surfaceName.value });
 });
 deleteButton.addEventListener("click", () => {
-  if (scene?.selected != null) void engine.deleteSurface(scene.selected);
+  if (show?.selected != null) void engine.deleteSurface(show.selected);
 });
 mergeButton.addEventListener("click", () => {
   const ids = [...multi];
@@ -585,7 +585,7 @@ const soundToggle = $<HTMLButtonElement>("sound-toggle");
 let lastSoundKey = "";
 const soundInput = $<HTMLSelectElement>("sound-input");
 const postSound = (body: Parameters<typeof engine.sound>[0]) => void engine.sound(body);
-soundToggle.addEventListener("click", () => postSound({ enabled: !scene?.sound?.enabled, device: soundInput.value || undefined }));
+soundToggle.addEventListener("click", () => postSound({ enabled: !show?.sound?.enabled, device: soundInput.value || undefined }));
 soundInput.addEventListener("change", () => postSound({ device: soundInput.value }));
 const soundSource = $<HTMLSelectElement>("sound-source");
 // Video sound: effects follow the videos playing with sound (no mic, no feedback from the speakers).
@@ -596,14 +596,14 @@ async function refreshSoundInputs() {
   // Same origin as the output window, so device ids match; labels appear once the mic is allowed.
   const devices = await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? [];
   const outputs = devices.filter((d) => d.kind === "audiooutput" && d.deviceId && d.deviceId !== "default");
-  const chosenOutput = scene?.sound?.output ?? "";
+  const chosenOutput = show?.sound?.output ?? "";
   soundOutputSelect.replaceChildren(
     Object.assign(document.createElement("option"), { value: "", textContent: "Sound output: Mac default", selected: !chosenOutput }),
     ...outputs.map((d, i) =>
       Object.assign(document.createElement("option"), { value: d.deviceId, textContent: `Sound output: ${d.label || `Output ${i + 1}`}`, selected: d.deviceId === chosenOutput })),
   );
   const inputs = devices.filter((d) => d.kind === "audioinput");
-  const chosen = scene?.sound?.device ?? "";
+  const chosen = show?.sound?.device ?? "";
   soundInput.replaceChildren(
     Object.assign(document.createElement("option"), { value: "", textContent: "Default input", selected: !chosen }),
     ...inputs.filter((d) => d.deviceId && d.deviceId !== "default").map((d, i) =>
@@ -613,9 +613,9 @@ async function refreshSoundInputs() {
 navigator.mediaDevices?.addEventListener("devicechange", () => void refreshSoundInputs());
 void refreshSoundInputs();
 function renderSound() {
-  const v = describeSound(scene?.sound ?? { enabled: false, device: null }, status?.output_connected ? status.output_sound ?? null : null);
+  const v = describeSound(show?.sound ?? { enabled: false, device: null }, status?.output_connected ? status.output_sound ?? null : null);
   soundToggle.textContent = `React to sound: ${v.on ? "on" : "off"}`;
-  const source = scene?.sound?.source ?? "mic";
+  const source = show?.sound?.source ?? "mic";
   if (document.activeElement !== soundSource) soundSource.value = source;
   soundInput.hidden = source === "video";
   soundToggle.classList.toggle("on", v.on);
@@ -629,9 +629,9 @@ function notice(text: string) {
   setTimeout(() => note.remove(), 6000);
 }
 
-// Every engine scene is applied here, exactly once, whether it arrived idle or during a drag.
+// Every engine show is applied here, exactly once, whether it arrived idle or during a drag.
 session.subscribe((view) => {
-  scene = view;
+  show = view;
   for (const id of [...multi]) if (!view.surfaces.some((s) => s.id === id)) multi.delete(id);
   // An error belongs to one effect; switching the surface to another effect clears it.
   for (const s of view.surfaces) if (effectErrors.get(s.id)?.effect !== s.effect) effectErrors.delete(s.id);
@@ -654,7 +654,7 @@ connect({
       render();
       renderSound();
       renderScan();
-    } else if (msg.type === "scene") {
+    } else if (msg.type === "show") {
       session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below
     } else if (msg.type === "scan_reload") {
       void reloadScan();

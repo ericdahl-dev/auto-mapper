@@ -4,7 +4,7 @@ The engine (`engine/app.py`) serves on `http://127.0.0.1:8765`. In development, 
 
 This is an internal API between the engine and its two pages, not a stable public one. Errors come back as FastAPI's `{"detail": "..."}` with the status codes listed below.
 
-Most write routes respond with the updated scene and also broadcast it over the WebSocket, so every editor and the output window stay in sync.
+Most write routes respond with the updated show, and the show is broadcast over the WebSocket, so every editor and the output window stay in sync.
 
 ## Status and hardware
 
@@ -34,18 +34,18 @@ Most write routes respond with the updated scene and also broadcast it over the 
 | GET | `/api/scan/latest.png` | | The scan image in projector pixels |
 | GET | `/api/scan/latest-mask.png` | | The decoded-pixel mask |
 
-## Scene
+## Show
 
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
-| GET | `/api/scene` | | The scene: size, surfaces, selected id, presentation state, `scan_rev`. 404 before the first scan |
-| PATCH | `/api/scene/surfaces/{id}` | Any of `effect`, `params`, `polygon` (3+ `[x, y]` points), `name` (up to 80 characters), `bezier` (the editor's curve data, sent together with its flattened `polygon`) | Updates one surface. Changing `effect` resets `params`; changing `polygon` marks a detected surface as edited, and drops any stored `bezier` unless a new one is sent with it |
-| DELETE | `/api/scene/surfaces/{id}` | | Removes a surface |
-| POST | `/api/scene/surfaces` | `{"polygon": [[x, y], ...], "name"?: "..."}` | Adds a hand-drawn surface and selects it |
-| POST | `/api/scene/select` | `{"id": 3}` or `{"id": null}` | Selects or deselects a surface |
-| POST | `/api/scene/merge` | `{"ids": [3, 5, ...]}` (2 or more) | Merges surfaces into the first one |
-| POST | `/api/scene/apply` | `{"from": 3, "to"?: [5, 6]}` | Copies a surface's effect and params to the listed surfaces, or to all of them if `to` is omitted |
-| POST | `/api/scene/redetect` | | Reruns detection on the saved scan, keeping drawn and edited surfaces. 404 before a scan, 409 while scanning |
+| GET | `/api/show` | | The current show: size, surfaces, selected id, presentation state, `scan_rev`. 404 before the first scan |
+| PATCH | `/api/show/surfaces/{id}` | Any of `effect`, `params`, `polygon` (3+ `[x, y]` points), `name` (up to 80 characters), `bezier` (the editor's curve data, sent together with its flattened `polygon`) | Updates one surface. Changing `effect` resets `params`; changing `polygon` marks a detected surface as edited, and drops any stored `bezier` unless a new one is sent with it |
+| DELETE | `/api/show/surfaces/{id}` | | Removes a surface |
+| POST | `/api/show/surfaces` | `{"polygon": [[x, y], ...], "name"?: "..."}` | Adds a hand-drawn surface and selects it |
+| POST | `/api/show/select` | `{"id": 3}` or `{"id": null}` | Selects or deselects a surface |
+| POST | `/api/show/merge` | `{"ids": [3, 5, ...]}` (2 or more) | Merges surfaces into the first one |
+| POST | `/api/show/apply` | `{"from": 3, "to"?: [5, 6]}` | Copies a surface's effect and params to the listed surfaces, or to all of them if `to` is omitted |
+| POST | `/api/show/redetect` | | Reruns detection on the saved scan, keeping drawn and edited surfaces. 404 before a scan, 409 while scanning |
 
 Routes that name a surface return 404 for an unknown surface id.
 
@@ -57,7 +57,7 @@ Routes that name a surface return 404 for an unknown surface id.
 | POST | `/api/presentation` | `{"mode"?: "edit" \| "play", "blackout"?: bool}` | The presentation state |
 | POST | `/api/presentation/blackout/toggle` | | The presentation state |
 
-Presentation state is per engine session and isn't saved with the scene.
+Presentation state, sound settings and the selected surface are per engine session and aren't saved with the show.
 
 ## Media
 
@@ -73,7 +73,7 @@ Accepted extensions: png, jpg, jpeg, webp, gif, mp4, m4v, mov, webm. Stored name
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
 | GET | `/api/projects` | | Saved projects, newest first |
-| POST | `/api/projects` | `{"name": "..."}` (1 to 80 characters) | Saves the working scan and scene under that name, overwriting a project with the same slug. 409 before the first scan or while scanning |
+| POST | `/api/projects` | `{"name": "..."}` (1 to 80 characters) | Saves the working scan and show under that name, overwriting a project with the same slug. 409 before the first scan or while scanning |
 | POST | `/api/projects/{slug}/open` | | Replaces the working scan with the project's and switches to Play. 404 for an unknown project, 409 while scanning |
 
 ## WebSocket: `/ws`
@@ -83,8 +83,8 @@ The first message from a client must be a hello; otherwise the engine closes the
 - Editor: `{"type": "hello", "role": "editor"}`
 - Output: `{"type": "hello", "role": "output", "width": W, "height": H}`. The output sends it again when it is resized (for example on going fullscreen). A newer output window replaces the previous one.
 
-**Engine to editors:** `status`, `scene`, `scan_started`, `scan_progress` (`done`, `total`), `scan_result` (the scan summary plus `image`), `scan_failed` (`error`), `scan_canceled`, `scan_reload` (refetch the scan after a redetect or project open), `effect_error` (`surface`, `effect`, `log`).
+**Engine to editors:** `status`, `show`, `scan_started`, `scan_progress` (`done`, `total`), `scan_result` (the scan summary plus `image`), `scan_failed` (`error`), `scan_canceled`, `scan_reload` (refetch the scan after a redetect or project open), `effect_error` (`surface`, `effect`, `log`).
 
-**Engine to output:** `scene`, `show_test_frame` (`kind`), `show_pattern` (`seq`, `pattern`).
+**Engine to output:** `show`, `show_test_frame` (`kind`), `show_pattern` (`seq`, `pattern`).
 
 **Output to engine:** `pattern_shown` (`seq`, the ack for `show_pattern`), `output_stats` (`fps`, and `sound` {`level`, `error`}; every 2 seconds, or 4 times a second while listening; relayed to editors as `output_sound` in status; plus `video_sound_blocked` and `sound_output_error`, relayed as `output_video_sound_blocked` and `output_sound_output_error`), `effect_error` (forwarded to editors), and `hello` on resize.

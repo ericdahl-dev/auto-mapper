@@ -77,7 +77,7 @@ def test_unsupported_or_unsafe_media_is_rejected(rig, scanned):
 def test_media_is_saved_with_the_project_and_restored_on_open(rig, scanned):
     with engine(rig, data_dir=scanned) as client:
         media = upload(client, "wall.png", PNG).json()
-        client.patch("/api/scene/surfaces/1", json={"effect": "media", "params": {"src": media["url"], "fit": "cover"}})
+        client.patch("/api/show/surfaces/1", json={"effect": "media", "params": {"src": media["url"], "fit": "cover"}})
         assert client.post("/api/projects", json={"name": "Gallery"}).status_code == 200
         assert (scanned / "projects" / "gallery" / "media" / media["name"]).read_bytes() == PNG
 
@@ -91,7 +91,7 @@ def test_media_is_saved_with_the_project_and_restored_on_open(rig, scanned):
         assert client.post("/api/projects/gallery/open").status_code == 200
         assert client.get(media["url"]).content == PNG
         assert client.get(other["url"]).status_code == 404
-        surface = client.get("/api/scene").json()["surfaces"][0]
+        surface = client.get("/api/show").json()["surfaces"][0]
         assert surface["params"] == {"src": media["url"], "fit": "cover"}
 
 

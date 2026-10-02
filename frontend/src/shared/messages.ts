@@ -88,10 +88,10 @@ export type ScanMessage =
   | { type: "scan_failed"; error: string }
   | { type: "scan_canceled" };
 
-export interface SceneSurface {
+export interface ShowSurface {
   id: number;
   name?: string;
-  source?: "detected" | "edited" | "manual";
+  source?: "detected" | "edited" | "drawn";
   bezier?: { anchors: number[][]; controls: Record<number, [number[], number[]]> };
   polygon: number[][];
   area: number;
@@ -99,11 +99,11 @@ export interface SceneSurface {
   params: Record<string, unknown>;
 }
 
-export interface SceneMessage {
-  type: "scene";
+export interface ShowMessage {
+  type: "show";
   width: number;
   height: number;
-  surfaces: SceneSurface[];
+  surfaces: ShowSurface[];
   selected: number | null;
   presentation: { mode: "edit" | "play"; blackout: boolean };
   sound?: { enabled: boolean; device: string | null; source?: "mic" | "video"; output?: string | null };
@@ -126,7 +126,7 @@ export type ServerMessage =
   | ShowTestFrameMessage
   | ShowPatternMessage
   | ScanMessage
-  | SceneMessage
+  | ShowMessage
   | EffectErrorMessage
   | ScanReloadMessage;
 
@@ -172,9 +172,9 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return typeof m.error === "string" ? (m as unknown as ScanMessage) : null;
     case "scan_canceled":
       return { type: "scan_canceled" };
-    case "scene":
+    case "show":
       return typeof m.width === "number" && typeof m.height === "number" && Array.isArray(m.surfaces)
-        ? (m as unknown as SceneMessage)
+        ? (m as unknown as ShowMessage)
         : null;
     case "scan_reload":
       return { type: "scan_reload" };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createMediaElement, SceneRenderer } from "../output/sceneRenderer";
-import type { SceneMessage } from "../shared/messages";
+import { createMediaElement, ShowRenderer } from "../output/showRenderer";
+import type { ShowMessage } from "../shared/messages";
 import greenVideo from "./fixtures/green.webm?url"; // 1 s of solid green, 32x16 (ffmpeg lavfi color source)
 import greenThenBlue from "./fixtures/green-then-blue.webm?url";
 import { EFFECTS } from "./index";
@@ -26,12 +26,12 @@ function setup(params: Record<string, unknown>) {
   const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H });
   const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true })!;
   const errors: string[] = [];
-  const r = new SceneRenderer(gl, EFFECTS, (e) => errors.push(e.log));
-  const scene: SceneMessage = {
-    type: "scene", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
+  const r = new ShowRenderer(gl, EFFECTS, (e) => errors.push(e.log));
+  const show: ShowMessage = {
+    type: "show", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
     surfaces: [{ id: 1, polygon: TRIANGLE, area: 288, effect: "media", params }],
   };
-  r.setScene(scene);
+  r.setShow(show);
   const pixel = (x: number, y: number) => {
     const out = new Uint8Array(4);
     gl.readPixels(x, H - 1 - y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, out);
