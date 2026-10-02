@@ -62,3 +62,31 @@ def test_cancel_with_no_scan_running_is_409(tmp_path):
     _, uvc, hw, cams = make_rig()
     with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client:
         assert client.post("/api/scan/cancel").status_code == 409
+
+
+def test_output_that_stops_responding_gives_an_actionable_error(tmp_path):
+    scene, uvc, hw, cams = make_rig()
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc, ack_timeout=0.2) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        client.post("/api/scan")
+        out.receive_json()  # first pattern: never acknowledged (e.g. window minimised)
+        done = until_done(ed)
+
+    assert done["type"] == "scan_failed"
+    assert "visible" in done["error"] and "fullscreen" in done["error"]
+    assert uvc.values == DEFAULTS
+
+
+def test_output_closed_mid_scan_gives_an_actionable_error(tmp_path):
+    scene, uvc, hw, cams = make_rig()
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc, ack_timeout=5) as client, \
+            editor(client) as ed:
+        with output(client, W, H) as out:
+            client.post("/api/scan")
+            out.receive_json()
+        # Output window closed while the engine waits for the first acknowledgement.
+        done = until_done(ed)
+
+    assert done["type"] == "scan_failed"
+    assert "closed" in done["error"]
+    assert uvc.values == DEFAULTS

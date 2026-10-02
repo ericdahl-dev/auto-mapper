@@ -14,6 +14,14 @@ class OutputNotResponding(Exception):
     pass
 
 
+NOT_RESPONDING = (
+    "The output window stopped responding. Keep it visible and fullscreen on the projector "
+    "(a minimised or hidden window stops drawing), then scan again."
+)
+CLOSED = "The output window closed during the scan. Reopen it fullscreen on the projector and scan again."
+NOT_CONNECTED = "The output window is not connected. Open it fullscreen on the projector and scan again."
+
+
 class Hub:
     def __init__(self, hardware: HardwareSnapshot, settings: CameraSettings, scene: SceneStore):
         self.hardware = hardware
@@ -76,6 +84,10 @@ class Hub:
             self.output = None
             self.output_resolution = None
             self.output_fps = None
+            # Don't make a scan wait out its timeout for a window that is gone.
+            for fut in self._acks.values():
+                if not fut.done():
+                    fut.set_exception(OutputNotResponding(CLOSED))
             await self.broadcast_status()
 
     async def send_to_output(self, msg: dict) -> bool:
@@ -90,10 +102,10 @@ class Hub:
         self._acks[seq] = fut
         try:
             if not await self.send_to_output({"type": "show_pattern", "seq": seq, "pattern": pattern}):
-                raise OutputNotResponding("Output window is not connected")
+                raise OutputNotResponding(NOT_CONNECTED)
             await asyncio.wait_for(fut, timeout)
         except asyncio.TimeoutError:
-            raise OutputNotResponding("Output window did not confirm the pattern in time") from None
+            raise OutputNotResponding(NOT_RESPONDING) from None
         finally:
             self._acks.pop(seq, None)
 
