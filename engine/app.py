@@ -17,6 +17,7 @@ from engine.camera_device import CAPTURE_SIZE, CameraFactory, CameraSession, Ope
 from engine.calibrate import CalibrationError, calibrate_exposure
 from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
+from engine.files import write_text_atomic
 from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine.scan import DecodeResult, block_coverage, diagnose, projector_space_image
@@ -250,7 +251,7 @@ def create_app(
             scan_dir / "map.npz", proj_x=decoded.proj_x.astype(np.int16), proj_y=decoded.proj_y.astype(np.int16),
             valid=decoded.valid, covered=covered,
         )
-        (scan_dir / "meta.json").write_text(json.dumps(summary, indent=2))
+        write_text_atomic(scan_dir / "meta.json", json.dumps(summary, indent=2))
 
     def latest_image_url() -> str:
         return f"/api/scan/latest.png?t={int(time.time() * 1000)}"
@@ -330,7 +331,7 @@ def create_app(
         )
         image = cv2.imread(str(scan_dir / "scan.png"))
         meta["surfaces"] = detect_surfaces(decoded, (image, m["covered"]))
-        (scan_dir / "meta.json").write_text(json.dumps(meta, indent=2))
+        write_text_atomic(scan_dir / "meta.json", json.dumps(meta, indent=2))
         return meta
 
     @app.delete("/api/scene/surfaces/{surface_id}")

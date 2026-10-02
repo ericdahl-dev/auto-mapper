@@ -2,6 +2,8 @@
 
 import json
 import subprocess
+
+from engine.files import write_text_atomic
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Protocol
@@ -76,7 +78,7 @@ def locked_camera(uvc: Uvc, data_dir: Path) -> Iterator[dict[str, str]]:
     original = {name: uvc.get(name) for name in CONTROLS}
     snapshot = _snapshot_path(data_dir)
     snapshot.parent.mkdir(parents=True, exist_ok=True)
-    snapshot.write_text(json.dumps(original))
+    write_text_atomic(snapshot, json.dumps(original))
     try:
         for name, value in AUTO_OFF.items():
             uvc.set(name, value)

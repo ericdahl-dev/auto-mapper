@@ -40,9 +40,11 @@ def test_saved_project_reopens_with_the_same_scene(rig, scanned):
 
         assert client.post("/api/projects/kitchen-island/open").status_code == 200
         reopened = client.get("/api/scene").json()
-        # ...are discarded by reopening (presentation is session state, not part of the project)
-        assert {k: v for k, v in reopened.items() if k != "presentation"} == {
-            k: v for k, v in saved_scene.items() if k != "presentation"}
+        # ...are discarded by reopening. Presentation (session state) and scan_rev (derived on
+        # load) are not part of the project.
+        session = {"presentation", "scan_rev"}
+        assert {k: v for k, v in reopened.items() if k not in session} == {
+            k: v for k, v in saved_scene.items() if k not in session}
         assert client.get("/api/status").json()["project"] == {"name": "Kitchen island", "slug": "kitchen-island"}
 
     folder = scanned / "projects" / "kitchen-island"

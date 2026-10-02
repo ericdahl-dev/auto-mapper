@@ -10,6 +10,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from engine.files import write_text_atomic
+
 MERGE_CLOSE_PX = 5  # bridges hairline gaps between surfaces being merged
 DUPLICATE_OVERLAP = 0.5  # a new detection this much inside a kept surface is a duplicate
 MATCH_IOU = 0.5  # overlap needed for a new detection to inherit an old surface's effect
@@ -23,21 +25,26 @@ class SceneStore:
     def __init__(self, scan_dir: Path):
         self.scan_dir = Path(scan_dir)
         self.scene: dict | None = self._load()
+        self.scan_rev = self._scan_rev()
         # How the output presents the scene. Session state: not saved with the scene.
         self.presentation = {"mode": "edit", "blackout": False}
 
     def _load(self) -> dict | None:
         saved = self.scan_dir / "scene.json"
-        if saved.exists():
-            scene = json.loads(saved.read_text())
+        scene = _read_json(saved)
+        if scene is not None:
             for surface in scene["surfaces"]:
                 surface.setdefault("name", f"Surface {surface['id']}")
                 surface.setdefault("source", "detected")
             return scene
+        meta = _read_json(self.scan_dir / "meta.json")
+        return self._from_scan(meta) if meta is not None else None
+
+    def _scan_rev(self) -> str | None:
+        """Changes only when new scan data lands (scan, redetect, project open), not on edits,
+        so the output reloads the scan image only when it actually changed."""
         meta = self.scan_dir / "meta.json"
-        if meta.exists():
-            return self._from_scan(json.loads(meta.read_text()))
-        return None
+        return str(meta.stat().st_mtime_ns) if meta.exists() else None
 
     @staticmethod
     def _from_scan(summary: dict) -> dict:
@@ -54,6 +61,7 @@ class SceneStore:
 
     def reload(self) -> None:
         self.scene = self._load()
+        self.scan_rev = self._scan_rev()
 
     def save(self) -> None:
         if self.scene is not None:
@@ -61,6 +69,7 @@ class SceneStore:
 
     def reset_from_scan(self, summary: dict) -> None:
         self.scene = self._from_scan(summary)
+        self.scan_rev = self._scan_rev()
         self._save()
 
     def _surface(self, surface_id: int) -> dict:
@@ -182,6 +191,7 @@ class SceneStore:
                 next_id += 1
             result.append(surface)
         result.sort(key=lambda s: s["area"], reverse=True)  # smaller surfaces draw on top
+        self.scan_rev = self._scan_rev()
         self.scene["surfaces"] = result
         if not any(s["id"] == self.scene["selected"] for s in result):
             self.scene["selected"] = None
@@ -208,14 +218,16 @@ class SceneStore:
             self.presentation["blackout"] = blackout
 
     def public(self) -> dict | None:
-        return {**self.scene, "presentation": dict(self.presentation)} if self.scene else None
+        if not self.scene:
+            return None
+        return {**self.scene, "presentation": dict(self.presentation), "scan_rev": self.scan_rev}
 
     def message(self) -> dict | None:
         return {"type": "scene", **self.public()} if self.scene else None
 
     def _save(self) -> None:
         self.scan_dir.mkdir(parents=True, exist_ok=True)
-        (self.scan_dir / "scene.json").write_text(json.dumps(self.scene, indent=2))
+        write_text_atomic(self.scan_dir / "scene.json", json.dumps(self.scene, indent=2))
 
 
 def polygon_area(polygon: list[list[float]]) -> float:
@@ -228,3 +240,11 @@ def _mask(polygon: list[list[float]], width: int, height: int) -> np.ndarray:
     m = np.zeros((height, width), np.uint8)
     cv2.fillPoly(m, [np.round(np.asarray(polygon)).astype(np.int32)], 1)
     return m.astype(bool)
+
+
+def _read_json(path: Path) -> dict | None:
+    """None if the file is missing or unreadable (e.g. cut off by a crash before atomic writes)."""
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None

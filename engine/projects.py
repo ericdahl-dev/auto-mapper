@@ -6,6 +6,7 @@ import shutil
 import time
 from pathlib import Path
 
+from engine.files import write_text_atomic
 from engine.scene import SceneStore
 
 SCAN_FILES = ["scan.png", "mask.png", "map.npz", "meta.json", "scene.json"]
@@ -37,7 +38,7 @@ class ProjectStore:
         if info is None:
             self._active_file.unlink(missing_ok=True)
         else:
-            self._active_file.write_text(json.dumps({"name": info["name"], "slug": info["slug"]}))
+            write_text_atomic(self._active_file, json.dumps({"name": info["name"], "slug": info["slug"]}))
 
     def save(self, name: str) -> dict:
         """Saves the current scan and scene; saving under an existing name overwrites it."""
@@ -58,7 +59,7 @@ class ProjectStore:
             "height": self.scene.scene["height"],
             "surfaces": len(self.scene.scene["surfaces"]),
         }
-        (folder / "project.json").write_text(json.dumps(info, indent=2))
+        write_text_atomic(folder / "project.json", json.dumps(info, indent=2))
         self._set_active(info)
         return info
 
@@ -76,7 +77,7 @@ class ProjectStore:
         for f in SCAN_FILES:
             target = self.scan_dir / f
             if (folder / f).exists():
-                shutil.copy2(folder / f, target)
+                shutil.copy(folder / f, target)  # fresh mtimes: an opened project is new scan data
             else:
                 target.unlink(missing_ok=True)
         self.scene.reload()

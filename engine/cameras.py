@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from engine.files import write_text_atomic
+
 _USB_ID = re.compile(r"^0x([0-9a-f]+)([0-9a-f]{4})([0-9a-f]{4})$", re.IGNORECASE)
 
 
@@ -63,7 +65,7 @@ class CameraSettings:
         data = self._load()
         data["camera"] = unique_id
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(data, indent=2))
+        write_text_atomic(self.path, json.dumps(data, indent=2))
 
     def calibration(self, unique_id: str | None) -> dict | None:
         return self._load().get("calibration", {}).get(unique_id) if unique_id else None
@@ -72,4 +74,4 @@ class CameraSettings:
         data = self._load()
         data.setdefault("calibration", {})[unique_id] = result
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(data, indent=2))
+        write_text_atomic(self.path, json.dumps(data, indent=2))
