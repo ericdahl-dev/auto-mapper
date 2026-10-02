@@ -2,15 +2,13 @@
 
 import json
 import re
-import shutil
 import time
 from pathlib import Path
 
 from engine.files import write_text_atomic
+from engine.scan_folder import ScanFolder
 from engine.scene import SceneStore
 
-SCAN_FILES = ["scan.png", "mask.png", "map.npz", "meta.json", "scene.json"]
-MEDIA_DIR = "media"  # images and videos surfaces show (see engine/media.py)
 
 
 class UnknownProject(LookupError):
@@ -23,9 +21,9 @@ def slugify(name: str) -> str:
 
 
 class ProjectStore:
-    def __init__(self, data_dir: Path, scan_dir: Path, scene: SceneStore):
+    def __init__(self, data_dir: Path, folder: ScanFolder, scene: SceneStore):
         self.root = Path(data_dir) / "projects"
-        self.scan_dir = Path(scan_dir)
+        self.folder = folder  # the working scan (scans/latest)
         self.scene = scene
         self._active_file = Path(data_dir) / "active-project.json"
 
@@ -47,12 +45,8 @@ class ProjectStore:
             raise UnknownProject("Nothing to save: scan first")
         slug = slugify(name)
         folder = self.root / slug
-        folder.mkdir(parents=True, exist_ok=True)
-        self.scene.save()  # make sure scene.json reflects the current state
-        for f in SCAN_FILES:
-            if (self.scan_dir / f).exists():
-                shutil.copy2(self.scan_dir / f, folder / f)
-        _replace_dir(self.scan_dir / MEDIA_DIR, folder / MEDIA_DIR)
+        self.scene.save()  # make sure the saved show reflects the current state
+        self.folder.copy_to(folder)
         info = {
             "name": name.strip() or slug,
             "slug": slug,
@@ -75,22 +69,9 @@ class ProjectStore:
         folder = self.root / slug
         if not (folder / "project.json").exists():
             raise UnknownProject(slug)
-        self.scan_dir.mkdir(parents=True, exist_ok=True)
-        for f in SCAN_FILES:
-            target = self.scan_dir / f
-            if (folder / f).exists():
-                shutil.copy(folder / f, target)  # fresh mtimes: an opened project is new scan data
-            else:
-                target.unlink(missing_ok=True)
-        _replace_dir(folder / MEDIA_DIR, self.scan_dir / MEDIA_DIR)
+        self.folder.replace_with(ScanFolder(folder))
         self.scene.reload()
         info = json.loads((folder / "project.json").read_text())
         self._set_active(info)
         return info
 
-
-def _replace_dir(source: Path, target: Path) -> None:
-    """Makes target a copy of source; no source means no target."""
-    shutil.rmtree(target, ignore_errors=True)
-    if source.is_dir():
-        shutil.copytree(source, target, ignore=shutil.ignore_patterns("*.part"))

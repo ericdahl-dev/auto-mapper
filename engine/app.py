@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import threading
 import time
@@ -8,7 +7,6 @@ from pathlib import Path
 from typing import Callable
 
 import cv2
-import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from pydantic import ValidationError
@@ -17,11 +15,11 @@ from engine.camera_device import CAPTURE_SIZE, CameraFactory, CameraSession, Ope
 from engine.calibrate import CalibrationError, calibrate_exposure
 from engine.camera_lock import Uvc, UvcUtil, locked_camera, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
-from engine.files import write_text_atomic
 from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine import media
-from engine.scan import DecodeResult, block_coverage, diagnose, projector_space_image
+from engine.scan import block_coverage, diagnose, projector_space_image
+from engine.scan_folder import ScanFolder
 from engine.scan_runner import ScanCanceled, ScanError, capture_scan
 from engine.projects import ProjectStore, UnknownProject
 from engine.scene import SceneStore, UnknownSurface
@@ -68,15 +66,15 @@ def create_app(
     session = CameraSession(camera_factory or OpenCVCameraFactory(), capture_size)
     make_uvc = uvc_factory or (lambda address: UvcUtil(address.location))
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
-    scan_dir = data_path / "scans" / "latest"
+    latest = ScanFolder(data_path / "scans" / "latest")  # the working scan and its show
     scanning = asyncio.Lock()
     cancel_scan = threading.Event()  # set by POST /api/scan/cancel, read by the capture thread
 
     def scan_busy() -> bool:
         task = getattr(app, "state", None) and getattr(app.state, "scan_task", None)
         return scanning.locked() or (task is not None and not task.done())
-    scene = SceneStore(scan_dir)
-    projects = ProjectStore(data_path, scan_dir, scene)
+    scene = SceneStore(latest)
+    projects = ProjectStore(data_path, latest, scene)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -240,7 +238,7 @@ def create_app(
                     "surfaces": surfaces,
                     "warnings": diagnose(decoded, coverage),
                 }
-                await asyncio.to_thread(save_scan, decoded, image, covered, summary)
+                await asyncio.to_thread(latest.save, decoded, image, covered, summary)
                 scene.apply_detection(summary)  # keeps drawn/edited surfaces and carries effects
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except ScanCanceled:
@@ -258,37 +256,27 @@ def create_app(
                 await hub.broadcast_scene()  # back to the projected scene
                 await hub.broadcast_status()
 
-    def save_scan(decoded, image, covered, summary: dict) -> None:
-        scan_dir.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(str(scan_dir / "scan.png"), image)
-        cv2.imwrite(str(scan_dir / "mask.png"), covered.astype(np.uint8) * 255)
-        np.savez_compressed(
-            scan_dir / "map.npz", proj_x=decoded.proj_x.astype(np.int16), proj_y=decoded.proj_y.astype(np.int16),
-            valid=decoded.valid, covered=covered,
-        )
-        write_text_atomic(scan_dir / "meta.json", json.dumps(summary, indent=2))
-
     def latest_image_url() -> str:
         return f"/api/scan/latest.png?t={int(time.time() * 1000)}"
 
     @app.get("/api/scan/latest")
     async def latest_scan():
-        meta = scan_dir / "meta.json"
-        if not meta.exists():
+        meta = latest.meta()
+        if meta is None:
             raise HTTPException(404, "No scan yet")
-        return {**json.loads(meta.read_text()), "image": latest_image_url()}
+        return {**meta, "image": latest_image_url()}
 
     @app.get("/api/scan/latest-mask.png")
     async def latest_scan_mask():
-        path = scan_dir / "mask.png"
-        if not path.exists():
+        path = latest.mask_path()
+        if path is None:
             raise HTTPException(404, "No scan yet")
         return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
     @app.get("/api/scan/latest.png")
     async def latest_scan_image():
-        path = scan_dir / "scan.png"
-        if not path.exists():
+        path = latest.image_path()
+        if path is None:
             raise HTTPException(404, "No scan yet")
         return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
@@ -326,29 +314,16 @@ def create_app(
 
     @app.post("/api/scene/redetect")
     async def redetect():
-        if scene.scene is None or not (scan_dir / "map.npz").exists():
+        if scene.scene is None or not latest.can_redetect():
             raise HTTPException(404, "No scan yet")
         if scan_busy():
             raise HTTPException(409, "A scan is running")
         async with scanning:  # hold scans/latest so a scan can't start halfway through
-            summary = await asyncio.to_thread(detect_saved_scan)
+            summary = await asyncio.to_thread(latest.redetect)
             scene.apply_detection(summary)
         await app.state.hub.broadcast_scene()
         await app.state.hub.broadcast({"type": "scan_reload"})
         return scene.public()
-
-    def detect_saved_scan() -> dict:
-        """Runs surface detection again on the saved scan, e.g. after detection improvements."""
-        m = np.load(scan_dir / "map.npz")
-        meta = json.loads((scan_dir / "meta.json").read_text())
-        decoded = DecodeResult(
-            proj_x=m["proj_x"].astype(np.int32), proj_y=m["proj_y"].astype(np.int32), valid=m["valid"],
-            white=None, black=None, bit_reliability={}, width=meta["width"], height=meta["height"],
-        )
-        image = cv2.imread(str(scan_dir / "scan.png"))
-        meta["surfaces"] = detect_surfaces(decoded, (image, m["covered"]))
-        write_text_atomic(scan_dir / "meta.json", json.dumps(meta, indent=2))
-        return meta
 
     @app.delete("/api/scene/surfaces/{surface_id}")
     async def delete_surface(surface_id: int):
@@ -399,13 +374,13 @@ def create_app(
     async def upload_media(name: str, request: Request):
         """The request body is the file itself; `name` is its original filename."""
         try:
-            return await media.store(scan_dir / "media", name, request.stream())
+            return await media.store(latest.media_dir, name, request.stream())
         except media.MediaError as e:
             raise HTTPException(e.status, str(e))
 
     @app.get("/api/media/{name}")
     async def get_media(name: str):
-        found = media.lookup(scan_dir / "media", name)
+        found = media.lookup(latest.media_dir, name)
         if found is None:
             raise HTTPException(404, "Unknown media")
         path, content_type = found

@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from engine.files import write_text_atomic
+from engine.scan_folder import ScanFolder
 
 MERGE_CLOSE_PX = 5  # bridges hairline gaps between surfaces being merged
 DUPLICATE_OVERLAP = 0.5  # a new detection this much inside a kept surface is a duplicate
@@ -22,8 +23,8 @@ class UnknownSurface(LookupError):
 
 
 class SceneStore:
-    def __init__(self, scan_dir: Path):
-        self.scan_dir = Path(scan_dir)
+    def __init__(self, folder: ScanFolder):
+        self.folder = folder  # the scan this show is mapped on, and where the show is saved
         self.scene: dict | None = self._load()
         self.scan_rev = self._scan_rev()
         # How the output presents the scene. Session state: not saved with the scene.
@@ -34,20 +35,19 @@ class SceneStore:
         self.sound = {"enabled": False, "device": None, "source": "mic", "output": None}
 
     def _load(self) -> dict | None:
-        saved = self.scan_dir / "scene.json"
-        scene = _read_json(saved)
+        scene = _read_json(self.folder.show_file)
         if scene is not None:
             for surface in scene["surfaces"]:
                 surface.setdefault("name", f"Surface {surface['id']}")
                 surface.setdefault("source", "detected")
             return scene
-        meta = _read_json(self.scan_dir / "meta.json")
+        meta = self.folder.meta()
         return self._from_scan(meta) if meta is not None else None
 
     def _scan_rev(self) -> str | None:
         """Changes only when new scan data lands (scan, redetect, project open), not on edits,
         so the output reloads the scan image only when it actually changed."""
-        meta = self.scan_dir / "meta.json"
+        meta = self.folder.meta_file
         return str(meta.stat().st_mtime_ns) if meta.exists() else None
 
     @staticmethod
@@ -249,8 +249,8 @@ class SceneStore:
         return {"type": "scene", **self.public()} if self.scene else None
 
     def _save(self) -> None:
-        self.scan_dir.mkdir(parents=True, exist_ok=True)
-        write_text_atomic(self.scan_dir / "scene.json", json.dumps(self.scene, indent=2))
+        self.folder.path.mkdir(parents=True, exist_ok=True)
+        write_text_atomic(self.folder.show_file, json.dumps(self.scene, indent=2))
 
 
 def polygon_area(polygon: list[list[float]]) -> float:
