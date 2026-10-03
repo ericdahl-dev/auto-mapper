@@ -34,6 +34,7 @@ import { placeOutput } from "./screens";
 import { channelNote, describeSound, soundOffSettings } from "./soundView";
 import { soundOffNote } from "./soundOffNote";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
+import { describeFraming, type FramingResult } from "./framingView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const banners = $("banners");
@@ -1200,6 +1201,7 @@ function render() {
   battery.hidden = batteryLabel.hidden = view.battery === null;
   syncOptions(cameraSelect, cameraOptions(status));
   calibrate.disabled = !status?.output_connected || !status.camera.selected;
+  checkFraming.disabled = calibrate.disabled || scanState.running;
 }
 
 // Sound: the output window listens; the editor switches it and shows its meter.
@@ -1385,6 +1387,30 @@ previewToggle.addEventListener("click", () => {
     previewTimer = undefined;
     $("preview-note").textContent = "";
     void engine.releaseCamera();
+  }
+});
+
+const checkFraming = $<HTMLButtonElement>("check-framing");
+const framingNote = $("framing-note");
+checkFraming.addEventListener("click", async () => {
+  checkFraming.disabled = true;
+  checkFraming.textContent = "Checking…";
+  try {
+    const res = await engine.checkFraming();
+    const body = await res.json();
+    if (!res.ok) {
+      notice(`Framing check failed: ${body.detail}`);
+      return;
+    }
+    const view = describeFraming(body as FramingResult);
+    framingNote.textContent = view.text;
+    framingNote.classList.toggle("warn", view.warn);
+    framingNote.hidden = false;
+    document.querySelector("#framing-overlay polygon")!.setAttribute("points", view.points);
+  } finally {
+    if (previewTimer === undefined) void engine.releaseCamera();
+    checkFraming.textContent = "Check framing";
+    render();
   }
 });
 

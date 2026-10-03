@@ -84,7 +84,10 @@
       details.fold > summary h2 { margin: 0; }
       #preview-box { position: relative; }
       #preview-box img { display: block; width: 100%; }
-      #mask-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+      #mask-overlay, #framing-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+      #framing-overlay { pointer-events: none; }
+      #framing-overlay polygon { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
+      #framing-note.warn { color: #fbbf24; }
       #mask-overlay polygon { fill: rgba(74, 222, 128, 0.15); stroke: #4ade80; stroke-width: 2; vector-effect: non-scaling-stroke; }
       #mask-overlay polyline { fill: none; stroke: #fbbf24; stroke-width: 2; vector-effect: non-scaling-stroke; }
       #preview-box.drawing { cursor: crosshair; }
@@ -300,7 +303,9 @@
         <div class="row">
           <button id="preview-toggle">Show preview</button>
           <button id="calibrate">Calibrate exposure</button>
+          <button id="check-framing" title="Shows white, then black, and measures how much of the camera's view the projection fills: the more, the finer the scan. Outlined on the preview.">Check framing</button>
         </div>
+        <p id="framing-note" class="muted hint" role="status" hidden></p>
         <dl><dt>Exposure</dt><dd id="calibration">…</dd><dt id="battery-label" hidden>Battery</dt><dd id="battery" hidden></dd></dl>
         <div class="row" id="aperture-row" hidden title="Still cameras: the lens opening for scans. f/8 keeps a scene with depth in focus; wider lets in more light but blurs what's nearer or farther than the focus. Needs the mode dial on M. Applies to the next scan.">
           <select id="aperture" aria-label="Aperture for scans">
@@ -325,6 +330,7 @@
         <p id="preview-note" class="muted hint" role="status"></p>
         <div id="preview-box" hidden>
           <img id="preview" alt="Camera preview" />
+          <svg id="framing-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><polygon /></svg>
           <svg id="mask-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
         <div class="row" title="Scan only part of what the camera sees: skip a window, a TV or shiny things. Click corners on the preview, double-click or Enter to finish; add as many areas as you like. Applies to the next scan.">

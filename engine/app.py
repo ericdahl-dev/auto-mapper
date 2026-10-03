@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable
 
 import cv2
+import numpy as np
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import ValidationError
@@ -14,8 +15,9 @@ from engine.camera_device import CAPTURE_SIZE, CameraFactory, CameraSession, Ope
 from engine.calibrate import CalibrationError, calibrate_exposure
 from engine.camera_lock import Uvc, UvcUtil, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
+from engine.framing import measure_framing
 from engine.hardware import HardwareProbe, MacHardware
-from engine.hub import Hub
+from engine.hub import Hub, OutputNotResponding
 from engine import media
 from engine.scan_folder import ScanFolder
 from engine.scan_camera import ScanCameras
@@ -244,6 +246,38 @@ def create_app(
         settings.save_calibration(selected, result)
         await hub.broadcast_status()
         return result
+
+    @app.post("/api/camera/framing")
+    async def framing():
+        """How well the projection fills the camera's view (#149): white then black on the projector,
+        a fresh frame of each; the projector goes back to the show after."""
+        hub: Hub = app.state.hub
+        selected = settings.selected(hub.hardware.cameras)
+        if selected is None:
+            raise HTTPException(409, "No camera selected")
+        if job.busy:
+            raise HTTPException(409, "Camera is busy scanning")
+        camera = scan_cameras.open(hub.hardware.cameras, selected)
+
+        def fresh() -> np.ndarray:
+            for _ in range(camera.drop_frames):  # frames from before the projector changed
+                camera.read()
+            return camera.read()
+
+        frames = []
+        try:
+            for kind in ("white", "black"):
+                await hub.show_pattern({"kind": kind}, ack_timeout)
+                await asyncio.sleep(scan_settle_seconds)
+                frames.append(await asyncio.to_thread(fresh))
+        except OutputNotResponding as e:
+            raise HTTPException(409, str(e))
+        except CaptureFailed as e:
+            raise HTTPException(409, str(e))
+        finally:
+            await hub.send_to_output({"type": "show_test_frame", "kind": "black"})
+            await hub.broadcast_show()
+        return measure_framing(*frames).to_dict()
 
     @app.post("/api/scan", status_code=202)
     async def start_scan():
