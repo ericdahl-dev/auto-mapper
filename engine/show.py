@@ -160,6 +160,15 @@ class CurrentShow:
         self.selected = None
         self._changed()
 
+    def clear(self) -> None:
+        """No scan, no show (a new project). Presentation goes back to Edit; sound settings stay."""
+        self.data = None
+        self.scan_rev = None
+        self.selected = None
+        self.clear_history()
+        self.presentation = {"mode": "edit", "blackout": False}
+        self._changed()
+
     def save(self) -> None:
         if self.data is not None:
             self._save()

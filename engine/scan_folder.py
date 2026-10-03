@@ -96,6 +96,12 @@ class ScanFolder:
         target.replace_with(self)
         return target
 
+    def clear(self) -> None:
+        """Removes the scan, its show and its media: back to no scan at all."""
+        for f in FILES:
+            (self.path / f).unlink(missing_ok=True)
+        shutil.rmtree(self.media_dir, ignore_errors=True)
+
     def replace_with(self, other: "ScanFolder") -> None:
         """Makes this folder hold exactly the other folder's scan and show."""
         self.path.mkdir(parents=True, exist_ok=True)

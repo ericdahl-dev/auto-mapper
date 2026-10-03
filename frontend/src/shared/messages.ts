@@ -133,6 +133,11 @@ export interface ScanReloadMessage {
   type: "scan_reload";
 }
 
+/** No scan and no show any more (a new project). */
+export interface ShowClearedMessage {
+  type: "show_cleared";
+}
+
 export interface EffectErrorMessage {
   type: "effect_error";
   surface: number;
@@ -147,7 +152,8 @@ export type ServerMessage =
   | ScanMessage
   | ShowMessage
   | EffectErrorMessage
-  | ScanReloadMessage;
+  | ScanReloadMessage
+  | ShowClearedMessage;
 
 function isPattern(p: unknown): p is Pattern {
   if (typeof p !== "object" || p === null) return false;
@@ -226,6 +232,8 @@ export function parseServerMessage(raw: string): ServerMessage | null {
         : null;
     case "scan_reload":
       return { type: "scan_reload" };
+    case "show_cleared":
+      return { type: "show_cleared" };
     case "effect_error":
       return typeof m.surface === "number" && typeof m.log === "string" ? (m as unknown as EffectErrorMessage) : null;
     default:

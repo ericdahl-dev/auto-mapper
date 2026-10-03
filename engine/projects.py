@@ -59,6 +59,12 @@ class ProjectStore:
         self._set_active(info)
         return info
 
+    def new(self) -> None:
+        """Starts over: no scan, no show, no open project. Saved projects are kept."""
+        self.folder.clear()
+        self.show.clear()
+        self._set_active(None)
+
     def list(self) -> list[dict]:
         if not self.root.exists():
             return []

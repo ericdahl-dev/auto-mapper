@@ -278,6 +278,12 @@ class ScanReload(_Out):
     type: Literal["scan_reload"]
 
 
+class ShowCleared(_Out):
+    """No scan and no show any more (a new project): the output goes dark, editors start empty."""
+
+    type: Literal["show_cleared"]
+
+
 class EffectErrorOut(_Out):
     type: Literal["effect_error"]
     surface: int
@@ -298,6 +304,6 @@ class ShowTestFrameOut(_Out):
 
 EngineMessage = TypeAdapter(Annotated[
     StatusOut | ShowOut | ScanStarted | ScanProgress | ScanResult | ScanFailed | ScanCanceledOut | ScanReload
-    | EffectErrorOut | ShowPatternOut | ShowTestFrameOut,
+    | ShowCleared | EffectErrorOut | ShowPatternOut | ShowTestFrameOut,
     Field(discriminator="type"),
 ])

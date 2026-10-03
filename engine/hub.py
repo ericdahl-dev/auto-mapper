@@ -159,7 +159,7 @@ class Hub:
 
     async def broadcast_show(self) -> None:
         if (show := self.show.message()) is None:
-            return
+            show = {"type": "show_cleared"}  # e.g. a new project: drop the old show everywhere
         await self.send_to_output(show)
         await self.broadcast(show)
 

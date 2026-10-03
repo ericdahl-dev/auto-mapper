@@ -85,6 +85,10 @@ const conn = connect({
   hello: () => ({ type: "hello", role: "output", ...size }),
   onMessage(msg) {
     if (msg.type === "show") applyShow(msg);
+    if (msg.type === "show_cleared") { // a new project: go dark, stay fullscreen
+      show = null;
+      showRenderer.clear();
+    }
     if (msg.type === "show_test_frame") {
       showFrames();
       renderer.showTestFrame(msg.kind);

@@ -91,6 +91,7 @@ Accepted extensions: png, jpg, jpeg, webp, gif, mp4, m4v, mov, webm. Stored name
 |--------|------|------|---------|
 | GET | `/api/projects` | | Saved projects, newest first |
 | POST | `/api/projects` | `{"name": "..."}` (1 to 80 characters) | Saves the working scan and show under that name, overwriting a project with the same slug. 409 before the first scan or while scanning |
+| POST | `/api/projects/new` | | Starts over: clears the working scan, its show and media, and the open project; Play/Blackout back to Edit. Saved projects are kept. Editors get `show_cleared` (and start empty); the output goes dark. 409 while scanning |
 | POST | `/api/projects/{slug}/open` | | Replaces the working scan with the project's and switches to Play. 404 for an unknown project, 409 while scanning |
 
 ## WebSocket: `/ws`
