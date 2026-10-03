@@ -93,6 +93,44 @@ class StillCamera:
     # seconds, which a small aperture in a dim room needs.
     longer_exposures = (20000, 10000, 5000, 3000)
 
+    # How every pattern photo is made (scan_profile): single shots (no bursts), fixed white balance,
+    # no DRO, flash or exposure compensation, M mode, a wide focus area for the one-time focus, and
+    # photos sized for scanning kept off the card. Settings a camera doesn't have are skipped.
+    SCAN_SETTINGS = (
+        ("capturemode", "Single Shot"), ("whitebalance", "Daylight"), ("dro", "Off"), ("flashmode", "Flash off"),
+        ("exposurecompensation", "0"), ("expprogram", "M"), ("focusarea", "Wide"),
+        ("imagequality", "Fine"), ("imagesize", "Medium"), ("capturetarget", "sdram"),
+    )
+    # Changed during a scan, so put back too.
+    SCAN_CHANGES = ("f-number", "shutterspeed", "iso", "focusmode")
+
+    @contextmanager
+    def scan_profile(self, aperture: str | None = None):
+        """Takes full control of the camera for a scan or calibration, then gives it back exactly as
+        the owner had it."""
+        names = [n for n, _ in self.SCAN_SETTINGS] + list(self.SCAN_CHANGES)
+        original: dict[str, str] = {}
+        for name in names:
+            try:
+                original[name] = self.driver.get_config(name)
+            except DriverError:
+                pass  # this camera doesn't have it
+        try:
+            for name, value in self.SCAN_SETTINGS:
+                if name in original:
+                    with _answering():
+                        self.driver.set_config(name, value)
+            self._exposure = None  # read afresh in M mode
+            self.prepare(aperture=aperture)
+            yield self
+        finally:
+            # Exposure program last: the shutter, ISO and aperture it restores need M while set.
+            for name in sorted(original, key=lambda n: n == "expprogram"):
+                try:
+                    self.driver.set_config(name, original[name])
+                except DriverError:
+                    pass  # best effort: never fail a finished scan over a setting
+
     def prepare(self, aperture: str | None = None) -> None:
         """Photos sized for scanning, kept off the memory card (faster, no card wear); and the
         aperture, e.g. "8" for f/8 (deep focus for a scene with depth), or None to leave the lens."""

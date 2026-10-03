@@ -250,10 +250,10 @@ def create_app(
             if is_still(selected):  # focused on the white frame first, as a scan does
                 still = (still_factory or open_gphoto2_camera)(selected)
                 try:
-                    still.prepare(aperture=_aperture(settings.scan_settings(selected)))
-                    still.focus_and_lock()
-                    with locked_camera(still, data_path):
-                        return calibrate_exposure(still, still.read)
+                    with still.scan_profile(aperture=_aperture(settings.scan_settings(selected))):
+                        still.focus_and_lock()
+                        with locked_camera(still, data_path):
+                            return calibrate_exposure(still, still.read)
                 finally:
                     still.close()
             uvc = make_uvc(address)
