@@ -63,6 +63,8 @@
       #project-list li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
       #project-list li.active { color: var(--ok); }
       details.fold > summary { list-style: none; cursor: pointer; }
+      details.fold-inline { margin: 0 0 12px; }
+      details.fold-inline > summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
       details.fold > summary::-webkit-details-marker { display: none; }
       details.fold > summary h2::before { content: "▸ "; color: var(--muted); }
       details.fold[open] > summary h2::before { content: "▾ "; }
@@ -141,6 +143,28 @@
         <div id="scan-warnings"></div>
       </div>
       <aside>
+        <section id="surface-panel" hidden>
+          <h2 id="surface-title">Surface</h2>
+          <p id="surface-source" class="muted hint"></p>
+          <div class="row"><input id="surface-name" type="text" placeholder="Name" aria-label="Surface name" /></div>
+          <div class="row"><select id="effect-select" aria-label="Effect"></select></div>
+          <div id="effect-controls"></div>
+          <div class="row"><button id="apply-effect">Apply to all surfaces</button></div>
+          <pre id="effect-error" hidden></pre>
+          <details class="fold-inline">
+            <summary>Outline</summary>
+            <label class="control" title="Shrink the lit area to stop light spilling past the object, or grow it to cover a gap">
+              <span>Edge</span><span id="surface-edge-readout" class="muted">0 px</span>
+              <input id="surface-edge" type="range" min="-10" max="10" step="1" value="0" />
+            </label>
+            <div class="row"><button id="curve-edge" title="Then click near an edge of this surface to make it bendable">Curve an edge</button></div>
+            <p class="muted hint">Drag corners to adjust. Double-click an edge to add a corner, Alt-click a corner to remove it. Shift-click surfaces to merge them. "Curve an edge" makes an edge a Bezier curve: drag the blue control points to bend it, double-click the curve to split it.</p>
+          </details>
+          <div class="row">
+            <button id="delete-surface" title="Delete or Backspace. Shift-click surfaces to delete several at once">Delete</button>
+            <button id="merge-surfaces" hidden>Merge selected</button>
+          </div>
+        </section>
         <details class="fold" data-fold="project"><summary><h2>Project</h2></summary>
         <div class="row">
           <input id="project-save-name" type="text" placeholder="Project name" />
@@ -161,25 +185,6 @@
           <label><input id="loop" type="checkbox" /> Loop</label>
         </div>
         </details>
-        <section id="surface-panel" hidden>
-          <h2 id="surface-title">Surface</h2>
-          <p id="surface-source" class="muted hint"></p>
-          <div class="row"><input id="surface-name" type="text" placeholder="Name" /></div>
-          <label class="control" title="Shrink the lit area to stop light spilling past the object, or grow it to cover a gap">
-            <span>Edge</span><span id="surface-edge-readout" class="muted">0 px</span>
-            <input id="surface-edge" type="range" min="-10" max="10" step="1" value="0" />
-          </label>
-          <div class="row">
-            <button id="delete-surface" title="Delete or Backspace. Shift-click surfaces to delete several at once">Delete</button>
-            <button id="merge-surfaces" hidden>Merge selected</button>
-            <button id="curve-edge" title="Then click near an edge of this surface to make it bendable">Curve an edge</button>
-          </div>
-          <p class="muted hint">Drag corners to adjust. Double-click an edge to add a corner, Alt-click a corner to remove it. Shift-click surfaces to merge them. "Curve an edge" makes an edge a Bezier curve: drag the blue control points to bend it, double-click the curve to split it.</p>
-          <div class="row"><select id="effect-select"></select></div>
-          <div id="effect-controls"></div>
-          <div class="row"><button id="apply-effect">Apply to all surfaces</button></div>
-          <pre id="effect-error" hidden></pre>
-        </section>
         <details class="fold" data-fold="schedule"><summary><h2>Schedule</h2></summary>
         <div class="row" title="For unattended displays: Play between these times, Blackout outside them, every day">
           <label><input id="schedule-enabled" type="checkbox" /> On</label>
