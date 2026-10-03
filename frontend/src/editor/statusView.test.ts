@@ -125,7 +125,13 @@ describe("a chosen projector that is unplugged", () => {
   it("says which display is being used instead", () => {
     const s = status();
     s.hardware.projector_missing = "P24q-10";
-    expect(describeStatus(s).banners).toContain("P24q-10 (your chosen projector) is not connected. Using AML TV for now.");
+    expect(describeStatus(s).notes).toContain("P24q-10 (your chosen projector) is not connected. Using AML TV for now.");
+  });
+
+  it("is a note in the Hardware section, not a banner: the work goes on with the other display", () => {
+    const s = status();
+    s.hardware.projector_missing = "P24q-10";
+    expect(describeStatus(s).banners).toEqual([]);
   });
 });
 
@@ -142,5 +148,24 @@ describe("sound output errors", () => {
   it("shows why the chosen sound output isn't used", () => {
     expect(describeStatus(status({ output_sound_output_error: "That sound output is not available. Pick another output." })).banners)
       .toContain("That sound output is not available. Pick another output.");
+  });
+});
+
+describe("why Scan is disabled", () => {
+  it("gives no reason when the rig can scan", () => {
+    expect(describeStatus(status()).scanReason).toBeNull();
+  });
+
+  it("names what stops the scan, first things first", () => {
+    const reason = (s: StatusMessage | null) => describeStatus(s).scanReason;
+    expect(reason(null)).toBe("The engine isn't running: start it with make dev");
+    expect(reason(status({}, ["no_projector"]))).toBe("No projector: connect it as an extended display");
+    expect(reason(status({}, ["no_camera"]))).toBe("No camera: plug in the webcam");
+    expect(reason(status({ output_connected: false, output_resolution: null, can_scan: false })))
+      .toBe("Open the output window (Hardware) and make it fullscreen on the projector");
+    expect(reason(status({ output_resolution: { width: 1920, height: 927 }, can_scan: false })))
+      .toBe("Output window must be 1920×1080: make it fullscreen on the projector");
+    expect(reason(status({ camera: { selected: null, calibration: null }, can_scan: false })))
+      .toBe("Choose the camera that scans (Hardware)");
   });
 });
