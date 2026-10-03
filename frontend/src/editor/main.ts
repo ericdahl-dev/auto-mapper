@@ -910,7 +910,8 @@ soundSource.addEventListener("change", () => postSound({ source: soundSource.val
 const soundOutputSelect = $<HTMLSelectElement>("sound-output");
 soundOutputSelect.addEventListener("change", () => postSound({ output: soundOutputSelect.value }));
 const soundDelay = $<HTMLInputElement>("sound-delay");
-soundDelay.addEventListener("input", () => { $("sound-delay-readout").textContent = `${soundDelay.value} ms`; });
+const delayText = (ms: number) => (ms === 0 ? "0 ms" : ms > 0 ? `${ms} ms later` : `${-ms} ms earlier`);
+soundDelay.addEventListener("input", () => { $("sound-delay-readout").textContent = delayText(Number(soundDelay.value)); });
 soundDelay.addEventListener("change", () => postSound({ delay: Number(soundDelay.value) })); // saved when let go
 async function refreshSoundInputs() {
   // Same origin as the output window, so device ids match; labels appear once the mic is allowed.
@@ -943,7 +944,7 @@ function renderSound() {
   $("sound-note").textContent = v.note;
   if (document.activeElement !== soundDelay) {
     soundDelay.value = String(show?.sound?.delay ?? 0);
-    $("sound-delay-readout").textContent = `${soundDelay.value} ms`;
+    $("sound-delay-readout").textContent = delayText(Number(soundDelay.value));
   }
 }
 

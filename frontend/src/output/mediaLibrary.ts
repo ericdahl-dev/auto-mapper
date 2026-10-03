@@ -4,6 +4,7 @@
 
 import { drawText, TEXT_KEY } from "../effects/textTexture";
 import type { VideoPlan } from "./playback";
+import { leadCorrection } from "./soundLead";
 
 interface MediaTexture {
   texture: WebGLTexture;
@@ -12,11 +13,13 @@ interface MediaTexture {
   uploadedFrame: number; // videos: the draw that last uploaded a frame
   ready: Promise<void>; // settles on load or on error
   start: number; // videos: seconds to start from and loop back to
+  lead: HTMLVideoElement | null; // sound early: a hidden copy playing the sound ahead of the muted picture
 }
 
 export class MediaLibrary {
   private items = new Map<string, MediaTexture>();
   private sinkId = ""; // audio output device for video sound; "" = the system default
+  private leadSeconds = 0; // how far video sound plays ahead of the picture (a negative sound delay)
 
   /** `uploadUnit` is a texture unit uploads may use (never 0: that holds the scan). */
   constructor(private gl: WebGL2RenderingContext, private uploadUnit: number) {}
@@ -25,6 +28,7 @@ export class MediaLibrary {
   sync(wanted: Set<string>): void {
     for (const [src, m] of this.items) {
       if (wanted.has(src)) continue;
+      this.dropLead(m);
       m.video?.pause();
       m.video?.removeAttribute("src");
       m.video?.load(); // lets the browser drop the decoder
@@ -36,20 +40,61 @@ export class MediaLibrary {
     }
   }
 
-  /** Applies speed, start and sound to the videos (see playback.ts). */
-  apply(plan: Map<string, VideoPlan>): void {
+  /** Applies speed, start and sound to the videos (see playback.ts). `leadSeconds` > 0 plays their
+   *  sound that much ahead of the picture, from a hidden copy (soundLead.ts). */
+  apply(plan: Map<string, VideoPlan>, leadSeconds = 0): void {
+    this.leadSeconds = leadSeconds;
     for (const [src, m] of this.items) {
       const v = m.video;
       const p = plan.get(src);
       if (!v || !p) continue;
       v.playbackRate = p.rate;
-      v.muted = p.volume === null;
-      if (p.volume !== null) v.volume = p.volume;
+      const audible = p.volume !== null;
+      const early = audible && leadSeconds > 0;
+      if (early && !m.lead) m.lead = this.makeLead(src);
+      if (!early) this.dropLead(m);
+      v.muted = !audible || early; // sound early: the copy plays it
+      const out = m.lead ?? v;
+      if (m.lead) m.lead.muted = false;
+      if (p.volume !== null) out.volume = p.volume;
       if (p.start !== m.start) {
         m.start = p.start;
         if (v.readyState >= v.HAVE_METADATA) v.currentTime = p.start;
       }
     }
+  }
+
+  /** Once per frame: keeps each early sound copy locked ahead of its picture. */
+  tick(): void {
+    for (const m of this.items.values()) {
+      const v = m.video, s = m.lead;
+      if (!v || !s || s.readyState < s.HAVE_METADATA || !(v.duration > 0)) continue;
+      if (v.paused !== s.paused) void (v.paused ? s.pause() : s.play().catch(() => {}));
+      const c = leadCorrection(v.currentTime, s.currentTime, this.leadSeconds, { start: m.start, duration: v.duration, rate: v.playbackRate });
+      if ("seek" in c) s.currentTime = c.seek;
+      else s.playbackRate = c.rate;
+    }
+  }
+
+  /** The hidden copy playing a video's sound early, if there is one (for tests and diagnostics). */
+  soundLead(src: string): HTMLVideoElement | null {
+    return this.items.get(src)?.lead ?? null;
+  }
+
+  private makeLead(src: string): HTMLVideoElement {
+    const s = createMediaElement(src) as HTMLVideoElement; // looping, inline; never drawn
+    s.muted = false;
+    if (this.sinkId) void s.setSinkId(this.sinkId).catch(() => {});
+    void s.play().catch(() => {});
+    return s;
+  }
+
+  private dropLead(m: MediaTexture): void {
+    if (!m.lead) return;
+    m.lead.pause();
+    m.lead.removeAttribute("src");
+    m.lead.load();
+    m.lead = null;
   }
 
   /** Binds a file's texture to a unit (uploading the current video frame once per draw); returns its size. */
@@ -70,7 +115,7 @@ export class MediaLibrary {
    *  message if that device can't be used; video sound then stays on the default. */
   async setOutputDevice(id: string | null): Promise<string | null> {
     this.sinkId = id ?? "";
-    const videos = this.videos();
+    const videos = this.sound();
     try {
       await Promise.all(videos.map((v) => v.setSinkId(this.sinkId)));
       return null;
@@ -81,20 +126,20 @@ export class MediaLibrary {
     }
   }
 
-  /** The videos currently playing with sound (for reacting to the video's sound). */
+  /** The elements currently playing video sound (for reacting to it, and the sound delay). */
   audibleVideos(): HTMLVideoElement[] {
-    return this.videos().filter((v) => !v.muted);
+    return this.sound().filter((v) => !v.muted);
   }
 
   /** True when a video should be heard but isn't playing: browsers pause an unmuted video until
    *  the user clicks in the page. The output window reports this so the editor can say "click". */
   soundBlocked(): boolean {
-    return this.videos().some((v) => !v.muted && v.paused);
+    return this.sound().some((v) => !v.muted && v.paused);
   }
 
   /** Restarts paused videos; call from a click handler, which lets the browser allow sound. */
   async resume(): Promise<void> {
-    await Promise.all(this.videos().map((v) => v.play().catch(() => {})));
+    await Promise.all(this.sound().map((v) => v.play().catch(() => {})));
   }
 
   /** A video element by file (for tests and diagnostics). */
@@ -114,8 +159,9 @@ export class MediaLibrary {
     await Promise.all([...this.items.values()].map((m) => m.ready));
   }
 
-  private videos(): HTMLVideoElement[] {
-    return [...this.items.values()].flatMap((m) => (m.video ? [m.video] : []));
+  /** Every element that can play video sound: the videos and their early sound copies. */
+  private sound(): HTMLVideoElement[] {
+    return [...this.items.values()].flatMap((m) => [m.video, m.lead].filter((v): v is HTMLVideoElement => v !== null));
   }
 
   private load(src: string): MediaTexture {
@@ -126,7 +172,7 @@ export class MediaLibrary {
     if (src.startsWith(TEXT_KEY)) {
       // Text: drawn now, no loading.
       const canvas = drawText(src);
-      const m: MediaTexture = { texture, size: [canvas.width, canvas.height], video: null, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
+      const m: MediaTexture = { texture, size: [canvas.width, canvas.height], video: null, uploadedFrame: -1, ready: Promise.resolve(), start: 0, lead: null };
       gl.activeTexture(gl.TEXTURE0 + this.uploadUnit);
       this.upload(m, canvas);
       return m;
@@ -134,7 +180,7 @@ export class MediaLibrary {
     const el = createMediaElement(src);
     const video = el instanceof HTMLVideoElement ? el : null;
     if (video && this.sinkId) void video.setSinkId(this.sinkId).catch(() => {});
-    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0 };
+    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0, lead: null };
     m.ready = new Promise<void>((settle) => {
       el.addEventListener("error", () => settle(), { once: true });
       if (video) {
