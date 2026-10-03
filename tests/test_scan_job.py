@@ -9,6 +9,7 @@ from engine.camera_lock import FakeUvc
 from engine.cameras import CameraSettings
 from engine.hub import OutputNotResponding
 from engine.scan_folder import ScanFolder
+from engine.scan_camera import ScanCameras
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning
 from engine.show import CurrentShow
 from tests.helpers import AC410
@@ -68,21 +69,18 @@ def rig(tmp_path):
 
     latest = ScanFolder(tmp_path / "scans" / "latest")
     show = CurrentShow(latest)
-    job = ScanJob(
+    settings = CameraSettings(tmp_path)
+    cameras = ScanCameras(
         session=CameraSession(FakeCameraFactory(frame=frame), (320, 240)),
-        settings=CameraSettings(tmp_path),
-        latest=latest,
-        show=show,
-        make_uvc=lambda address: uvc,
-        data_dir=tmp_path,
-        settle_seconds=0, drop_frames=0, frames_per_pattern=1, ack_timeout=1,
+        make_uvc=lambda address: uvc, make_still=lambda uid: None, settings=settings,
+        data_dir=tmp_path, drop_frames=0, frames_per_pattern=1,
     )
+    job = ScanJob(cameras=cameras, settings=settings, latest=latest, show=show, settle_seconds=0, ack_timeout=1)
     return scene, job, latest, show
 
 
 def start(job, hub):
-    from engine.cameras import usb_address
-    job.start(hub, [AC410], AC410["unique_id"], usb_address(AC410["unique_id"]))
+    job.start(hub, [AC410], AC410["unique_id"])
 
 
 async def run(job, hub):
