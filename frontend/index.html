@@ -45,7 +45,8 @@
       .control .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16em; }
       .control button.sound-off { grid-column: 1 / -1; justify-self: start; background: none; border: none; padding: 2px 0; color: var(--warn); font-size: 12px; text-decoration: underline; }
       #effect-error { color: var(--bad); white-space: pre-wrap; font-size: 12px; background: #2a1414; padding: 8px; }
-      #surfaces polygon { fill: rgba(37, 99, 235, 0.18); stroke: #60a5fa; stroke-width: 2; }
+      /* Fill comes from the surface's effect (surfaceFill.ts); the outline stays blue on any scan. */
+      #surfaces polygon { stroke: #60a5fa; stroke-width: 2; }
       #surfaces polygon.selected { fill: rgba(255, 255, 255, 0.25); stroke: #fff; stroke-width: 3; }
       #surfaces polygon.error { stroke: #f87171; stroke-width: 3; }
       #surfaces polygon.multi { stroke: #fbbf24; stroke-width: 3; }
@@ -301,6 +302,13 @@
         </details>
       </aside>
     </main>
+    <!-- The hatch on None (dark) surfaces, outside #surfaces, which is redrawn often. -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <pattern id="no-effect-hatch" patternUnits="userSpaceOnUse" width="24" height="24" patternTransform="rotate(45)">
+        <rect width="24" height="24" fill="rgba(0, 0, 0, 0.25)" />
+        <line x1="0" y1="0" x2="0" y2="24" stroke="rgba(255, 255, 255, 0.45)" stroke-width="6" />
+      </pattern>
+    </svg>
     <script type="module" src="/src/editor/main.ts"></script>
   </body>
 </html>

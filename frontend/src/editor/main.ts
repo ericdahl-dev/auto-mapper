@@ -24,6 +24,7 @@ import { modePill } from "./modePill";
 import { moveScene } from "./sceneList";
 import { syncOptions } from "./selectOptions";
 import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
+import { surfaceFill } from "./surfaceFill";
 import { FIT, panBy, type View, zoomAt } from "./viewZoom";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
@@ -303,6 +304,8 @@ function renderSurfaces() {
       const { bezier, polygon } = s; // the session's view already includes edits in progress
       const poly = document.createElementNS(SVG_NS, "polygon");
       poly.setAttribute("points", polygon.map(([x, y]) => `${x},${y}`).join(" "));
+      // Tinted by its effect; an attribute, so the CSS selection highlight still wins.
+      poly.setAttribute("fill", surfaceFill(effectById(s.effect), s.params));
       poly.classList.toggle("selected", s.id === show?.selected);
       poly.classList.toggle("multi", multi.has(s.id));
       poly.classList.toggle("error", effectErrors.has(s.id));
