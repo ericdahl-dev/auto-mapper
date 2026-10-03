@@ -124,7 +124,7 @@ class CameraSettings:
         """A camera's scan settings (#66), kept with its calibration: hole fill (px), HDR exposures
         per pattern (1 = off), and a mask of the camera image to scan (None = all of it)."""
         saved = self._load().get("scan_settings", {}).get(unique_id, {}) if unique_id else {}
-        return {"hole_fill": 9, "hdr": 1, "mask": None, **saved}
+        return {"hole_fill": 9, "hdr": 1, "mask": None, "aperture": "8", **saved}
 
     def save_scan_settings(self, unique_id: str, changes: dict) -> dict:
         data = self._load()

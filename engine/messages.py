@@ -110,6 +110,8 @@ class ScanSettingsRequest(BaseModel):
     mask: Annotated[list[Annotated[list[UnitPoint], Field(min_length=3, max_length=200)]], Field(min_length=1, max_length=16)] | None = None
     clear_mask: bool = False  # back to scanning the whole camera image
     hdr: Annotated[int, Field(ge=1, le=3)] | None = None  # exposures per pattern: 1 = off
+    # Still cameras: f-number to scan at ("8" = f/8, deep focus), or "camera" to leave the lens as set.
+    aperture: Annotated[str, Field(pattern=r"^(\d{1,2}(\.\d)?|camera)$")] | None = None
 
 
 class AutostartRequest(BaseModel):

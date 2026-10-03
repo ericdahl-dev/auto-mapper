@@ -19,7 +19,7 @@ from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub
 from engine import media
 from engine.scan_folder import ScanFolder
-from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
+from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, _aperture, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
 from engine.osc import OscControl, OscServer
 from engine.playlist import PlaylistRunner
@@ -197,7 +197,7 @@ def create_app(
                 def take():
                     cam = (still_factory or open_gphoto2_camera)(selected)
                     try:
-                        cam.prepare()
+                        cam.prepare(aperture=_aperture(settings.scan_settings(selected)))
                         return cam.read()
                     finally:
                         cam.close()
@@ -250,7 +250,7 @@ def create_app(
             if is_still(selected):  # focused on the white frame first, as a scan does
                 still = (still_factory or open_gphoto2_camera)(selected)
                 try:
-                    still.prepare()
+                    still.prepare(aperture=_aperture(settings.scan_settings(selected)))
                     still.focus_and_lock()
                     with locked_camera(still, data_path):
                         return calibrate_exposure(still, still.read)

@@ -56,7 +56,7 @@ def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray]) -> dict:
 
 def longest_exposure(uvc: Uvc) -> int:
     """The longest exposure this camera accepts, up to 300 ms (UvcUtil reports a clamped value)."""
-    for exposure in LONGER_EXPOSURES:
+    for exposure in getattr(uvc, "longer_exposures", LONGER_EXPOSURES):  # still cameras: seconds
         try:
             uvc.set("exposure-time-abs", str(exposure))
             return exposure

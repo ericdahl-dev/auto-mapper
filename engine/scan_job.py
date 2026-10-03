@@ -54,6 +54,12 @@ def latest_image_url() -> str:
     return f"/api/scan/latest.png?t={int(time.time() * 1000)}"
 
 
+def _aperture(scan_settings: dict) -> str | None:
+    """The f-number a still camera scans at; None leaves the lens as set ("camera")."""
+    value = scan_settings.get("aperture", "8")
+    return None if value == "camera" else value
+
+
 class ScanJob:
     def __init__(
         self,
@@ -137,7 +143,7 @@ class ScanJob:
                     # and held (refocusing on stripes fails); each frame is a fresh photo.
                     still = self.make_still(selected)
                     try:
-                        still.prepare()
+                        still.prepare(aperture=_aperture(self.settings.scan_settings(selected)))
                         show({"kind": "white"})
                         still.focus_and_lock()
                         return capture_scan(**common, read_frame=still.read, uvc=still, drop_frames=0,

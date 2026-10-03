@@ -59,6 +59,14 @@ def _seconds(shutter: str) -> float | None:
         return None
 
 
+def _f_number(text: str) -> float | None:
+    """'f/5.6' -> 5.6; None for anything else."""
+    try:
+        return float(text.removeprefix("f/")) if text.startswith("f/") else None
+    except ValueError:
+        return None
+
+
 def _nearest(target: float, options: dict[str, float]) -> str:
     """The option nearest the target on a log scale (exposure steps are multiplicative)."""
     return min(options, key=lambda k: abs(math.log(options[k] / target)))
@@ -81,12 +89,22 @@ class StillCamera:
         self._exposure: str | None = None
         self._gain = "0"
 
-    def prepare(self) -> None:
-        """Photos sized for scanning, kept off the memory card (faster, no card wear)."""
+    # Calibration may use exposures this long (100 us units): a still camera on a tripod can take
+    # seconds, which a small aperture in a dim room needs.
+    longer_exposures = (20000, 10000, 5000, 3000)
+
+    def prepare(self, aperture: str | None = None) -> None:
+        """Photos sized for scanning, kept off the memory card (faster, no card wear); and the
+        aperture, e.g. "8" for f/8 (deep focus for a scene with depth), or None to leave the lens."""
         with _answering():
             self.driver.set_config("imagequality", "Fine")
             self.driver.set_config("imagesize", "Medium")
             self.driver.set_config("capturetarget", "sdram")
+            if aperture:
+                self.driver.set_config("expprogram", "M")  # the aperture is only the app's to set in M
+                stops = {c: v for c in self.driver.choices("f-number") if (v := _f_number(c))}
+                if stops:
+                    self.driver.set_config("f-number", _nearest(float(aperture), stops))
 
     # The webcam controls (engine/camera_lock.Uvc)
     def get(self, name: str) -> str:
