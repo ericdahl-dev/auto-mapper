@@ -19,7 +19,7 @@ export type HardwareIssue = "no_projector" | "no_camera";
 export interface CameraInfo {
   name: string;
   unique_id: string;
-  device_type: "builtin" | "external" | "continuity" | "other";
+  device_type: "builtin" | "external" | "continuity" | "other" | "still"; // still: a camera taking photos over USB (#136)
 }
 
 export interface Calibration {

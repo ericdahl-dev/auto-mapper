@@ -36,9 +36,13 @@ def opencv_index(cameras: list[dict], unique_id: str) -> int | None:
 
 
 def default_camera(cameras: list[dict]) -> str | None:
-    """First USB webcam; never the built-in, Continuity (phone) or virtual cameras."""
+    """First USB webcam, else a still camera over USB (#136); never the built-in, Continuity
+    (phone) or virtual cameras."""
     for c in cameras:
         if usb_address(c["unique_id"]):
+            return c["unique_id"]
+    for c in cameras:
+        if c.get("device_type") == "still":
             return c["unique_id"]
     return None
 
