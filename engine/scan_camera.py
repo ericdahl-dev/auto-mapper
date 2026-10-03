@@ -25,6 +25,7 @@ from engine.calibrate import LONGER_EXPOSURES
 from engine.camera_device import CameraSession
 from engine.camera_lock import Uvc, locked_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
+from engine.scan_settings import ScanSettings
 from engine.still_camera import FLAT_BATTERY, CaptureFailed, StillCamera, is_still
 
 STILL_PREVIEW_SECONDS = 5.0  # how long a still camera's preview photo is reused
@@ -142,10 +143,11 @@ class ScanCameras:
         self.on_battery = on_battery  # a still camera's battery level, each time it's read
         self._still_preview = _StillPreview()
 
-    def open(self, cameras: list[dict], selected: str) -> ScanCamera:
+    def open(self, cameras: list[dict], selected: str, scan_settings: ScanSettings | None = None) -> ScanCamera:
+        """scan_settings: the ones a scan started with; the saved ones otherwise."""
         if is_still(selected):
-            aperture = self._settings.scan_settings(selected).get("aperture", "8")
-            return _Still(self._make_still(selected), None if aperture == "camera" else aperture,
+            settings = scan_settings or self._settings.scan_settings(selected)
+            return _Still(self._make_still(selected), settings.still_aperture,
                           self._data_dir, lambda level: self.on_battery(level), self._still_preview)
         address = usb_address(selected)
         uvc = self._make_uvc(address) if address is not None else None

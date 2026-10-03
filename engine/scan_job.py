@@ -108,9 +108,11 @@ class ScanJob:
             def call(coro):  # run an engine coroutine from the capture thread and wait for it
                 return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
+            scan_settings = self.settings.scan_settings(selected)  # read once: changes apply to the next scan
+
             def capture():
                 show = lambda p: call(hub.show_pattern(p, self.ack_timeout))  # noqa: E731
-                camera = self.cameras.open(cameras, selected)
+                camera = self.cameras.open(cameras, selected, scan_settings)
                 show({"kind": "white"})  # a still camera focuses on it as it's taken over
                 with camera.taken_over():
                     return capture_scan(
@@ -119,7 +121,7 @@ class ScanJob:
                         width=res["width"],
                         height=res["height"],
                         calibration=self.settings.calibration(selected),
-                        hdr=self.settings.scan_settings(selected)["hdr"],
+                        hdr=scan_settings.hdr,
                         progress=lambda done, total: call(
                             hub.broadcast({"type": "scan_progress", "done": done, "total": total})
                         ),
@@ -130,9 +132,9 @@ class ScanJob:
             try:
                 started = time.monotonic()
                 decoded, calibration = await asyncio.to_thread(capture)
-                decoded = apply_camera_mask(decoded, self.settings.scan_settings(selected)["mask"])
+                decoded = apply_camera_mask(decoded, scan_settings.mask)
                 self.settings.save_calibration(selected, calibration)
-                hole_fill = self.settings.scan_settings(selected)["hole_fill"]
+                hole_fill = scan_settings.hole_fill
                 image, covered = await asyncio.to_thread(projector_space_image, decoded, hole_fill)
                 coverage = block_coverage(covered)
                 surfaces = await asyncio.to_thread(detect_surfaces, decoded, (image, covered))

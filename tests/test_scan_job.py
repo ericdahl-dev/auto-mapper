@@ -143,3 +143,15 @@ def test_a_failing_output_window_fails_the_scan_with_its_message_and_still_clean
     assert "stopped responding" in failed["error"]
     assert hub.to_output[-1] == {"type": "show_test_frame", "kind": "black"}
     assert not job.busy
+
+
+def test_a_scan_uses_the_settings_it_started_with(rig):
+    """Settings changed while a scan runs apply to the next one (#144): here a mask drawn mid-scan
+    that would leave only a corner of the image."""
+    scene, job, latest, show = rig
+    hub = FakeHub(scene)
+    corner = [[[0, 0], [0.1, 0], [0.1, 0.1], [0, 0.1]]]
+    hub.on_pattern = lambda: job.settings.save_scan_settings(AC410["unique_id"], {"mask": corner})
+    asyncio.run(run(job, hub))
+    result = next(m for m in hub.sent if m["type"] == "scan_result")
+    assert result["coverage"] > 0.5
