@@ -19,6 +19,7 @@ import { movePin, pinHandles } from "./pin";
 import { MidiRouter, parseMidi, settingValue, type MidiAction, type MidiTarget } from "./midi";
 import { deleteKeyTargets } from "./deleteKey";
 import { moveScene } from "./sceneList";
+import { FIT, panBy, type View, zoomAt } from "./viewZoom";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
 import { placeOutput } from "./screens";
@@ -88,6 +89,7 @@ async function refreshProjects() {
 }
 
 async function reloadScan() {
+  if (view !== FIT) setView(FIT); // a different scan: start from the whole of it
   const r = await engine.latestScan();
   if (r.ok) {
     scanState = scanReducer(initialScan, { type: "scan_result", ...(await r.json()) });
@@ -134,6 +136,38 @@ const deleteButton = $<HTMLButtonElement>("delete-surface");
 const mergeButton = $<HTMLButtonElement>("merge-surfaces");
 const applyButton = $<HTMLButtonElement>("apply-effect");
 const multi = new Set<number>(); // shift-click selection for merging
+
+// Zooming the scan view to place points precisely (viewZoom.ts). The view is a CSS transform, and
+// projectorPoint and the handle sizes read the transformed box, so editing works the same zoomed.
+let view: View = FIT;
+const viewBox = () => ({ width: scanView.offsetWidth, height: scanView.offsetHeight }); // unzoomed
+function setView(v: View) {
+  view = v;
+  scanView.style.transform = v.scale === 1 ? "" : `translate(${v.x}px, ${v.y}px) scale(${v.scale})`;
+  $("zoom-readout").textContent = `${Math.round(v.scale * 100)}%`;
+  renderSurfaces(); // handles keep their size on screen
+}
+/** A pointer position in the unzoomed stage, in screen pixels. */
+function stagePoint(ev: { clientX: number; clientY: number }): number[] {
+  const r = scanView.getBoundingClientRect();
+  return [ev.clientX - (r.left - view.x), ev.clientY - (r.top - view.y)];
+}
+const stage = scanView.parentElement!;
+stage.addEventListener("wheel", (ev) => {
+  if (scanView.hidden) return;
+  if (ev.ctrlKey || ev.metaKey) { // pinch on a trackpad, or Cmd/Ctrl + scroll
+    ev.preventDefault();
+    ev.stopPropagation();
+    setView(zoomAt(view, stagePoint(ev), Math.exp(-ev.deltaY * 0.01), viewBox()));
+  } else if (view.scale > 1 && !(ev.target as Element).closest?.("[data-framing]")) {
+    ev.preventDefault(); // two-finger scroll moves around a zoomed scan
+    setView(panBy(view, [-ev.deltaX, -ev.deltaY], viewBox()));
+  }
+}, { passive: false, capture: true });
+const centerOfStage = () => [scanView.offsetWidth / 2, scanView.offsetHeight / 2];
+$("zoom-in").addEventListener("click", () => setView(zoomAt(view, centerOfStage(), 2, viewBox())));
+$("zoom-out").addEventListener("click", () => setView(zoomAt(view, centerOfStage(), 0.5, viewBox())));
+$("zoom-fit").addEventListener("click", () => setView(FIT));
 
 function projectorPoint(ev: MouseEvent): number[] {
   const r = surfacesSvg.getBoundingClientRect();
@@ -263,8 +297,11 @@ function renderSurfaces() {
       });
       const [x, y] = polygon[0];
       const label = document.createElementNS(SVG_NS, "text");
-      label.setAttribute("x", String(x + 12));
-      label.setAttribute("y", String(y + 34));
+      // Same size on screen however far the view is zoomed in, so labels don't cover what you're editing.
+      label.setAttribute("x", String(x + 12 / view.scale));
+      label.setAttribute("y", String(y + 34 / view.scale));
+      label.style.fontSize = `${28 / view.scale}px`;
+      label.style.strokeWidth = `${4 / view.scale}px`;
       label.textContent = String(s.id);
       const parts: SVGElement[] = [poly, label];
       if (s.id === show?.selected && s.edge) {
@@ -323,6 +360,7 @@ function renderSurfaces() {
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
 let framedJustNow = false;
 function bindFraming(poly: SVGPolygonElement, s: ShowMessage["surfaces"][number]) {
+  poly.dataset.framing = "1"; // its scroll frames the media; the view zoom leaves it alone
   const effect = effectById(s.effect);
   const f = framingOf(effect)!; // which of the effect's settings are zoom and pan
   // Always read the latest values (local edits included), so fast scrolls build on each other.

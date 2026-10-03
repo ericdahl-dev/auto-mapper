@@ -153,6 +153,7 @@ Detected surfaces appear as numbered outlines over the scan. In the editor:
 | Move a corner | Drag a handle. On a curved run, the neighboring points follow with a smooth falloff, so the curve bends instead of kinking. |
 | Add a corner | Double-click an edge of the selected surface. |
 | Remove a corner | Alt-click a handle. A surface always keeps at least three corners. |
+| Zoom in to place points precisely | Pinch on the trackpad (or Cmd/Ctrl + scroll) over the scan to zoom, up to 16×; two-finger scroll moves around. **−**, **+** and **Fit** sit under the scan. Handles and labels keep their size, so you can place points much more precisely. |
 | Delete surfaces | Click a surface and press **Delete** or **Backspace** (or the panel's Delete). Shift-click more surfaces to delete them all at once; one Undo brings them back. |
 | Start a new project | **New** under Project, then click again to confirm: the scan and show are cleared and the output goes dark, ready for a new scan. Saved projects are kept, so **Save** the current one first if you want it back. |
 | Several scenes | **Scenes** in the sidebar: **Add** starts a dark scene, **Duplicate** copies the open one. Click a scene to show and edit it; every scene uses the same surfaces. Name it, set its seconds for the playlist, and move it with ↑ ↓. In **Play** mode the scenes play in that order with a **Crossfade** between them (**Loop** to start over); the Right and Left arrow keys step through them by hand. |
