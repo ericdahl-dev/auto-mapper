@@ -147,6 +147,14 @@
           <label>Crossfade <input id="crossfade" type="number" min="0" max="60" step="0.5" style="width: 4.5em" /> s</label>
           <label><input id="loop" type="checkbox" /> Loop</label>
         </div>
+        <h2>Schedule</h2>
+        <div class="row" title="For unattended displays: Play between these times, Blackout outside them, every day">
+          <label><input id="schedule-enabled" type="checkbox" /> On</label>
+          <input id="schedule-on" type="time" /> to <input id="schedule-off" type="time" />
+        </div>
+        <p class="muted hint"><span id="schedule-next">Schedule off</span></p>
+        <label class="muted" title="When the engine starts (e.g. after a power cut), go straight to Play with the last show">
+          <input id="autostart" type="checkbox" /> Start in Play</label>
         <h2>Hardware</h2>
         <dl>
           <dt>Projector</dt><dd><select id="projector-select" title="Which display is the projector"></select></dd>

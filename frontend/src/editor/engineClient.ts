@@ -4,6 +4,14 @@
 import type { TestFrameKind } from "../shared/messages";
 import type { SurfaceEdit } from "./editSession";
 
+/** Daily on/off times; "days" overrides them per weekday ("0" = Monday), null = off all day. */
+export interface Schedule {
+  enabled: boolean;
+  on: string; // "HH:MM"
+  off: string;
+  days: Record<string, { on: string; off: string } | null>;
+}
+
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 
 export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, init)) {
@@ -53,6 +61,10 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     selectProjector: (key: string) => post("/api/projector", { key }),
     refreshHardware: () => post("/api/hardware/refresh"),
     testFrame: (kind: TestFrameKind) => post("/api/test-frame", { kind }),
+    // Unattended displays: daily on/off times, and starting straight into Play
+    schedule: () => get("/api/schedule"),
+    setSchedule: (body: Schedule) => post("/api/schedule", body),
+    setAutostart: (enabled: boolean) => post("/api/autostart", { enabled }),
     // Projects
     projects: () => get("/api/projects"),
     saveProject: (name: string) => post("/api/projects", { name }),

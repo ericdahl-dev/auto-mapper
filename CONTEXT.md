@@ -111,6 +111,10 @@ _Avoid_: Keystone, recalibrate
 How bright the whole show is projected, from dark to full. One setting for the show, not per surface.
 _Avoid_: Master dimmer, opacity
 
+**Schedule**:
+Daily times between which the show plays by itself; outside them it is in blackout. Weekdays can have their own times or stay dark.
+_Avoid_: Timer, on/off rules
+
 **Undo step**:
 One change to the show that Undo takes back as a whole: a drag, a burst of typing, a merge. Choosing surfaces, Play mode, Blackout and sound aren't undo steps. A new scan or opening a project starts over.
 

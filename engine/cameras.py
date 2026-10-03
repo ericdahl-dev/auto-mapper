@@ -76,6 +76,26 @@ class CameraSettings:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         write_text_atomic(self.path, json.dumps(data, indent=2))
 
+    def schedule(self) -> dict:
+        """Daily on/off times for unattended displays (engine/schedule.py); off until set."""
+        return self._load().get("schedule") or {"enabled": False, "on": "17:30", "off": "23:00", "days": {}}
+
+    def autostart(self) -> bool:
+        """Start the engine straight into Play with the last show (unattended displays)."""
+        return bool(self._load().get("autostart"))
+
+    def set_autostart(self, enabled: bool) -> None:
+        data = self._load()
+        data["autostart"] = enabled
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_text_atomic(self.path, json.dumps(data, indent=2))
+
+    def set_schedule(self, schedule: dict) -> None:
+        data = self._load()
+        data["schedule"] = schedule
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_text_atomic(self.path, json.dumps(data, indent=2))
+
     def calibration(self, unique_id: str | None) -> dict | None:
         return self._load().get("calibration", {}).get(unique_id) if unique_id else None
 

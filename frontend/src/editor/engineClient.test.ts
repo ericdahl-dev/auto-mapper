@@ -30,6 +30,9 @@ describe("engine client", () => {
     await client.testFrame("grid");
     await client.saveProject("Porch");
     await client.openProject("porch");
+    await client.schedule();
+    await client.setSchedule({ enabled: true, on: "17:30", off: "23:00", days: {} });
+    await client.setAutostart(true);
     await client.align({ brightness: 0.5 });
     await client.resetAlignment();
     await client.patchSurface(3, { edge: 2 }, "g7");
@@ -57,6 +60,9 @@ describe("engine client", () => {
       { url: "/api/test-frame", method: "POST", body: { kind: "grid" } },
       { url: "/api/projects", method: "POST", body: { name: "Porch" } },
       { url: "/api/projects/porch/open", method: "POST", body: undefined },
+      { url: "/api/schedule", method: "GET", body: undefined },
+      { url: "/api/schedule", method: "POST", body: { enabled: true, on: "17:30", off: "23:00", days: {} } },
+      { url: "/api/autostart", method: "POST", body: { enabled: true } },
       { url: "/api/show/alignment", method: "POST", body: { brightness: 0.5 } },
       { url: "/api/show/alignment/reset", method: "POST", body: undefined },
       { url: "/api/show/surfaces/3", method: "PATCH", body: { edge: 2, gesture: "g7" } },
