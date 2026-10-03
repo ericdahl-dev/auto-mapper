@@ -860,13 +860,70 @@ applyFolds();
 // Scan settings for the selected camera (#66): hole fill now; saved per camera, used by the next scan.
 const holeFill = $<HTMLInputElement>("hole-fill");
 const holeFillReadout = $("hole-fill-readout");
+let cameraMask: number[][][] | null = null; // 0..1 camera coordinates
 async function loadScanSettings() {
   const r = await engine.scanSettings();
-  if (!r.ok || document.activeElement === holeFill) return;
-  const s = (await r.json()) as { hole_fill: number };
+  if (!r.ok) return;
+  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null };
+  cameraMask = s.mask;
+  renderMask();
+  if (document.activeElement === holeFill) return;
   holeFill.value = String(s.hole_fill);
   holeFillReadout.textContent = `${s.hole_fill} px`;
 }
+
+// Camera mask (#66): click corners on the preview to mark areas to scan; the rest is ignored.
+const previewBox = $("preview-box");
+const maskOverlay = $("mask-overlay");
+let maskDraw = idleDraw; // in preview pixels, so the double-click echo rule works; saved as 0..1
+function renderMask() {
+  const { width, height } = previewBox.getBoundingClientRect();
+  const toUnit = (p: number[]) => `${p[0] / Math.max(1, width)},${p[1] / Math.max(1, height)}`;
+  const shapes = (cameraMask ?? []).map((poly) => {
+    const el = document.createElementNS(SVG_NS, "polygon");
+    el.setAttribute("points", poly.map(([x, y]) => `${x},${y}`).join(" "));
+    return el;
+  });
+  if (maskDraw.active && maskDraw.points.length) {
+    const draft = document.createElementNS(SVG_NS, "polyline");
+    draft.setAttribute("points", maskDraw.points.map(toUnit).join(" "));
+    shapes.push(draft);
+  }
+  maskOverlay.replaceChildren(...shapes);
+  previewBox.classList.toggle("drawing", maskDraw.active);
+  $("mask-draw").textContent = maskDraw.active ? "Double-click to finish" : "Mask area";
+  $("mask-clear").hidden = !cameraMask;
+  $("mask-note").textContent = cameraMask ? `Scanning ${cameraMask.length} area${cameraMask.length > 1 ? "s" : ""} only` : "";
+}
+function maskStep(ev: DrawEvent) {
+  maskDraw = drawStep(maskDraw, ev);
+  if (maskDraw.finished) {
+    const { width, height } = previewBox.getBoundingClientRect();
+    const unit = maskDraw.finished.map(([x, y]) => [
+      Math.min(1, Math.max(0, x / width)), Math.min(1, Math.max(0, y / height)),
+    ]);
+    maskDraw = idleDraw;
+    void engine.setScanSettings({ mask: [...(cameraMask ?? []), unit] }).then(() => loadScanSettings());
+  }
+  renderMask();
+}
+const previewPoint = (ev: MouseEvent) => {
+  const r = previewBox.getBoundingClientRect();
+  return [ev.clientX - r.left, ev.clientY - r.top];
+};
+$("mask-draw").addEventListener("click", () => {
+  if (maskDraw.active) return maskStep({ type: "finish" });
+  if (previewTimer === undefined) previewToggle.click(); // you draw on what the camera sees
+  maskStep({ type: "start" });
+});
+$("mask-clear").addEventListener("click", () => void engine.setScanSettings({ clear_mask: true }).then(() => loadScanSettings()));
+previewBox.addEventListener("click", (ev) => { if (maskDraw.active) maskStep({ type: "point", point: previewPoint(ev) }); });
+previewBox.addEventListener("dblclick", () => { if (maskDraw.active) maskStep({ type: "finish" }); });
+window.addEventListener("keydown", (ev) => {
+  if (!maskDraw.active) return;
+  if (ev.key === "Enter") maskStep({ type: "finish" });
+  if (ev.key === "Escape") maskStep({ type: "cancel" });
+});
 holeFill.addEventListener("input", () => { holeFillReadout.textContent = `${holeFill.value} px`; });
 holeFill.addEventListener("change", () => void engine.setScanSettings({ hole_fill: Number(holeFill.value) }));
 void loadScanSettings();
@@ -1228,7 +1285,7 @@ cameraSelect.addEventListener("change", async () => {
 let previewTimer: number | undefined;
 previewToggle.addEventListener("click", () => {
   const on = previewTimer === undefined;
-  preview.hidden = !on;
+  $("preview-box").hidden = !on;
   previewToggle.textContent = on ? "Hide preview" : "Show preview";
   if (on) {
     const refresh = () => (preview.src = `/api/camera/preview.jpg?t=${Date.now()}`);

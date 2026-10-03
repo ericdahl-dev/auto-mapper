@@ -63,6 +63,12 @@
       #project-list li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
       #project-list li.active { color: var(--ok); }
       details.fold > summary { list-style: none; cursor: pointer; }
+      #preview-box { position: relative; }
+      #preview-box img { display: block; width: 100%; }
+      #mask-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
+      #mask-overlay polygon { fill: rgba(74, 222, 128, 0.15); stroke: #4ade80; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      #mask-overlay polyline { fill: none; stroke: #fbbf24; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      #preview-box.drawing { cursor: crosshair; }
       details.fold-inline { margin: 0 0 12px; }
       details.fold-inline > summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
       details.fold > summary::-webkit-details-marker { display: none; }
@@ -263,7 +269,15 @@
           <span>Hole fill</span><span id="hole-fill-readout" class="muted">9 px</span>
           <input id="hole-fill" type="range" min="0" max="31" step="1" value="9" aria-label="Hole fill" />
         </label>
-        <img id="preview" alt="Camera preview" hidden />
+        <div id="preview-box" hidden>
+          <img id="preview" alt="Camera preview" />
+          <svg id="mask-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="row" title="Scan only part of what the camera sees: skip a window, a TV or shiny things. Click corners on the preview, double-click or Enter to finish; add as many areas as you like. Applies to the next scan.">
+          <button id="mask-draw">Mask area</button>
+          <button id="mask-clear" hidden>Clear mask</button>
+          <span id="mask-note" class="muted"></span>
+        </div>
         </details>
         <details class="fold" data-fold="test-frame"><summary><h2>Test frame</h2></summary>
         <div class="row">

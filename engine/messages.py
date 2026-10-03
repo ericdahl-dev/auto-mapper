@@ -101,8 +101,14 @@ class OscRequest(BaseModel):
     port: Annotated[int, Field(ge=0, le=65535)] | None = None  # 0: any free port (tests)
 
 
+UnitPoint = Annotated[list[Annotated[float, Field(ge=0, le=1)]], Field(min_length=2, max_length=2)]
+
+
 class ScanSettingsRequest(BaseModel):
     hole_fill: Annotated[int, Field(ge=0, le=31)] | None = None  # px gap filled between decoded pixels
+    # Areas of the camera image to scan (0..1 camera coordinates); the rest is ignored.
+    mask: Annotated[list[Annotated[list[UnitPoint], Field(min_length=3, max_length=200)]], Field(min_length=1, max_length=16)] | None = None
+    clear_mask: bool = False  # back to scanning the whole camera image
 
 
 class AutostartRequest(BaseModel):

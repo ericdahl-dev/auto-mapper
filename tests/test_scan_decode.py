@@ -120,3 +120,28 @@ def test_hole_fill_closes_more_gaps_the_higher_it_is():
     assert (filled[0] == hit).all()  # 0: only what was actually decoded
     assert filled[0].sum() < filled[5].sum() < filled[15].sum()
     assert projector_space_image(r)[1].sum() == projector_space_image(r, hole_fill_px=9)[1].sum()  # today's default
+
+
+def test_a_camera_mask_drops_everything_outside_it():
+    """#66: only the masked area of the camera image is scanned; the rest yields nothing."""
+    from engine.scan import apply_camera_mask, projector_space_image
+    from engine.surfaces import detect_surfaces
+
+    scene = Scene()
+    full = decode(scene)
+    # Keep the left half of the camera image (0..1 coordinates), so the box (u 190..250) is outside.
+    left = [[[0, 0], [0.5, 0], [0.5, 1], [0, 1]]]
+    masked = apply_camera_mask(decode(scene), left)
+    assert not masked.valid[:, 170:].any()  # nothing decoded right of the mask's edge (160 px)
+    assert masked.valid[:, :150].sum() == full.valid[:, :150].sum()  # inside: untouched
+    assert (masked.proj_x[~masked.valid] == -1).all()
+    surfaces = detect_surfaces(masked, projector_space_image(masked))
+    assert len(surfaces) < len(detect_surfaces(full, projector_space_image(full)))  # the box is gone
+
+
+def test_no_mask_or_an_empty_one_keeps_everything():
+    from engine.scan import apply_camera_mask
+
+    r = decode(Scene())
+    assert apply_camera_mask(r, None).valid.sum() == r.valid.sum()
+    assert apply_camera_mask(decode(Scene()), []).valid.sum() == r.valid.sum()
