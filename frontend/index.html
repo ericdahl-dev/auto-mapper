@@ -25,7 +25,7 @@
          shifts the scan view under the cursor (which broke double-clicks). */
       html { height: 100%; scrollbar-gutter: stable; }
       body { margin: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
-      header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+      header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
       h1 { font-size: 16px; margin: 0 auto 0 0; }
       main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 280px; gap: 16px; padding: 16px; }
       main > div { min-height: 0; overflow-y: auto; }
@@ -54,28 +54,34 @@
       .control input[type=file] { grid-column: 1 / -1; width: 100%; }
       .control textarea { grid-column: 1 / -1; width: 100%; box-sizing: border-box; font: inherit; resize: vertical; }
       .control .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16em; }
-      .control button.sound-off { grid-column: 1 / -1; justify-self: start; background: none; border: none; padding: 2px 0; color: var(--warn); font-size: 12px; text-decoration: underline; }
+      .control button.sound-off { grid-column: 1 / -1; justify-self: start; background: none; border: none; padding: 2px 0; min-height: 24px; color: var(--warn); font-size: 12px; text-decoration: underline; }
       #effect-error { color: var(--bad); white-space: pre-wrap; font-size: 12px; background: #2a1414; padding: 8px; }
       /* Fill comes from the surface's effect (surfaceFill.ts); the outline stays blue on any scan. */
       #surfaces polygon { stroke: #60a5fa; stroke-width: 2; }
       #surfaces polygon.selected { fill: rgba(255, 255, 255, 0.25); stroke: #fff; stroke-width: 3; }
       #surfaces polygon.error { stroke: #f87171; stroke-width: 3; }
       #surfaces polygon.multi { stroke: #fbbf24; stroke-width: 3; }
-      #surfaces rect.handle.anchor { fill: #fff; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
+      #surfaces rect.handle.anchor { fill: #fff; cursor: move; }
       #surfaces circle.handle.control { fill: #60a5fa; }
       #surfaces line.tangent { stroke: #60a5fa; stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
       #surfaces polygon.align { fill: none; stroke: #4ade80; stroke-width: 1.5; stroke-dasharray: 8 4; vector-effect: non-scaling-stroke; pointer-events: none; }
-      #surfaces circle.handle.align { fill: #4ade80; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
+      #surfaces circle.handle.align { fill: #4ade80; cursor: move; }
       #surfaces polygon.pin { fill: none; stroke: #fb923c; stroke-width: 1.5; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
-      #surfaces rect.handle.pin { fill: #fb923c; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
+      #surfaces rect.handle.pin { fill: #fb923c; cursor: move; }
       #surfaces polygon.edge { fill: none; stroke: #fbbf24; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; }
-      #surfaces circle.handle { fill: #fff; stroke: #111; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: move; }
-      #surface-name { width: 100%; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
-      #project-save-name { flex: 1; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
+      #surfaces circle.handle { fill: #fff; cursor: move; }
+      /* Handles look ~14 px but grab from 24 px (#124): an invisible stroke widens the target; the dark
+         edge that keeps them readable on light scans is a shadow. */
+      #surfaces .handle { stroke: transparent; stroke-width: 10px; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000); }
+      /* Text, number and time fields all look alike (#124). */
+      input[type=text], input[type=number], input[type=time] { background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; font: inherit; min-height: 24px; box-sizing: border-box; }
+      #surface-name { width: 100%; }
+      #project-save-name { flex: 1; min-width: 0; }
       #project-list { list-style: none; padding: 0; margin: 0 0 16px; }
       #project-list li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
       #project-list li.active { color: var(--ok); }
-      details.fold > summary { list-style: none; cursor: pointer; }
+      details.fold > summary { list-style: none; cursor: pointer; min-height: 24px; display: flex; align-items: center; margin-bottom: 4px; }
+      details.fold > summary h2 { margin: 0; }
       #preview-box { position: relative; }
       #preview-box img { display: block; width: 100%; }
       #mask-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -83,7 +89,7 @@
       #mask-overlay polyline { fill: none; stroke: #fbbf24; stroke-width: 2; vector-effect: non-scaling-stroke; }
       #preview-box.drawing { cursor: crosshair; }
       details.fold-inline { margin: 0 0 12px; }
-      details.fold-inline > summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+      details.fold-inline > summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-bottom: 8px; line-height: 24px; } /* keeps its marker */
       details.fold > summary::-webkit-details-marker { display: none; }
       details.fold > summary h2::before { content: "▸ "; color: var(--muted); }
       details.fold[open] > summary h2::before { content: "▾ "; }
@@ -92,9 +98,10 @@
       #midi-list li { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; border-bottom: 1px solid var(--line); }
       #scene-list li { display: flex; gap: 4px; align-items: center; padding: 3px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
       #scene-list li.open { outline: 1px solid var(--ok); }
+      #scene-list li input { padding: 3px 6px; }
       #scene-list li input[type="text"] { flex: 1; min-width: 0; }
       #scene-list li input[type="number"] { width: 4.5em; }
-      #scene-list li button { padding: 2px 6px; }
+      #scene-list li button { padding: 2px 6px; min-width: 24px; min-height: 24px; }
       .hint { font-size: 12px; margin: 0 0 8px; }
       #surfaces.drawing { cursor: crosshair; }
       #surfaces polyline.draft { fill: rgba(251, 191, 36, 0.15); stroke: #fbbf24; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
@@ -107,7 +114,7 @@
       aside { background: var(--panel); border: 1px solid var(--line); padding: 12px; overflow-y: auto; min-height: 0; }
       dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0 0 16px; }
       dt { color: var(--muted); }
-      dd { margin: 0; }
+      dd { margin: 0; min-width: 0; }
       .ok { color: var(--ok); } .bad { color: var(--bad); }
       .scan-reason { align-self: center; max-width: 22em; font-size: 12px; line-height: 1.3; color: var(--warn); }
       #hardware-notes .note { margin: 0 0 12px; padding: 6px 8px; font-size: 12px; color: var(--text); border-left: 3px solid var(--muted); background: #222; }
@@ -117,7 +124,7 @@
       button.on { background: #92400e; border-color: #92400e; color: #fff; }
       button.primary { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
       button.primary:disabled { background: var(--panel); border-color: var(--line); color: var(--muted); }
-      header .group { display: flex; gap: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
+      header .group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
       header .group.live { margin-left: auto; }
       header .group.live #blackout { border-color: #dc2626; }
       header button.history { width: 9.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -125,13 +132,21 @@
       .pill.edit { background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
       .pill.live { background: #15803d; color: #fff; }
       .pill.dark { background: #b91c1c; color: #fff; }
-      #toasts { position: fixed; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 10; max-width: 420px; }
+      #toasts { position: fixed; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 10; max-width: min(420px, calc(100vw - 32px)); }
       #toasts .banner { border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
       .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
       [hidden] { display: none !important; } /* hidden wins over display rules like .row */
-      select { width: 100%; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
+      select { width: 100%; min-width: 0; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
       #preview { width: 100%; border: 1px solid var(--line); margin-bottom: 12px; }
       h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
+      /* Narrow windows (#124): the sidebar stacks under the scan and the page scrolls. */
+      @media (max-width: 900px) {
+        body { height: auto; min-height: 100%; overflow-y: auto; }
+        main { display: flex; flex-direction: column; }
+        main > div, aside { overflow: visible; }
+        header .group.live { margin-left: 0; }
+        .scan-reason { order: 1; flex-basis: 100%; max-width: none; } /* its own line under the buttons */
+      }
     </style>
   </head>
   <body>
@@ -174,7 +189,7 @@
           </div>
           <span id="stage-empty">Scan image appears here after a scan.</span>
           <span class="zoom" id="zoom-controls" title="Pinch or Cmd-scroll on the scan to zoom; two-finger scroll to move around">
-            <button id="zoom-out" title="Zoom out">−</button><span id="zoom-readout" class="muted">100%</span><button id="zoom-in" title="Zoom in">+</button><button id="zoom-fit" title="Show the whole scan">Fit</button>
+            <button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button><span id="zoom-readout" class="muted">100%</span><button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button><button id="zoom-fit" title="Show the whole scan" aria-label="Zoom to fit">Fit</button>
           </span>
         </div>
         <p class="row"><span id="scan-label" class="muted">No scan yet</span>
@@ -211,7 +226,7 @@
         </section>
         <details class="fold" data-fold="project"><summary><h2>Project</h2></summary>
         <div class="row">
-          <input id="project-save-name" type="text" placeholder="Project name" />
+          <input id="project-save-name" type="text" placeholder="Project name" aria-label="Project name" />
           <button id="project-save">Save</button>
           <button id="project-new" title="Clear the scan and show to start over. Saved projects are kept; save this one first to keep it.">New</button>
         </div>
@@ -232,7 +247,7 @@
         <details class="fold" data-fold="schedule"><summary><h2>Schedule</h2></summary>
         <div class="row" title="For unattended displays: Play between these times, Blackout outside them, every day">
           <label><input id="schedule-enabled" type="checkbox" /> On</label>
-          <input id="schedule-on" type="time" /> to <input id="schedule-off" type="time" />
+          <input id="schedule-on" type="time" aria-label="Play from" /> to <input id="schedule-off" type="time" aria-label="Blackout from" />
         </div>
         <p class="muted hint"><span id="schedule-next">Schedule off</span></p>
         <label class="muted" title="When the engine starts (e.g. after a power cut), go straight to Play with the last show">
@@ -244,7 +259,7 @@
           <span id="midi-status" class="muted"></span>
         </div>
         <div class="row" id="midi-learn-row" hidden>
-          <select id="midi-target" title="What the next knob or key controls"></select>
+          <select id="midi-target" title="What the next knob or key controls" aria-label="What the next knob or key controls"></select>
           <button id="midi-learn" title="Then move a knob or press a key">Learn</button>
         </div>
         <ul id="midi-list"></ul>
@@ -252,8 +267,8 @@
         <details class="fold" data-fold="hardware"><summary><h2>Hardware</h2></summary>
         <div id="hardware-notes"></div>
         <dl>
-          <dt>Projector</dt><dd><select id="projector-select" title="Which display is the projector"></select></dd>
-          <dt>Camera</dt><dd><select id="camera-select" title="Which camera scans"></select></dd>
+          <dt id="projector-label">Projector</dt><dd><select id="projector-select" title="Which display is the projector" aria-labelledby="projector-label"></select></dd>
+          <dt id="camera-label">Camera</dt><dd><select id="camera-select" title="Which camera scans" aria-labelledby="camera-label"></select></dd>
           <dt>Output</dt><dd id="output">…</dd>
           <dt>Frame rate</dt><dd id="fps">…</dd>
         </dl>
@@ -265,21 +280,21 @@
         <details class="fold" data-fold="sound"><summary><h2>Sound</h2></summary>
         <div class="row">
           <button id="sound-toggle" title="Effects with React to sound follow the music">React to sound: off</button>
-          <select id="sound-source" title="What sound-reactive effects follow">
+          <select id="sound-source" title="What sound-reactive effects follow" aria-label="React to">
             <option value="mic">React to: Microphone</option>
             <option value="video">React to: Video sound</option>
           </select>
-          <select id="sound-input" title="Which input the output window listens to"></select>
+          <select id="sound-input" title="Which input the output window listens to" aria-label="Sound input"></select>
         </div>
         <div class="row">
-          <select id="sound-output" title="Where video sound plays (default: the Mac's selected output)"></select>
+          <select id="sound-output" title="Where video sound plays (default: the Mac's selected output)" aria-label="Sound output"></select>
         </div>
         <p class="muted hint" id="sound-channels"></p>
         <label class="control" title="Move it until a clap in a video lines up with the hands. Right: sound later (the projector shows the picture late). Left: sound earlier (Bluetooth or other speakers that play late).">
           <span>Sound delay</span><span id="sound-delay-readout" class="muted">0 ms</span>
           <input id="sound-delay" type="range" min="-500" max="500" step="5" value="0" />
         </label>
-        <div class="row"><meter id="sound-meter" min="0" max="100" value="0"></meter> <span id="sound-note" class="muted">Off</span></div>
+        <div class="row"><meter id="sound-meter" min="0" max="100" value="0" aria-label="Sound level"></meter> <span id="sound-note" class="muted">Off</span></div>
         </details>
         <details class="fold" data-fold="camera"><summary><h2>Camera</h2></summary>
         <div class="row">

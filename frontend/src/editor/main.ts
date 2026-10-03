@@ -5,7 +5,7 @@ import { EFFECTS, effectById } from "../effects/index";
 import type { ShowMessage } from "../shared/messages";
 import { bindPresentationKeys, setMode, stepScene, toggleBlackout } from "../shared/presentation";
 import { applyPlan } from "./applyEffect";
-import { controlsFor, mediaLabel, parseControlValue } from "./controls";
+import { controlsFor, mediaLabel, parseControlValue, readout as readoutText } from "./controls";
 import { type Bezier, curveBezierEdge, flatten, fromPolygon, insertAnchor, moveAnchor, moveControl, removeAnchor } from "./bezier";
 import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
@@ -75,8 +75,9 @@ newProject.addEventListener("click", async () => {
 });
 
 // Open replaces the working show and goes to Play: with unsaved changes, a second click confirms.
-function openButton(slug: string): HTMLButtonElement {
+function openButton(slug: string, name: string): HTMLButtonElement {
   const b = Object.assign(document.createElement("button"), { textContent: "Open" });
+  b.setAttribute("aria-label", `Open ${name}`);
   let armed: ReturnType<typeof setTimeout> | null = null;
   b.addEventListener("click", async () => {
     if (status?.unsaved && !armed) {
@@ -104,7 +105,7 @@ async function refreshProjects() {
       const when = new Date(p.saved_at * 1000).toLocaleString();
       li.append(
         Object.assign(document.createElement("span"), { textContent: p.name, title: `${p.surfaces} surfaces, saved ${when}` }),
-        openButton(p.slug),
+        openButton(p.slug, p.name),
       );
       return li;
     }),
@@ -327,7 +328,8 @@ function renderSurfaceList() {
 function renderSurfaces() {
   const surfaces = show?.surfaces ?? [];
   const width = show?.width ?? 1920;
-  // Handle size in projector pixels that looks ~7 screen px whatever the editor's scale.
+  // Handle size in projector pixels that looks ~7 screen px whatever the editor's scale (CSS widens
+  // what you can grab to 24 px).
   const r = (7 * width) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
   surfacesSvg.replaceChildren(
     ...surfaces.flatMap((s) => {
@@ -539,7 +541,7 @@ function bezierHandles(id: number, bezier: Bezier, r: number): SVGElement[] {
     ([c1, c2] as number[][]).forEach((c, which) => {
       const dot = document.createElementNS(SVG_NS, "circle");
       dot.classList.add("handle", "control");
-      Object.entries({ cx: c[0], cy: c[1], r: r * 0.8 }).forEach(([k, v]) => dot.setAttribute(k, String(v)));
+      Object.entries({ cx: c[0], cy: c[1], r }).forEach(([k, v]) => dot.setAttribute(k, String(v)));
       draggable(dot, (bz, p) => moveControl(bz, edge, which as 0 | 1, p));
       out.push(dot);
     });
@@ -692,16 +694,19 @@ function renderScenes() {
     li.classList.toggle("open", sc.id === show?.scene);
     li.addEventListener("click", () => { if (sc.id !== show?.scene) void engine.openScene(sc.id); });
     const name = Object.assign(document.createElement("input"), { type: "text", value: sc.name, title: "Scene name" });
+    name.setAttribute("aria-label", "Scene name");
     name.addEventListener("change", () => void engine.updateScene(sc.id, { name: name.value }));
     const secs = Object.assign(document.createElement("input"), {
       type: "number", min: "0.5", max: "3600", step: "0.5", value: String(sc.duration), title: "Seconds in the playlist",
     });
+    secs.setAttribute("aria-label", `Seconds of ${sc.name} in the playlist`);
     secs.addEventListener("change", () => {
       const v = Number(secs.value);
       if (v > 0) void engine.updateScene(sc.id, { duration: v });
     });
     const button = (label: string, title: string, run: () => void, disabled = false) => {
       const b = Object.assign(document.createElement("button"), { textContent: label, title, disabled });
+      b.setAttribute("aria-label", `${title}: ${sc.name}`); // the arrows and × alone say little
       b.addEventListener("click", (ev) => { ev.stopPropagation(); run(); });
       return b;
     };
@@ -800,6 +805,7 @@ function renderMidi() {
     const li = document.createElement("li");
     const name = `${b.kind === "cc" ? "Knob" : "Key"} ${b.number}${b.channel ? ` (ch ${b.channel + 1})` : ""}`;
     const remove = Object.assign(document.createElement("button"), { textContent: "×", title: "Remove" });
+    remove.setAttribute("aria-label", `Remove ${name}`);
     // Remove this binding by what it is, not where it was in the list.
     remove.addEventListener("click", () => void engine.setMidi((show?.midi ?? []).filter((x) => JSON.stringify(x) !== JSON.stringify(b))));
     li.append(`${name} → ${targetLabel(b.target)}`, remove);
@@ -1018,9 +1024,9 @@ function renderPanel() {
         }
         const input = Object.assign(document.createElement("input"), { type: c.kind, value: String(c.value) });
         if (c.kind === "range") Object.assign(input, { min: c.min, max: c.max, step: c.step });
-        const readout = Object.assign(document.createElement("span"), { className: "muted", textContent: String(c.value) });
+        const readout = Object.assign(document.createElement("span"), { className: "muted", textContent: readoutText(c, c.value) });
         input.addEventListener("input", () => {
-          readout.textContent = input.value;
+          readout.textContent = readoutText(c, input.value);
           patchSurface(surface.id, { params: { [c.name]: parseControlValue(c.kind, input.value) } });
         });
         row.append(Object.assign(document.createElement("span"), { textContent: c.label }), readout, input);

@@ -7,7 +7,7 @@ export const edgeglow: Effect = {
   params: [
     { name: "glowColor", label: "Color", type: "color", default: "#22d3ee" },
     { name: "threshold", label: "Sensitivity", type: "number", default: 0.08, min: 0.01, max: 0.5, step: 0.01 },
-    { name: "spread", label: "Line width (px)", type: "number", default: 2, min: 1, max: 8, step: 1 },
+    { name: "spread", label: "Line width", type: "number", default: 2, min: 1, max: 8, step: 1, unit: "px" },
     { name: "base", label: "Base light", type: "number", default: 0.1, min: 0, max: 1, step: 0.01 },
     { name: "pulse", label: "Pulse", type: "number", default: 0, min: 0, max: 1, step: 0.01 },
   ],

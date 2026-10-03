@@ -22,7 +22,7 @@ export const media: Effect = {
     { name: "zoom", label: "Zoom", type: "number", default: 1, min: 0.1, max: 10, step: 0.01 },
     { name: "panX", label: "Pan left/right", type: "number", default: 0, min: -1, max: 1, step: 0.005 },
     { name: "panY", label: "Pan up/down", type: "number", default: 0, min: -1, max: 1, step: 0.005 },
-    { name: "rotate", label: "Rotate (°)", type: "number", default: 0, min: -180, max: 180, step: 1 },
+    { name: "rotate", label: "Rotate", type: "number", default: 0, min: -180, max: 180, step: 1, unit: "°" },
     { name: "flip", label: "Flip", type: "choice", default: "none", options: [
       { value: "none", label: "None" },
       { value: "horizontal", label: "Horizontal" },
@@ -31,7 +31,7 @@ export const media: Effect = {
     ] },
     { name: "background", label: "Background", type: "color", default: "#000000" },
     // Videos only (applied by the renderer to the video element, not the shader).
-    { name: "start", label: "Video start (s)", type: "number", default: 0, min: 0, max: 3600, step: 0.1 },
+    { name: "start", label: "Video start", type: "number", default: 0, min: 0, max: 3600, step: 0.1, unit: "s" },
     { name: "speed", label: "Video speed", type: "number", default: 1, min: 0.1, max: 4, step: 0.05 },
     // Videos only: the video's own sound, from the output window, in Play mode (muted while editing).
     { name: "sound", label: "Video sound", type: "choice", default: "off", options: [
