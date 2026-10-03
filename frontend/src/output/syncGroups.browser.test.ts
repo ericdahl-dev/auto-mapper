@@ -17,23 +17,39 @@ function show(group: string): ShowMessage {
 }
 
 describe("a sync group in the output", () => {
-  it("keeps two videos within 40 ms of each other over 10 s of playback", async () => {
+  // A player restarting at its loop point can lag for a frame (seen: one 16 ms sample 83 ms apart at a
+  // 10 fps clip's wrap, #150); that blip isn't drift. Held apart for two samples in a row is.
+  it("starts two videos together and pulls one back within 40 ms after it's knocked out of step", async () => {
     const canvas = Object.assign(document.createElement("canvas"), { width: 8, height: 4 });
     const r = new ShowRenderer(canvas.getContext("webgl2")!, EFFECTS, () => {});
     r.setShow(show("A"));
     await r.media.whenLoaded();
     const a = r.media.element(toneVideo)!, b = r.media.element(other)!;
     b.currentTime = 0.7; // start them well apart
-    let worst = 0;
+    let worst = 0, previous = 0, knocked = false;
+    let heldAtStart = 0, heldAfter = 0; // apart in two samples running: started together; caught up again
     const start = performance.now();
     while (performance.now() - start < 10_000) {
       r.draw((performance.now() - start) / 1000);
       await new Promise((ok) => setTimeout(ok, 16));
-      if (performance.now() - start > 1500) { // after it has started them together
+      const t = performance.now() - start;
+      if (!knocked && t > 3000) { // a stall, as a slow decode or a busy machine causes: too small to seek
+        b.currentTime += 0.09;
+        knocked = true;
+      }
+      if ((t > 1500 && t < 3000) || t > 6000) {
         const d = Math.abs(a.currentTime - b.currentTime);
-        worst = Math.max(worst, Math.min(d, a.duration - d));
+        const apart = Math.min(d, a.duration - d);
+        worst = Math.max(worst, apart);
+        const held = Math.min(apart, previous);
+        if (t < 3000) heldAtStart = Math.max(heldAtStart, held);
+        else heldAfter = Math.max(heldAfter, held);
+        previous = apart;
       }
     }
-    expect(worst).toBeLessThan(0.04);
+    expect(heldAtStart).toBeLessThan(0.04);
+    // Left alone, the knock stays 25-90 ms (seeks land on frames); corrected, it's back within the lock's 15 ms.
+    expect(heldAfter).toBeLessThan(0.02);
+    expect(worst).toBeLessThan(0.15); // a blip is at most a frame or so
   }, 20_000);
 });
