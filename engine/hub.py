@@ -11,10 +11,18 @@ from engine.cameras import CameraSettings
 from engine.hardware import HardwareSnapshot
 from engine.messages import EngineMessage
 from engine.show import CurrentShow
+from engine.still_camera import FLAT_BATTERY, LOW_BATTERY
 
 
 log = logging.getLogger(__name__)
 
+
+
+def _battery_state(level: int | None) -> str | None:
+    """'ok', 'low' (warn) or 'flat' (no scans); None before a still camera has reported one."""
+    if level is None:
+        return None
+    return "flat" if level <= FLAT_BATTERY else "low" if level <= LOW_BATTERY else "ok"
 
 class OutputNotResponding(Exception):
     pass
@@ -73,14 +81,39 @@ class Hub:
             "camera": self._camera_status(),
             "project": self.projects.active() if self.projects else None,
             "unsaved": self.projects.unsaved() if self.projects else False,
-            "can_scan": self._output_fills_projector()
-            and not self.hardware.issues
-            and self.settings.selected(self.hardware.cameras) is not None,
+            "can_scan": self.scan_blocker() is None,
+            "scan_blocker": self.scan_blocker(),
         }
+
+    def scan_blocker(self) -> str | None:
+        """Why a scan can't run now, in the editor's words; None when it can."""
+        hw, out = self.hardware, self.output_resolution
+        projector = hw.projector
+        if "no_projector" in hw.issues or projector is None:
+            return "No projector: connect it as an extended display"
+        if "no_camera" in hw.issues:
+            return "No camera: plug in the webcam"
+        if out is None:
+            return "Open the output window (Hardware) and make it fullscreen on the projector"
+        if not self._output_fills_projector():
+            size = f"{projector['width']}×{projector['height']}"
+            return f"Output window must be {size}: make it fullscreen on the projector"
+        if self.settings.selected(hw.cameras) is None:
+            return "Choose the camera that scans (Hardware)"
+        if self.still_battery is not None and self.still_battery <= FLAT_BATTERY:
+            return f"The camera battery is at {self.still_battery}%: charge or swap it before scanning"
+        return None
 
     def _camera_status(self) -> dict:
         selected = self.settings.selected(self.hardware.cameras)
-        return {"selected": selected, "calibration": self.settings.calibration(selected), "battery": self.still_battery}
+        calibration = self.settings.calibration(selected)
+        return {
+            "selected": selected,
+            "calibration": calibration,
+            "at_light_limit": bool(calibration and calibration.get("at_light_limit")),
+            "battery": self.still_battery,
+            "battery_state": _battery_state(self.still_battery),
+        }
 
     def _output_fills_projector(self) -> bool:
         # Patterns are generated at projector resolution, so the output window must be
