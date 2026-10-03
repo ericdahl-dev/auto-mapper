@@ -49,7 +49,7 @@ class SurfaceUpdate(BaseModel):
 
 class NewSceneRequest(BaseModel):
     name: Annotated[str, Field(max_length=80)] | None = None
-    duplicate: int | None = None  # copy this scene's look instead of starting dark
+    duplicate: int | None = None  # copy this scene's effects and settings instead of starting dark
 
 
 class SceneUpdate(BaseModel):

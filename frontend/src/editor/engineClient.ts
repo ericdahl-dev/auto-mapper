@@ -21,7 +21,7 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(gesture ? { ...body, gesture } : body),
       }),
-    // Scenes: looks on the same outlines
+    // Scenes: effects and settings for the same surfaces
     addScene: (body: { name?: string; duplicate?: number }) => post("/api/show/scenes", body),
     updateScene: (id: number, body: { name?: string; duration?: number }) =>
       fetchFn(`/api/show/scenes/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),

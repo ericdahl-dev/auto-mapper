@@ -43,12 +43,14 @@ SCENE_SECONDS = 10.0  # how long a new scene plays in a playlist
 
 
 def _with_scenes(show: dict) -> dict:
-    """Scenes: each a look (effect and settings per surface) on the same outlines. The open scene's
-    look lives on the surfaces themselves; the others keep theirs in "looks". Shows saved before
+    """Scenes: each gives the same outlines their own effect and settings. The open scene's live on
+    the surfaces themselves; the others keep theirs in "effects", by surface id. Shows saved before
     scenes existed open as one scene."""
     if not show.get("scenes"):
-        show["scenes"] = [{"id": 1, "name": "Scene 1", "duration": SCENE_SECONDS, "looks": {}}]
+        show["scenes"] = [{"id": 1, "name": "Scene 1", "duration": SCENE_SECONDS, "effects": {}}]
         show["scene"] = 1
+    for scene in show["scenes"]:
+        scene.setdefault("effects", scene.pop("looks", {}))  # an earlier build's name for them
     show.setdefault("playlist", {"crossfade": 1.0, "loop": True})  # seconds between scenes; wrap around
     return show
 
@@ -390,28 +392,28 @@ class CurrentShow:
                 return sc
         raise UnknownScene(scene_id)
 
-    def _look(self) -> dict:
+    def _scene_effects(self) -> dict:
         """The open scene's effects and settings, by surface id."""
         return {str(s["id"]): {"effect": s["effect"], "params": copy.deepcopy(s["params"])} for s in self.data["surfaces"]}
 
     def _show_scene(self, scene: dict) -> None:
-        """Stores the open scene's look and puts another scene's on the surfaces."""
-        self._scene(self.data["scene"])["looks"] = self._look()
+        """Stores the open scene's effects and puts another scene's on the surfaces."""
+        self._scene(self.data["scene"])["effects"] = self._scene_effects()
         for s in self.data["surfaces"]:
-            look = scene["looks"].get(str(s["id"]), {"effect": "none", "params": {}})
-            s["effect"], s["params"] = look["effect"], copy.deepcopy(look["params"])
+            saved = scene["effects"].get(str(s["id"]), {"effect": "none", "params": {}})
+            s["effect"], s["params"] = saved["effect"], copy.deepcopy(saved["params"])
         self.data["scene"] = scene["id"]
 
     def add_scene(self, name: str | None = None, duplicate: int | None = None) -> int:
-        """A new scene, opened: dark, or a copy of another scene's look."""
+        """A new scene, opened: dark, or a copy of another scene's effects and settings."""
         source = self._scene(duplicate) if duplicate is not None else None
         self._record("Duplicate scene" if source else "Add scene")
         new_id = max(sc["id"] for sc in self.data["scenes"]) + 1
-        looks = {}
+        effects_by_surface = {}
         if source is not None:
-            looks = self._look() if source["id"] == self.data["scene"] else copy.deepcopy(source["looks"])
+            effects_by_surface = self._scene_effects() if source["id"] == self.data["scene"] else copy.deepcopy(source["effects"])
         scene = {"id": new_id, "name": name or (f"{source['name']} copy" if source else f"Scene {new_id}"),
-                 "duration": source["duration"] if source else SCENE_SECONDS, "looks": looks}
+                 "duration": source["duration"] if source else SCENE_SECONDS, "effects": effects_by_surface}
         self.data["scenes"].append(scene)
         self._show_scene(scene)
         self._save()
@@ -480,7 +482,7 @@ class CurrentShow:
         if not self.data:
             return None
         data = {k: v for k, v in self.data.items() if k != "alignment"}
-        data["scenes"] = [{k: v for k, v in sc.items() if k != "looks"} for sc in self.data["scenes"]]
+        data["scenes"] = [{k: sc[k] for k in ("id", "name", "duration")} for sc in self.data["scenes"]]
         return {**data, "selected": self.selected, "presentation": dict(self.presentation),
                 "sound": dict(self.sound), "alignment": self.alignment(), "history": self.history(), "scan_rev": self.scan_rev}
 
