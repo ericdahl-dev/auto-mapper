@@ -25,6 +25,7 @@ import { moveScene } from "./sceneList";
 import { syncOptions } from "./selectOptions";
 import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
 import { surfaceFill } from "./surfaceFill";
+import { SurfaceList, surfaceRows } from "./surfaceList";
 import { FIT, panBy, type View, zoomAt } from "./viewZoom";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
@@ -294,6 +295,35 @@ function labelAt(polygon: number[][]): number[] {
   return p;
 }
 
+/** Shift-click (on the scan or in the Surfaces list): add a surface to the selection, or take it out. */
+function toggleMulti(id: number) {
+  multi.has(id) ? multi.delete(id) : multi.add(id);
+  if (show?.selected != null) multi.add(show.selected);
+  renderSurfaces();
+}
+
+// The Surfaces list (#121): pick a surface by name; the selected row follows clicks on the scan.
+const surfaceListSection = $("surface-list-section");
+/** A pick in the list wins over a deselect still pending from the scan; drawing or curving ignore it, like the scan does. */
+function listPick(run: () => void) {
+  if (draw.active || curving) return;
+  if (pendingDeselect) clearTimeout(pendingDeselect);
+  pendingDeselect = null;
+  run();
+}
+const surfaceList = new SurfaceList($("surface-list"), {
+  select: (id) => listPick(() => {
+    multi.clear();
+    select(id);
+  }),
+  toggle: (id) => listPick(() => toggleMulti(id)),
+});
+function renderSurfaceList() {
+  const surfaces = show?.surfaces ?? [];
+  surfaceListSection.hidden = surfaces.length === 0;
+  surfaceList.render(surfaceRows(surfaces), show?.selected ?? null, multi); // rebuilt only when a row's text changes
+}
+
 function renderSurfaces() {
   const surfaces = show?.surfaces ?? [];
   const width = show?.width ?? 1920;
@@ -316,12 +346,7 @@ function renderSurfaces() {
           framedJustNow = false; // the click that ends a framing drag isn't a selection click
           return;
         }
-        if (ev.shiftKey) {
-          multi.has(s.id) ? multi.delete(s.id) : multi.add(s.id);
-          if (show?.selected != null) multi.add(show.selected);
-          renderSurfaces();
-          return;
-        }
+        if (ev.shiftKey) return toggleMulti(s.id);
         const action = surfaceClick({ detail: ev.detail, selected: s.id === show?.selected });
         if (action === "add-corner") { // double-click on the selected surface's edge
           if (pendingDeselect) clearTimeout(pendingDeselect);
@@ -391,6 +416,7 @@ function renderSurfaces() {
     ...alignElements(r),
     ...draftElements(),
   );
+  renderSurfaceList();
   renderPanel();
   renderPresentation();
   renderAlignment();
