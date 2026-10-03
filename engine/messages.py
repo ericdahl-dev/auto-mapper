@@ -139,6 +139,7 @@ class SoundRequest(BaseModel):
     source: Literal["mic", "video"] | None = None
     output: Annotated[str, Field(max_length=200)] | None = None  # "" = the system default
     device: Annotated[str, Field(max_length=200)] | None = None
+    delay: Annotated[int, Field(ge=0, le=500)] | None = None  # ms: holds video sound back for a late projector
 
 
 class PresentationRequest(BaseModel):

@@ -2,35 +2,15 @@
 // Web Audio into AudioAnalyzer, once per frame.
 
 import { AudioAnalyzer, type AudioValues, SILENT } from "./analysis";
+import { routeVideo, videoAudioContext } from "./videoAudio";
+
+export { setVideoSoundOutput } from "./videoAudio";
 
 export interface SoundSettings {
   enabled: boolean;
   device: string | null; // a browser device id; null = the default input
   source?: "mic" | "video"; // "video": react to the videos that are playing with sound, not the mic
 }
-
-// A video element can be routed into Web Audio only once, and only into one context, for good. So
-// video taps live in one shared context; each tap keeps playing to the speakers through it.
-// Chrome 110+ lets an AudioContext pick its output device; TypeScript's DOM types don't have it yet.
-type SinkAudioContext = AudioContext & { setSinkId(id: string): Promise<void> };
-let videoContext: SinkAudioContext | null = null;
-let videoSink = ""; // output device for video sound routed through Web Audio; "" = the system default
-
-/** Where video sound routed through Web Audio plays (null = system default). Returns an error
- *  message if the device can't be used; it then stays on the default. */
-export async function setVideoSoundOutput(id: string | null): Promise<string | null> {
-  videoSink = id ?? "";
-  if (!videoContext) return null; // applied when the context is created
-  try {
-    await videoContext.setSinkId(videoSink);
-    return null;
-  } catch {
-    videoSink = "";
-    await videoContext.setSinkId("").catch(() => {});
-    return "That sound output is not available. Pick another output.";
-  }
-}
-const taps = new WeakMap<HTMLVideoElement, MediaElementAudioSourceNode>();
 
 export class SoundInput {
   private ctx: AudioContext | null = null;
@@ -53,8 +33,7 @@ export class SoundInput {
     if (!settings.enabled) return;
     if (settings.source === "video") {
       this.videoMode = true;
-      videoContext ??= new AudioContext(videoSink ? ({ sinkId: videoSink } as AudioContextOptions) : {}) as SinkAudioContext;
-      this.ctx = videoContext;
+      this.ctx = videoAudioContext(); // video taps live in the shared context (videoAudio.ts)
       this.node = this.ctx.createAnalyser();
       this.node.fftSize = 2048;
       this.node.smoothingTimeConstant = 0;
@@ -89,13 +68,8 @@ export class SoundInput {
     const node = this.node;
     this.tapped.forEach((t) => t.disconnect(node));
     this.tapped = videos.map((v) => {
-      let tap = taps.get(v);
-      if (!tap) {
-        tap = this.ctx!.createMediaElementSource(v);
-        tap.connect(this.ctx!.destination); // routed through Web Audio now: keep it audible
-        taps.set(v, tap);
-      }
-      tap.connect(node);
+      const tap = routeVideo(v); // still plays to the speakers, through the sound delay
+      tap.connect(node); // listened to before the delay: the picture it drives is late too
       return tap;
     });
     if (!videos.length) this.error = NO_VIDEO_SOUND;

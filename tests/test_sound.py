@@ -22,18 +22,18 @@ def scanned(tmp_path):
 
 def test_sound_is_off_until_turned_on(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
-        assert out.receive_json()["sound"] == {"enabled": False, "device": None, "source": "mic", "output": None}
+        assert out.receive_json()["sound"] == {"enabled": False, "device": None, "source": "mic", "output": None, "delay": 0}
 
 
 def test_turning_sound_on_tells_the_output_which_input_to_use(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         out.receive_json()
         r = client.post("/api/sound", json={"enabled": True, "device": "usb-mic-1"})
-        assert r.json() == {"enabled": True, "device": "usb-mic-1", "source": "mic", "output": None}
-        assert out.receive_json()["sound"] == {"enabled": True, "device": "usb-mic-1", "source": "mic", "output": None}
+        assert r.json() == {"enabled": True, "device": "usb-mic-1", "source": "mic", "output": None, "delay": 0}
+        assert out.receive_json()["sound"] == {"enabled": True, "device": "usb-mic-1", "source": "mic", "output": None, "delay": 0}
 
         client.post("/api/sound", json={"enabled": False})  # device kept for next time
-        assert out.receive_json()["sound"] == {"enabled": False, "device": "usb-mic-1", "source": "mic", "output": None}
+        assert out.receive_json()["sound"] == {"enabled": False, "device": "usb-mic-1", "source": "mic", "output": None, "delay": 0}
 
 
 def test_editors_see_the_outputs_sound_meter_and_errors(rig, scanned):
@@ -66,7 +66,7 @@ def test_effects_can_react_to_the_video_sound_instead_of_the_mic(rig, scanned):
     with engine(rig, data_dir=scanned) as client, output(client) as out:
         assert out.receive_json()["sound"]["source"] == "mic"
         client.post("/api/sound", json={"enabled": True, "source": "video"})
-        assert out.receive_json()["sound"] == {"enabled": True, "device": None, "source": "video", "output": None}
+        assert out.receive_json()["sound"] == {"enabled": True, "device": None, "source": "video", "output": None, "delay": 0}
         assert client.post("/api/sound", json={"source": "radio"}).status_code == 422
 
 
@@ -86,3 +86,14 @@ def test_editors_see_sound_output_errors(rig, scanned):
         ed.receive_json()
         out.send_json({"type": "output_stats", "fps": 60, "sound_output_error": "That sound output is not available."})
         assert ed.receive_json()["output_sound_output_error"] == "That sound output is not available."
+
+
+def test_a_sound_delay_lines_video_sound_up_with_the_projectors_late_picture(tmp_path):
+    hw = FakeHardware(displays=[LAPTOP], cameras=[AC410])
+    with engine(hw, data_dir=tmp_path) as client:
+        assert client.get("/api/show").status_code in (200, 404)
+        assert client.post("/api/sound", json={"delay": 120}).json()["delay"] == 120
+        assert client.post("/api/sound", json={"delay": 501}).status_code == 422
+        assert client.post("/api/sound", json={"delay": -1}).status_code == 422
+    with engine(hw, data_dir=tmp_path) as client:  # the projector's lag doesn't change: kept in settings
+        assert client.post("/api/sound", json={}).json()["delay"] == 120

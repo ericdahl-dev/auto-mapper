@@ -909,6 +909,9 @@ const soundSource = $<HTMLSelectElement>("sound-source");
 soundSource.addEventListener("change", () => postSound({ source: soundSource.value }));
 const soundOutputSelect = $<HTMLSelectElement>("sound-output");
 soundOutputSelect.addEventListener("change", () => postSound({ output: soundOutputSelect.value }));
+const soundDelay = $<HTMLInputElement>("sound-delay");
+soundDelay.addEventListener("input", () => { $("sound-delay-readout").textContent = `${soundDelay.value} ms`; });
+soundDelay.addEventListener("change", () => postSound({ delay: Number(soundDelay.value) })); // saved when let go
 async function refreshSoundInputs() {
   // Same origin as the output window, so device ids match; labels appear once the mic is allowed.
   const devices = await navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? [];
@@ -938,6 +941,10 @@ function renderSound() {
   soundToggle.classList.toggle("on", v.on);
   $<HTMLMeterElement>("sound-meter").value = v.meter;
   $("sound-note").textContent = v.note;
+  if (document.activeElement !== soundDelay) {
+    soundDelay.value = String(show?.sound?.delay ?? 0);
+    $("sound-delay-readout").textContent = `${soundDelay.value} ms`;
+  }
 }
 
 function notice(text: string) {

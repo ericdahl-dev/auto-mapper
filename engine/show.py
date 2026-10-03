@@ -68,7 +68,8 @@ class CurrentShow:
         # Sound-reactive effects: whether the output listens, and to which input (a browser device id).
         # source: "mic", or "video" to react to the playing videos' own sound (no mic, no feedback).
         # output: a browser audio output device id for video sound; None = the system default.
-        self.sound = {"enabled": False, "device": None, "source": "mic", "output": None}
+        # delay: ms video sound is held back to land with the projector's picture (its processing lag).
+        self.sound = {"enabled": False, "device": None, "source": "mic", "output": None, "delay": 0}
         # Undo/redo: (label, the show's data before that change, gesture id). Kept here so every
         # editor and the output agree. Selection, presentation and sound aren't part of it.
         self._undo: list[tuple[str, dict, str | None]] = []
@@ -347,8 +348,11 @@ class CurrentShow:
         self._changed()
 
     def set_sound(
-        self, enabled: bool | None = None, device: str | None = None, source: str | None = None, output: str | None = None
+        self, enabled: bool | None = None, device: str | None = None, source: str | None = None, output: str | None = None,
+        delay: int | None = None,
     ) -> None:
+        if delay is not None:
+            self.sound["delay"] = delay
         if output is not None:
             self.sound["output"] = output or None  # "" = back to the system default
         if source is not None:

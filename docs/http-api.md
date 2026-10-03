@@ -66,6 +66,7 @@ Routes that name a surface return 404 for an unknown surface id.
 | Method | Path | Body | Returns |
 |--------|------|------|---------|
 | POST | `/api/sound` | `{"enabled"?: bool, "device"?: "...", "source"?: "mic" \| "video", "output"?: "..."}` | Sound-reactive effects on or off, the browser input device id, whether they follow the microphone or the videos' own sound, and the audio output device for video sound (`""` = the Mac's default); pushed to the output in the scene's `sound` field. Returns the sound settings |
+| POST | `/api/sound` | `{"delay": 120}` | Sound delay, 0..500 ms: holds video sound back so it lands with the projector's late picture. Saved in settings.json (it belongs to the setup, so it survives restarts) |
 | GET | `/api/presentation` | | `{"mode": "edit" or "play", "blackout": bool}` |
 | GET | `/api/schedule` | | `{"schedule": {...}, "next": {"at": "2026-10-05T17:30:00", "on": true} or null, "autostart": bool}` (local time) |
 | POST | `/api/schedule` | `{"enabled": true, "on": "17:30", "off": "23:00", "days"?: {"5": {"on": "12:00", "off": "23:30"}, "6": null}}` | Daily on/off times: Play between them, Blackout outside. `days` overrides a weekday ("0" = Monday), `null` = off all day. An off time at or before the on time runs past midnight. Applied only when its state changes, so switching by hand holds until the next change. Saved in settings.json |

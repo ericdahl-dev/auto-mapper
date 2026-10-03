@@ -124,7 +124,7 @@ export interface ShowMessage {
   scene?: number; // the open scene: its effects and settings are the surfaces' own
   playlist?: { crossfade: number; loop: boolean }; // Play mode plays the scenes in order
   midi?: MidiBinding[]; // knobs and keys bound to settings or actions
-  sound?: { enabled: boolean; device: string | null; source?: "mic" | "video"; output?: string | null };
+  sound?: { enabled: boolean; device: string | null; source?: "mic" | "video"; output?: string | null; delay?: number };
   scan_rev?: string | null; // changes only when the scan data changes
 }
 
