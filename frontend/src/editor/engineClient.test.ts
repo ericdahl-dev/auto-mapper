@@ -35,6 +35,11 @@ describe("engine client", () => {
     await client.patchSurface(3, { edge: 2 }, "g7");
     await client.undo();
     await client.redo();
+    await client.addScene({ duplicate: 1 });
+    await client.updateScene(2, { name: "Night", duration: 8 });
+    await client.openScene(2);
+    await client.orderScenes([2, 1]);
+    await client.deleteScene(2);
     expect(calls).toEqual([
       { url: "/api/show/surfaces/3", method: "PATCH", body: { params: { zoom: 2 } } },
       { url: "/api/show/select", method: "POST", body: { id: 3 } },
@@ -56,6 +61,11 @@ describe("engine client", () => {
       { url: "/api/show/surfaces/3", method: "PATCH", body: { edge: 2, gesture: "g7" } },
       { url: "/api/show/undo", method: "POST", body: undefined },
       { url: "/api/show/redo", method: "POST", body: undefined },
+      { url: "/api/show/scenes", method: "POST", body: { duplicate: 1 } },
+      { url: "/api/show/scenes/2", method: "PATCH", body: { name: "Night", duration: 8 } },
+      { url: "/api/show/scenes/2/open", method: "POST", body: undefined },
+      { url: "/api/show/scenes/order", method: "POST", body: { ids: [2, 1] } },
+      { url: "/api/show/scenes/2", method: "DELETE", body: undefined },
     ]);
   });
 

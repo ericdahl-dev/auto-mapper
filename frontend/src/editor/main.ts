@@ -16,6 +16,7 @@ import { createEngineClient } from "./engineClient";
 import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
 import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
+import { moveScene } from "./sceneList";
 import { bindUndoKeys } from "./undoKeys";
 import { placeOutput } from "./screens";
 import { describeSound } from "./soundView";
@@ -291,6 +292,7 @@ function renderSurfaces() {
   renderPresentation();
   renderAlignment();
   renderHistory();
+  renderScenes();
 }
 
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
@@ -524,6 +526,52 @@ function renderHistory() {
   redoButton.disabled = !h?.redo;
   undoButton.textContent = h?.undo ? `Undo ${h.undo.toLowerCase()}` : "Undo";
   redoButton.textContent = h?.redo ? `Redo ${h.redo.toLowerCase()}` : "Redo";
+}
+
+// Scenes: looks on the same surfaces, in playlist order. Clicking a row opens (shows and edits) it.
+const sceneList = $("scene-list");
+$("add-scene").addEventListener("click", () => void engine.addScene({}));
+$("duplicate-scene").addEventListener("click", () => {
+  if (show?.scene != null) void engine.addScene({ duplicate: show.scene });
+});
+function renderScenes() {
+  const scenes = show?.scenes ?? [];
+  // Don't rebuild under someone typing a name or a length.
+  if (sceneList.contains(document.activeElement) && sceneList.children.length === scenes.length) {
+    sceneList.querySelectorAll("li").forEach((li, i) => li.classList.toggle("open", scenes[i]?.id === show?.scene));
+    return;
+  }
+  const ids = scenes.map((sc) => sc.id);
+  sceneList.replaceChildren(...scenes.map((sc) => {
+    const li = document.createElement("li");
+    li.classList.toggle("open", sc.id === show?.scene);
+    li.addEventListener("click", () => { if (sc.id !== show?.scene) void engine.openScene(sc.id); });
+    const name = Object.assign(document.createElement("input"), { type: "text", value: sc.name, title: "Scene name" });
+    name.addEventListener("change", () => void engine.updateScene(sc.id, { name: name.value }));
+    const secs = Object.assign(document.createElement("input"), {
+      type: "number", min: "0.5", max: "3600", step: "0.5", value: String(sc.duration), title: "Seconds in the playlist",
+    });
+    secs.addEventListener("change", () => {
+      const v = Number(secs.value);
+      if (v > 0) void engine.updateScene(sc.id, { duration: v });
+    });
+    const button = (label: string, title: string, run: () => void, disabled = false) => {
+      const b = Object.assign(document.createElement("button"), { textContent: label, title, disabled });
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); run(); });
+      return b;
+    };
+    const move = (delta: -1 | 1) => {
+      const order = moveScene(ids, sc.id, delta);
+      if (order) void engine.orderScenes(order);
+    };
+    li.append(
+      name, secs, document.createTextNode("s"),
+      button("↑", "Earlier in the playlist", () => move(-1), ids[0] === sc.id),
+      button("↓", "Later in the playlist", () => move(1), ids[ids.length - 1] === sc.id),
+      button("×", "Delete scene", () => void engine.deleteScene(sc.id), scenes.length === 1),
+    );
+    return li;
+  }));
 }
 
 const playButton = $<HTMLButtonElement>("play");
