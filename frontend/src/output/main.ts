@@ -53,7 +53,9 @@ function applyShow(msg: ShowMessage) {
   const changedScan = !show || show.scan_rev !== msg.scan_rev;
   show = msg;
   showRenderer.setShow(msg);
-  applySoundDelay(msg.sound?.delay ?? 0, showRenderer.media.audibleVideos()); // lands with the projector's late picture
+  // Sound later (a late projector): through Web Audio. Sound earlier (late speakers): the renderer's
+  // media library plays it from copies running ahead (soundLead.ts).
+  applySoundDelay(Math.max(0, msg.sound?.delay ?? 0), showRenderer.media.audibleVideos());
   void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(showRenderer.media.audibleVideos()));
   const output = msg.sound?.output ?? null;
   if (output !== soundOutput) {

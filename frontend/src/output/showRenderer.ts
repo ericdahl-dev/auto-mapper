@@ -145,7 +145,8 @@ export class ShowRenderer {
       const playback = s.effect.playback?.(s.params);
       return playback ? s.media.map(([, src]) => ({ src, ...playback })) : [];
     });
-    this.media.apply(playbackPlan(wants, show.presentation));
+    // A negative sound delay plays video sound early instead (soundLead.ts); positive is videoAudio.ts.
+    this.media.apply(playbackPlan(wants, show.presentation), Math.max(0, -(show.sound?.delay ?? 0)) / 1000);
   }
 
   /** The latest sound values, used by every following draw. */
@@ -204,6 +205,7 @@ export class ShowRenderer {
   /** Draws the show; realigned or dimmed shows are drawn offscreen first, then warped (alignment.ts). */
   draw(timeSeconds: number) {
     this.frame++;
+    this.media.tick();
     const a = this.show?.alignment;
     if (!this.show || isNeutral(a, this.show.width, this.show.height)) return this.drawScenes(timeSeconds);
     this.aligner ??= new AlignmentPass(this.gl);

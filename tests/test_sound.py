@@ -94,6 +94,8 @@ def test_a_sound_delay_lines_video_sound_up_with_the_projectors_late_picture(tmp
         assert client.get("/api/show").status_code in (200, 404)
         assert client.post("/api/sound", json={"delay": 120}).json()["delay"] == 120
         assert client.post("/api/sound", json={"delay": 501}).status_code == 422
-        assert client.post("/api/sound", json={"delay": -1}).status_code == 422
+        assert client.post("/api/sound", json={"delay": -180}).json()["delay"] == -180  # sound early: late speakers
+        assert client.post("/api/sound", json={"delay": -501}).status_code == 422
+        client.post("/api/sound", json={"delay": 120})
     with engine(hw, data_dir=tmp_path) as client:  # the projector's lag doesn't change: kept in settings
         assert client.post("/api/sound", json={}).json()["delay"] == 120

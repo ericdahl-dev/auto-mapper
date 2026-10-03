@@ -186,9 +186,9 @@
         <div class="row">
           <select id="sound-output" title="Where video sound plays (default: the Mac's selected output)"></select>
         </div>
-        <label class="control" title="Projectors show the picture late. Hold video sound back by the same amount so a clap lines up with the hands.">
+        <label class="control" title="Move it until a clap in a video lines up with the hands. Right: sound later (the projector shows the picture late). Left: sound earlier (Bluetooth or other speakers that play late).">
           <span>Sound delay</span><span id="sound-delay-readout" class="muted">0 ms</span>
-          <input id="sound-delay" type="range" min="0" max="500" step="5" value="0" />
+          <input id="sound-delay" type="range" min="-500" max="500" step="5" value="0" />
         </label>
         <div class="row"><meter id="sound-meter" min="0" max="100" value="0"></meter> <span id="sound-note" class="muted">Off</span></div>
         <h2>Camera</h2>
