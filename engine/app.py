@@ -46,6 +46,7 @@ from engine.messages import (
     PresentationRequest,
     ProjectorSelectRequest,
     ProjectSaveRequest,
+    ScanSettingsRequest,
     SceneOrder,
     SceneUpdate,
     ScheduleRequest,
@@ -180,6 +181,21 @@ def create_app(
             raise HTTPException(409, "Camera is busy scanning")
         await asyncio.to_thread(session.close)
         return {"ok": True}
+
+    def selected_camera() -> str:
+        hub: Hub = app.state.hub
+        selected = settings.selected(hub.hardware.cameras)
+        if selected is None:
+            raise HTTPException(404, "No camera")
+        return selected
+
+    @app.get("/api/camera/scan-settings")
+    async def get_scan_settings():
+        return settings.scan_settings(selected_camera())
+
+    @app.post("/api/camera/scan-settings")
+    async def set_scan_settings(req: ScanSettingsRequest):
+        return settings.save_scan_settings(selected_camera(), req.model_dump(exclude_none=True))
 
     @app.post("/api/camera/calibrate")
     async def calibrate():

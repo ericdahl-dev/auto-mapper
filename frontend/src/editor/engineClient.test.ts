@@ -32,6 +32,8 @@ describe("engine client", () => {
     await client.saveProject("Porch");
     await client.openProject("porch");
     await client.newProject();
+    await client.scanSettings();
+    await client.setScanSettings({ hole_fill: 5 });
     await client.schedule();
     await client.setSchedule({ enabled: true, on: "17:30", off: "23:00", days: {} });
     await client.setAutostart(true);
@@ -65,6 +67,8 @@ describe("engine client", () => {
       { url: "/api/projects", method: "POST", body: { name: "Porch" } },
       { url: "/api/projects/porch/open", method: "POST", body: undefined },
       { url: "/api/projects/new", method: "POST", body: undefined },
+      { url: "/api/camera/scan-settings", method: "GET", body: undefined },
+      { url: "/api/camera/scan-settings", method: "POST", body: { hole_fill: 5 } },
       { url: "/api/schedule", method: "GET", body: undefined },
       { url: "/api/schedule", method: "POST", body: { enabled: true, on: "17:30", off: "23:00", days: {} } },
       { url: "/api/autostart", method: "POST", body: { enabled: true } },

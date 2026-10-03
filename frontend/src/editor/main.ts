@@ -857,6 +857,20 @@ for (const d of folds) {
 }
 applyFolds();
 
+// Scan settings for the selected camera (#66): hole fill now; saved per camera, used by the next scan.
+const holeFill = $<HTMLInputElement>("hole-fill");
+const holeFillReadout = $("hole-fill-readout");
+async function loadScanSettings() {
+  const r = await engine.scanSettings();
+  if (!r.ok || document.activeElement === holeFill) return;
+  const s = (await r.json()) as { hole_fill: number };
+  holeFill.value = String(s.hole_fill);
+  holeFillReadout.textContent = `${s.hole_fill} px`;
+}
+holeFill.addEventListener("input", () => { holeFillReadout.textContent = `${holeFill.value} px`; });
+holeFill.addEventListener("change", () => void engine.setScanSettings({ hole_fill: Number(holeFill.value) }));
+void loadScanSettings();
+
 const playButton = $<HTMLButtonElement>("play");
 const blackoutButton = $<HTMLButtonElement>("blackout");
 playButton.addEventListener("click", () => void setMode(show?.presentation.mode === "play" ? "edit" : "play"));
@@ -1205,9 +1219,10 @@ projectorSelect.addEventListener("change", () => {
   void engine.selectProjector(projectorSelect.value);
 });
 
-cameraSelect.addEventListener("change", () =>
-  void engine.selectCamera(cameraSelect.value),
-);
+cameraSelect.addEventListener("change", async () => {
+  await engine.selectCamera(cameraSelect.value);
+  void loadScanSettings(); // scan settings belong to the camera
+});
 
 // Preview is opt-in: polling keeps the camera running, so it only runs while shown.
 let previewTimer: number | undefined;

@@ -161,11 +161,12 @@ HOLE_CLOSE_PX = 9  # camera has fewer pixels than the projector, and coarse deco
 COVERAGE_BLOCK = 8
 
 
-def projector_space_image(r: DecodeResult) -> tuple[np.ndarray, np.ndarray]:
+def projector_space_image(r: DecodeResult, hole_fill_px: int = HOLE_CLOSE_PX) -> tuple[np.ndarray, np.ndarray]:
     """Re-projects the white reference frame into projector pixels.
 
     Returns the image and a mask of projector pixels that have data (decoded, or a small
-    gap between decoded pixels that was filled in).
+    gap between decoded pixels that was filled in). `hole_fill_px` is how wide a gap gets filled:
+    0 keeps only decoded pixels; more gives fuller surfaces but wobblier edges.
     """
     import cv2
 
@@ -179,7 +180,9 @@ def projector_space_image(r: DecodeResult) -> tuple[np.ndarray, np.ndarray]:
     img = np.zeros((h, w, 3), np.uint8)
     img[hit] = (sums[hit] / counts[hit, None]).astype(np.uint8)
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (HOLE_CLOSE_PX, HOLE_CLOSE_PX))
+    if hole_fill_px <= 0:
+        return img, hit
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (hole_fill_px, hole_fill_px))
     covered = cv2.morphologyEx(hit.astype(np.uint8), cv2.MORPH_CLOSE, kernel).astype(bool)
     holes = covered & ~hit
     if holes.any():

@@ -259,6 +259,10 @@
           <button id="calibrate">Calibrate exposure</button>
         </div>
         <dl><dt>Exposure</dt><dd id="calibration">…</dd></dl>
+        <label class="control" title="How wide a gap between decoded pixels the scan fills in: more gives fuller surfaces, less gives truer edges. Applies to the next scan.">
+          <span>Hole fill</span><span id="hole-fill-readout" class="muted">9 px</span>
+          <input id="hole-fill" type="range" min="0" max="31" step="1" value="9" aria-label="Hole fill" />
+        </label>
         <img id="preview" alt="Camera preview" hidden />
         </details>
         <details class="fold" data-fold="test-frame"><summary><h2>Test frame</h2></summary>
