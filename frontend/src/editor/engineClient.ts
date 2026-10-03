@@ -57,6 +57,8 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     cancelScan: () => post("/api/scan/cancel"),
     latestScan: () => get("/api/scan/latest"),
     calibrate: () => post("/api/camera/calibrate"),
+    // How well the projection fills the camera's view (#149): shows white then black
+    checkFraming: () => post("/api/camera/framing"),
     // The selected camera's scan settings (#66): applied by the next scan
     scanSettings: () => get("/api/camera/scan-settings"),
     setScanSettings: (body: { hole_fill?: number; mask?: number[][][]; clear_mask?: boolean; hdr?: number; aperture?: string }) =>

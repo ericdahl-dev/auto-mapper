@@ -101,12 +101,13 @@ describe("engine client", () => {
     await client.cancelScan();
     await client.latestScan();
     await client.calibrate();
+    await client.checkFraming();
     await client.releaseCamera();
     await client.refreshHardware();
     await client.projects();
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       "POST /api/scan", "POST /api/scan/cancel", "GET /api/scan/latest", "POST /api/camera/calibrate",
-      "POST /api/camera/release", "POST /api/hardware/refresh", "GET /api/projects",
+      "POST /api/camera/framing", "POST /api/camera/release", "POST /api/hardware/refresh", "GET /api/projects",
     ]);
   });
 
