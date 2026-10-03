@@ -100,6 +100,17 @@ export interface ShowSurface {
   params: Record<string, unknown>;
 }
 
+export type MidiAction = "play" | "edit" | "blackout" | "next" | "previous";
+export type MidiTarget = { surface: number; param: string } | { action: MidiAction };
+
+/** A MIDI knob (cc) or key (note) bound to a setting or an action; saved with the show. */
+export interface MidiBinding {
+  kind: "cc" | "note";
+  channel: number; // 0..15
+  number: number; // 0..127
+  target: MidiTarget;
+}
+
 export interface ShowMessage {
   type: "show";
   width: number;
@@ -112,6 +123,7 @@ export interface ShowMessage {
   scenes?: { id: number; name: string; duration: number }[]; // effects and settings for the same surfaces, in playlist order
   scene?: number; // the open scene: its effects and settings are the surfaces' own
   playlist?: { crossfade: number; loop: boolean }; // Play mode plays the scenes in order
+  midi?: MidiBinding[]; // knobs and keys bound to settings or actions
   sound?: { enabled: boolean; device: string | null; source?: "mic" | "video"; output?: string | null };
   scan_rev?: string | null; // changes only when the scan data changes
 }

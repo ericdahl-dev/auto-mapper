@@ -33,6 +33,7 @@ from engine.messages import (
     EffectErrorReport,
     Hello,
     MergeRequest,
+    MidiBindings,
     NewSceneRequest,
     NewSurfaceRequest,
     OscRequest,
@@ -321,6 +322,13 @@ def create_app(
         nxt = next_change(settings.schedule(), clock())
         return {"schedule": settings.schedule(), "next": nxt and {"at": nxt[0].isoformat(), "on": nxt[1]},
                 "autostart": settings.autostart()}
+
+    @app.put("/api/show/midi")
+    async def set_midi(req: MidiBindings):
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        show.set_midi([b.model_dump() for b in req.bindings])
+        return show.public()
 
     @app.get("/api/osc")
     async def get_osc():

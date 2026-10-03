@@ -134,6 +134,7 @@
       "redo": null,
       "undo": null
     },
+    "midi": [],
     "playlist": {
       "crossfade": 1.0,
       "loop": true
