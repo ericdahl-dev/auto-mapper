@@ -48,16 +48,23 @@ export const media: Effect = {
       ...Array.from({ length: 8 }, (_, i) => ({ value: String(i + 1), label: `Channel ${i + 1}` })),
     ] },
     { name: "pan", label: "Pan (left/right)", type: "number", default: 0, min: -1, max: 1, step: 0.05 },
+    // Videos in the same group start together and are kept together (output/syncGroups.ts).
+    { name: "group", label: "Sync group", type: "choice", default: "none", options: [
+      { value: "none", label: "None" }, { value: "A", label: "A" }, { value: "B", label: "B" },
+      { value: "C", label: "C" }, { value: "D", label: "D" },
+    ] },
   ],
   framing: { zoom: "zoom", panX: "panX", panY: "panY" },
   // Playback reads the same clamped values the shader would get (see effects/types.ts uniformsFor).
   playback: (params) => {
     const u = uniformsFor(media, params);
-    const channel = media.params.find((p) => p.name === "channel");
-    const choice = channel?.type === "choice" ? channel.options[u.u_channel as number].value : "all";
+    const option = (name: string) => {
+      const p = media.params.find((x) => x.name === name);
+      return p?.type === "choice" ? p.options[u[`u_${name}`] as number].value : "";
+    };
     return {
       rate: u.u_speed as number, start: u.u_start as number, sound: u.u_sound === 1, volume: u.u_volume as number,
-      channel: choice, pan: u.u_pan as number,
+      channel: option("channel"), pan: u.u_pan as number, group: option("group"),
     };
   },
   fragment: `

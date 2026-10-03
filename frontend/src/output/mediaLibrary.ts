@@ -5,6 +5,7 @@
 import { drawText, TEXT_KEY } from "../effects/textTexture";
 import type { VideoPlan } from "./playback";
 import { leadCorrection } from "./soundLead";
+import { SyncGroups } from "./syncGroups";
 
 interface MediaTexture {
   texture: WebGLTexture;
@@ -21,6 +22,7 @@ export class MediaLibrary {
   private items = new Map<string, MediaTexture>();
   private sinkId = ""; // audio output device for video sound; "" = the system default
   private leadSeconds = 0; // how far video sound plays ahead of the picture (a negative sound delay)
+  private syncGroups = new SyncGroups();
 
   /** `uploadUnit` is a texture unit uploads may use (never 0: that holds the scan). */
   constructor(private gl: WebGL2RenderingContext, private uploadUnit: number) {}
@@ -66,8 +68,11 @@ export class MediaLibrary {
     }
   }
 
-  /** Once per frame: keeps each early sound copy locked ahead of its picture. */
+  /** Once per frame: keeps sync groups together, and each early sound copy locked ahead of its picture. */
   tick(): void {
+    const grouped = [...this.items.values()].flatMap((m) =>
+      m.video && m.plan && m.plan.group !== "none" ? [{ group: m.plan.group, player: m.video, start: m.start, rate: m.plan.rate }] : []);
+    this.syncGroups.update(grouped, performance.now() / 1000);
     for (const m of this.items.values()) {
       const v = m.video, s = m.lead;
       if (!v || !s || s.readyState < s.HAVE_METADATA || !(v.duration > 0)) continue;

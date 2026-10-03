@@ -33,6 +33,7 @@ export interface Effect {
     rate: number; start: number; sound: boolean; volume: number;
     channel?: string; // "all", "left", "right", "pan", or "1".."8" (audio/channels.ts)
     pan?: number;
+    group?: string; // sync group ("none", "A".."D"): output/syncGroups.ts
   };
   /** Fragment shader body. The shared preamble (see compile.ts) is prepended. null = draw nothing. */
   fragment: string | null;
