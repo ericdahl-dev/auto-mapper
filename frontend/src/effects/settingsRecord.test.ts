@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // The engine clamps settings it receives from outside the Editor (OSC, MIDI) to each effect's ranges,
 // which are defined here in TypeScript. This test records them to engine/effect_settings.json and fails
 // when that file is out of date. To accept a change: UPDATE_EFFECT_SETTINGS=1 npx vitest run.
