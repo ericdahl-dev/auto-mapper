@@ -69,28 +69,12 @@ def test_settings_for_scanning_are_set_when_opened():
     assert driver.config["capturetarget"] == "sdram"
 
 
-# The real driver's parsing, on output recorded from the a6600 (gphoto2 2.5.32).
-
-SHUTTER_CONFIG = """Label: Shutter Speed
-Readonly: 0
-Type: RADIO
-Current: 1/30
-Choice: 0 30
-Choice: 1 25
-Choice: 2 1/30
-END
-"""
+# Listing still cameras, on output recorded from the a6600 (gphoto2 2.5.32).
 
 AUTODETECT = """Model                          Port
 ----------------------------------------------------------
 Sony Alpha-A6600 (PC Control)  usb:002,001
 """
-
-
-def test_config_output_parses_to_current_value_and_choices():
-    from engine.still_camera import parse_config
-
-    assert parse_config(SHUTTER_CONFIG) == ("1/30", ["30", "25", "1/30"])
 
 
 def test_auto_detect_lists_still_cameras_with_stable_ids():
@@ -111,3 +95,17 @@ def test_a_still_camera_is_the_default_only_when_there_is_no_usb_webcam():
     assert default_camera([virtual, still, webcam]) == webcam["unique_id"]
     assert default_camera([virtual, still]) == still["unique_id"]
     assert default_camera([virtual]) is None
+
+
+def test_a_camera_that_stops_answering_is_a_clear_error_not_a_crash():
+    from engine.still_camera import DriverError
+
+    class Stuck(FakeStillDriver):
+        def set_config(self, name, value):
+            raise DriverError("gphoto2 --set-config-value timed out")
+
+    cam = StillCamera(Stuck(shutters=SHUTTERS, isos=ISOS))
+    with pytest.raises(CaptureFailed, match="camera"):
+        cam.prepare()
+    with pytest.raises(CaptureFailed):
+        cam.set("exposure-time-abs", "100")

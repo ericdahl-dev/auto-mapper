@@ -24,7 +24,7 @@ from engine.projects import ProjectStore, UnknownProject
 from engine.osc import OscControl, OscServer
 from engine.playlist import PlaylistRunner
 from engine.schedule import ScheduleRunner, next_change
-from engine.still_camera import CaptureFailed, StillCamera, is_still, open_gphoto2_camera
+from engine.still_camera import CaptureFailed, StillCamera, close_still_cameras, is_still, open_gphoto2_camera
 from engine.show import CurrentShow, LastScene, NothingToUndo, UnknownScene, UnknownSurface
 from engine.messages import (
     AlignmentRequest,
@@ -126,6 +126,7 @@ def create_app(
             playlist.cancel()
             scheduled.cancel()
             osc.stop()
+            close_still_cameras()
             session.close()
 
     app = FastAPI(title="auto-mapper engine", lifespan=lifespan)
@@ -185,10 +186,12 @@ def create_app(
 
     # A still camera takes a photo per preview (1.5-4 s): the Editor polls twice a second, so a recent
     # photo is reused, and only one is taken at a time.
-    still_photo: dict = {"at": 0.0, "frame": None}
+    still_photo: dict = {"at": 0.0, "frame": None, "failed_at": 0.0, "error": ""}
     still_lock = asyncio.Lock()
 
     async def still_preview(selected: str):
+        if time.monotonic() - still_photo["failed_at"] < 10:  # don't queue up retries of a stuck camera
+            raise HTTPException(409, still_photo["error"])
         async with still_lock:
             if still_photo["frame"] is None or time.monotonic() - still_photo["at"] > STILL_PREVIEW_SECONDS:
                 def take():
@@ -201,6 +204,7 @@ def create_app(
                 try:
                     still_photo["frame"] = await asyncio.to_thread(take)
                 except CaptureFailed as e:
+                    still_photo["failed_at"], still_photo["error"] = time.monotonic(), str(e)
                     raise HTTPException(409, str(e))
                 still_photo["at"] = time.monotonic()
             return still_photo["frame"]
