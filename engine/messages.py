@@ -176,6 +176,7 @@ class OutputStats(BaseModel):
     sound: OutputSound | None = None
     video_sound_blocked: bool | None = None
     sound_output_error: str | None = None
+    sound_channels: Annotated[int, Field(ge=1, le=64)] | None = None  # channels the sound output has
 
 
 class EffectErrorReport(BaseModel):
@@ -207,6 +208,7 @@ class StatusOut(_Out):
     output_sound: dict | None
     output_video_sound_blocked: bool
     output_sound_output_error: str | None
+    output_sound_channels: int | None
     camera: dict
     project: dict | None
     can_scan: bool

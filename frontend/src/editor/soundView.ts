@@ -6,3 +6,13 @@ export function describeSound(settings: SoundSettings, output: { level: number; 
   if (!output) return { on: true, meter: 0, note: "Open the output window: it does the listening." };
   return { on: true, meter: Math.round(output.level * 100), note: output.error ?? "Listening" };
 }
+
+/** The sound output's channel count, with a warning when a surface's Sound channel is beyond it
+ *  (multichannel interfaces can report 2 until set up in macOS Audio MIDI Setup). */
+export function channelNote(channels: number | null, chosen: string[]): string {
+  if (!channels) return "";
+  const beyond = chosen.map(Number).filter((n) => Number.isInteger(n) && n > channels);
+  if (!beyond.length) return `${channels} channels`;
+  return `${channels} channels, but a surface uses channel ${Math.max(...beyond)}. ` +
+    "Set up the interface's channels in Audio MIDI Setup, or pick another Sound output.";
+}

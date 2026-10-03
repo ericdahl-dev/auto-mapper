@@ -3,7 +3,7 @@ import { connect } from "../shared/connection";
 import type { ShowMessage } from "../shared/messages";
 import { bindPresentationKeys } from "../shared/presentation";
 import { SoundInput, setVideoSoundOutput } from "../audio/mic";
-import { applyVideoSound, resumeVideoAudio, videoAudioSuspended } from "../audio/videoAudio";
+import { applyVideoSound, outputChannels, resumeVideoAudio, videoAudioSuspended } from "../audio/videoAudio";
 import { ShowRenderer } from "./showRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
@@ -41,6 +41,7 @@ function loop() {
       sound: sound.status(),
       video_sound_blocked: showRenderer.media.soundBlocked() || videoAudioSuspended(),
       sound_output_error: soundOutputError,
+      sound_channels: outputChannels(),
     });
     frames = 0;
     statsFrom = now;

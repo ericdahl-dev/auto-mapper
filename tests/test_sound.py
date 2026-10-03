@@ -99,3 +99,15 @@ def test_a_sound_delay_lines_video_sound_up_with_the_projectors_late_picture(tmp
         client.post("/api/sound", json={"delay": 120})
     with engine(hw, data_dir=tmp_path) as client:  # the projector's lag doesn't change: kept in settings
         assert client.post("/api/sound", json={}).json()["delay"] == 120
+
+
+def test_editors_see_how_many_channels_the_sound_output_has(rig, scanned):
+    with engine(rig, data_dir=scanned) as client, editor(client) as ed, output(client) as out:
+        ed.receive_json(), ed.receive_json()
+        out.receive_json()
+        ed.receive_json()
+        out.send_json({"type": "output_stats", "fps": 60, "sound_channels": 8})
+        assert ed.receive_json()["output_sound_channels"] == 8
+        out.send_json({"type": "output_stats", "sound_channels": 4000})  # nonsense is refused, not stored
+        out.send_json({"type": "output_stats", "fps": 30})
+        assert ed.receive_json()["output_sound_channels"] == 8
