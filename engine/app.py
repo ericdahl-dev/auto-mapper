@@ -83,6 +83,7 @@ def create_app(
     data_path = Path(data_dir or DEFAULT_DATA_DIR)
     latest = ScanFolder(data_path / "scans" / "latest")  # the working scan and its show
     show = CurrentShow(latest)
+    show.sound["delay"] = settings.sound_delay()
     projects = ProjectStore(data_path, latest, show)
     job = ScanJob(  # one scan at a time; other work on the working scan holds it with job.exclusive()
         session=session, settings=settings, latest=latest, show=show, make_uvc=make_uvc, data_dir=data_path,
@@ -461,7 +462,9 @@ def create_app(
 
     @app.post("/api/sound")
     async def set_sound(req: SoundRequest):
-        show.set_sound(req.enabled, req.device, req.source, req.output)
+        if req.delay is not None:
+            settings.set_sound_delay(req.delay)
+        show.set_sound(req.enabled, req.device, req.source, req.output, req.delay)
         return show.sound
 
     @app.post("/api/presentation/blackout/toggle")

@@ -3,6 +3,7 @@ import { connect } from "../shared/connection";
 import type { ShowMessage } from "../shared/messages";
 import { bindPresentationKeys } from "../shared/presentation";
 import { SoundInput, setVideoSoundOutput } from "../audio/mic";
+import { applySoundDelay, resumeVideoAudio, videoAudioSuspended } from "../audio/videoAudio";
 import { ShowRenderer } from "./showRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
@@ -38,7 +39,7 @@ function loop() {
       type: "output_stats",
       fps: (frames * 1000) / (now - statsFrom),
       sound: sound.status(),
-      video_sound_blocked: showRenderer.media.soundBlocked(),
+      video_sound_blocked: showRenderer.media.soundBlocked() || videoAudioSuspended(),
       sound_output_error: soundOutputError,
     });
     frames = 0;
@@ -52,6 +53,7 @@ function applyShow(msg: ShowMessage) {
   const changedScan = !show || show.scan_rev !== msg.scan_rev;
   show = msg;
   showRenderer.setShow(msg);
+  applySoundDelay(msg.sound?.delay ?? 0, showRenderer.media.audibleVideos()); // lands with the projector's late picture
   void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(showRenderer.media.audibleVideos()));
   const output = msg.sound?.output ?? null;
   if (output !== soundOutput) {
@@ -112,6 +114,7 @@ document.addEventListener("fullscreenchange", syncHint);
 document.addEventListener("click", () => {
   if (!document.fullscreenElement) void document.documentElement.requestFullscreen();
   void sound.resume(); // browsers may hold audio until a click in the page
+  void resumeVideoAudio(); // ...including video sound going through the sound delay
   void showRenderer.media.resume(); // ...and pause unmuted videos until then
 });
 syncHint();

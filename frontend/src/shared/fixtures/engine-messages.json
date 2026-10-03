@@ -154,6 +154,7 @@
     ],
     "selected": null,
     "sound": {
+      "delay": 0,
       "device": null,
       "enabled": false,
       "output": null,

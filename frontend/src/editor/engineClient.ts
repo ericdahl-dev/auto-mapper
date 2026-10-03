@@ -50,7 +50,7 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     resetAlignment: () => post("/api/show/alignment/reset"),
     uploadMedia: (file: File) => fetchFn(`/api/media?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file }),
     // Sound
-    sound: (body: { enabled?: boolean; device?: string; source?: string; output?: string }) => post("/api/sound", body),
+    sound: (body: { enabled?: boolean; device?: string; source?: string; output?: string; delay?: number }) => post("/api/sound", body),
     // Scans, camera and hardware
     startScan: () => post("/api/scan"),
     cancelScan: () => post("/api/scan/cancel"),

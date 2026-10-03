@@ -90,6 +90,16 @@ class CameraSettings:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         write_text_atomic(self.path, json.dumps(data, indent=2))
 
+    def sound_delay(self) -> int:
+        """ms video sound is held back for the projector's lag: a property of the setup, so kept."""
+        return int(self._load().get("sound_delay", 0))
+
+    def set_sound_delay(self, ms: int) -> None:
+        data = self._load()
+        data["sound_delay"] = ms
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_text_atomic(self.path, json.dumps(data, indent=2))
+
     def autostart(self) -> bool:
         """Start the engine straight into Play with the last show (unattended displays)."""
         return bool(self._load().get("autostart"))
