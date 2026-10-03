@@ -9,6 +9,7 @@ import type { ShowMessage } from "../shared/messages";
 import { MediaLibrary } from "./mediaLibrary";
 import { playbackPlan } from "./playback";
 import { AlignmentPass, isNeutral } from "./alignment";
+import { FadeLayer, fadeProgress } from "./crossfade";
 
 export interface EffectError {
   surface: number;
@@ -59,6 +60,9 @@ export class ShowRenderer {
   readonly media: MediaLibrary;
   private frame = 0;
   private aligner: AlignmentPass | null = null;
+  /** The scene being left while crossfading to a new one (Play mode), with its GPU objects. */
+  private fade: { surfaces: PreparedSurface[]; buffers: WebGLBuffer[]; vaos: WebGLVertexArrayObject[]; seconds: number; start: number | null } | null = null;
+  private fadeLayer: FadeLayer | null = null;
   private audio: AudioValues = SILENT;
 
   constructor(
@@ -89,9 +93,17 @@ export class ShowRenderer {
 
   setShow(show: ShowMessage) {
     const { gl } = this;
-    // Show updates arrive on every slider move and drag frame: free the previous one's GPU objects.
-    this.buffers.forEach((b) => gl.deleteBuffer(b));
-    this.vaos.forEach((v) => gl.deleteVertexArray(v));
+    const seconds = show.playlist?.crossfade ?? 0;
+    const newScene = this.show !== null && show.scene !== undefined && this.show.scene !== show.scene;
+    if (newScene && show.presentation?.mode === "play" && seconds > 0) {
+      // Keep the scene being left (and its GPU objects) to fade out over the new one.
+      this.endFade();
+      this.fade = { surfaces: this.surfaces, buffers: this.buffers, vaos: this.vaos, seconds, start: null };
+    } else {
+      // Show updates arrive on every slider move and drag frame: free the previous one's GPU objects.
+      this.buffers.forEach((b) => gl.deleteBuffer(b));
+      this.vaos.forEach((v) => gl.deleteVertexArray(v));
+    }
     this.buffers = [];
     this.vaos = [];
     this.show = show;
@@ -127,7 +139,8 @@ export class ShowRenderer {
         uniforms: uniformsFor(effect, s.params, outline), // once per show update, not per frame
       };
     });
-    this.media.sync(new Set(this.surfaces.flatMap((s) => s.media.map(([, src]) => src))));
+    const showing = [...this.surfaces, ...(this.fade?.surfaces ?? [])];
+    this.media.sync(new Set(showing.flatMap((s) => s.media.map(([, src]) => src))));
     const wants = this.surfaces.flatMap((s) => {
       const playback = s.effect.playback?.(s.params);
       return playback ? s.media.map(([, src]) => ({ src, ...playback })) : [];
@@ -181,28 +194,55 @@ export class ShowRenderer {
     return result;
   }
 
+  private endFade() {
+    if (!this.fade) return;
+    this.fade.buffers.forEach((b) => this.gl.deleteBuffer(b));
+    this.fade.vaos.forEach((v) => this.gl.deleteVertexArray(v));
+    this.fade = null;
+  }
+
   /** Draws the show; realigned or dimmed shows are drawn offscreen first, then warped (alignment.ts). */
   draw(timeSeconds: number) {
+    this.frame++;
     const a = this.show?.alignment;
-    if (!this.show || isNeutral(a, this.show.width, this.show.height)) return this.drawShow(timeSeconds);
+    if (!this.show || isNeutral(a, this.show.width, this.show.height)) return this.drawScenes(timeSeconds);
     this.aligner ??= new AlignmentPass(this.gl);
     this.aligner.begin();
-    this.drawShow(timeSeconds);
+    this.drawScenes(timeSeconds);
     this.aligner.end(a!, this.show.width, this.show.height);
   }
 
-  private drawShow(timeSeconds: number) {
+  /** The open scene, with the scene being left fading out over it during a crossfade. */
+  private drawScenes(timeSeconds: number) {
     const { gl } = this;
-    this.frame++;
+    const fade = this.fade;
+    if (fade) fade.start ??= timeSeconds; // the fade starts with its first frame
+    const progress = fade ? fadeProgress(fade.start!, fade.seconds, timeSeconds) : 1;
+    if (!fade || progress >= 1 || this.show?.presentation?.blackout) {
+      this.endFade();
+      return this.drawShow(this.surfaces, timeSeconds, true);
+    }
+    const target = gl.getParameter(gl.FRAMEBUFFER_BINDING) as WebGLFramebuffer | null;
+    this.fadeLayer ??= new FadeLayer(gl);
+    this.fadeLayer.begin();
+    this.drawShow(fade.surfaces, timeSeconds, false);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target);
+    this.drawShow(this.surfaces, timeSeconds, true);
+    this.fadeLayer.composite(1 - progress);
+  }
+
+  /** Draws prepared surfaces; `overlays` adds Edit mode's selection and error outlines. */
+  private drawShow(surfaces: PreparedSurface[], timeSeconds: number, overlays: boolean) {
+    const { gl } = this;
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
     if (!this.show || this.show.presentation?.blackout) return;
-    const editing = this.show.presentation?.mode !== "play";
+    const editing = overlays && this.show.presentation?.mode !== "play";
     const res: [number, number] = [this.show.width, this.show.height];
     const failed: PreparedSurface[] = [];
 
-    for (const s of this.surfaces) {
+    for (const s of surfaces) {
       if (s.effect.fragment === null) continue; // "none": leave dark
       const compiled = this.program(s.effect);
       if (!compiled.ok) {

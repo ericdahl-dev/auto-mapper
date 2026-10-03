@@ -528,7 +528,7 @@ function renderHistory() {
   redoButton.textContent = h?.redo ? `Redo ${h.redo.toLowerCase()}` : "Redo";
 }
 
-// Scenes: looks on the same surfaces, in playlist order. Clicking a row opens (shows and edits) it.
+// Scenes: effects and settings for the same surfaces, in playlist order. Clicking a row opens (shows and edits) it.
 const sceneList = $("scene-list");
 $("add-scene").addEventListener("click", () => void engine.addScene({}));
 $("duplicate-scene").addEventListener("click", () => {
