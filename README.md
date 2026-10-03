@@ -214,7 +214,7 @@ Effects can follow music. In the **Sound** panel, click **React to sound: off** 
 
 **React to** picks what the effects follow: the **Microphone**, or **Video sound**. Video sound analyzes the videos playing with sound directly, so the effects stay exactly in sync with the video and the mic can't pick up feedback from the speakers or room noise. Turn on Video sound for at least one playing video.
 
-Then raise **React to sound** (0 = off) on an effect:
+Then raise **React to sound** (0 = off) on an effect. While sound is off, the setting says **(sound is off)**; click that to go to the Sound panel's switch.
 
 - **Fill**: dims in silence, brightens with loudness, flashes on beats.
 - **Outline trace**: the line thickens on beats and glows with loudness.
