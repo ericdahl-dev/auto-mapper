@@ -253,3 +253,14 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return null;
   }
 }
+
+/** GET/POST /api/camera/scan-settings: the selected camera's scan settings (engine/scan_settings.py). */
+export interface ScanSettingsResponse {
+  hole_fill: number; // px gap between decoded pixels the scan fills in
+  hdr: number; // exposures per pattern: 1 = off
+  mask: number[][][] | null; // areas of the camera image to scan (0..1); null = all of it
+  aperture: string; // still cameras: f-number ("8" = f/8), or "camera"
+}
+
+/** POST /api/camera/calibrate: the exposure found (engine/calibrate.py). */
+export type CalibrateResponse = Calibration;
