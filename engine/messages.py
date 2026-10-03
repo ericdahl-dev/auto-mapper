@@ -101,6 +101,10 @@ class OscRequest(BaseModel):
     port: Annotated[int, Field(ge=0, le=65535)] | None = None  # 0: any free port (tests)
 
 
+class ScanSettingsRequest(BaseModel):
+    hole_fill: Annotated[int, Field(ge=0, le=31)] | None = None  # px gap filled between decoded pixels
+
+
 class AutostartRequest(BaseModel):
     enabled: bool
 

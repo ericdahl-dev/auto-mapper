@@ -1,3 +1,4 @@
+import json
 import cv2
 import numpy as np
 import pytest
@@ -184,3 +185,27 @@ def test_a_new_scan_starts_undo_over_in_the_show_every_editor_gets(rig, tmp_path
         shows = scan(ed, out)
         assert shows and shows[-1]["history"] == {"undo": None, "redo": None}
         assert client.post("/api/show/undo").status_code == 409
+
+
+def test_scan_settings_are_kept_per_camera_and_hole_fill_changes_the_scan(rig, tmp_path):
+    """#66: hole fill is a per-camera scan setting, saved with its calibration, used by the next scan."""
+    scene, uvc, hw, cams = rig
+
+    def scan_covered(client, ed, out):
+        client.post("/api/scan")
+        play_output(out, scene)
+        while ed.receive_json()["type"] not in ("scan_result", "scan_failed"):
+            pass
+        return int(np.load(tmp_path / "scans" / "latest" / "map.npz")["covered"].sum())
+
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        assert client.get("/api/camera/scan-settings").json() == {"hole_fill": 9, "hdr": 1, "mask": None}
+        assert client.post("/api/camera/scan-settings", json={"hole_fill": 0}).json()["hole_fill"] == 0
+        assert client.post("/api/camera/scan-settings", json={"hole_fill": 99}).status_code == 422
+        tight = scan_covered(client, ed, out)
+        client.post("/api/camera/scan-settings", json={"hole_fill": 25})
+        loose = scan_covered(client, ed, out)
+        assert loose > tight
+    settings = json.loads((tmp_path / "settings.json").read_text())
+    assert settings["scan_settings"][AC410["unique_id"]]["hole_fill"] == 25  # by camera, like calibration

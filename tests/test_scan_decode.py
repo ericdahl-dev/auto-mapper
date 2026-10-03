@@ -107,3 +107,16 @@ def test_coarse_decode_is_refined_below_the_stripe_width():
     ok = r.valid & scene.lit & ~near_box
     err = np.abs(r.proj_x[ok] - scene.true_x[ok])
     assert np.percentile(err, 95) <= 2  # raw coarse decode is up to 7 px off
+
+
+def test_hole_fill_closes_more_gaps_the_higher_it_is():
+    """#66: hole fill 0 leaves the camera's undecoded specks; higher values close them."""
+    from engine.scan import projector_space_image
+
+    r = decode(Scene())
+    hit = np.zeros((r.height, r.width), bool)
+    hit[r.proj_y[r.valid], r.proj_x[r.valid]] = True
+    filled = {px: projector_space_image(r, hole_fill_px=px)[1] for px in (0, 5, 15)}
+    assert (filled[0] == hit).all()  # 0: only what was actually decoded
+    assert filled[0].sum() < filled[5].sum() < filled[15].sum()
+    assert projector_space_image(r)[1].sum() == projector_space_image(r, hole_fill_px=9)[1].sum()  # today's default

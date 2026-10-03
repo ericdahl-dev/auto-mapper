@@ -137,7 +137,8 @@ class ScanJob:
                 started = time.monotonic()
                 decoded, calibration = await asyncio.to_thread(capture)
                 self.settings.save_calibration(selected, calibration)
-                image, covered = await asyncio.to_thread(projector_space_image, decoded)
+                hole_fill = self.settings.scan_settings(selected)["hole_fill"]
+                image, covered = await asyncio.to_thread(projector_space_image, decoded, hole_fill)
                 coverage = block_coverage(covered)
                 surfaces = await asyncio.to_thread(detect_surfaces, decoded, (image, covered))
                 summary = {
