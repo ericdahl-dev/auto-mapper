@@ -233,3 +233,35 @@ def test_a_camera_mask_limits_what_the_scan_finds(rig, tmp_path):
         assert client.post("/api/camera/scan-settings", json={"mask": [[[0, 0], [2, 0], [0, 1]]]}).status_code == 422
         assert client.post("/api/camera/scan-settings", json={"mask": [[[0, 0], [1, 0]]]}).status_code == 422
         assert client.post("/api/camera/scan-settings", json={"clear_mask": True}).json()["mask"] is None
+
+
+def test_an_hdr_scan_captures_each_pattern_at_more_exposures(rig, tmp_path):
+    scene, uvc, hw, cams = rig
+    exposures: list[str] = []
+    original = uvc.set
+
+    def recording(name, value):
+        if name == "exposure-time-abs":
+            exposures.append(value)
+        return original(name, value)
+
+    uvc.set = recording
+
+    def scan(client, ed, out):
+        exposures.clear()
+        client.post("/api/scan")
+        play_output(out, scene)
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+        assert msg["type"] == "scan_result", msg
+        return msg
+
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        plain = scan(client, ed, out)
+        assert client.post("/api/camera/scan-settings", json={"hdr": 4}).status_code == 422
+        assert client.post("/api/camera/scan-settings", json={"hdr": 2}).json()["hdr"] == 2
+        calibrated = client.get("/api/status").json()["camera"]["calibration"]["exposure"]
+        hdr = scan(client, ed, out)
+        assert {str(calibrated), str(min(1000, calibrated * 4))} <= set(exposures)
+        assert hdr["coverage"] >= plain["coverage"] - 0.01

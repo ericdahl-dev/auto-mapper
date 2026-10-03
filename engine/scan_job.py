@@ -124,6 +124,7 @@ class ScanJob:
                     width=res["width"],
                     height=res["height"],
                     calibration=self.settings.calibration(selected),
+                    hdr=self.settings.scan_settings(selected)["hdr"],
                     progress=lambda done, total: call(
                         hub.broadcast({"type": "scan_progress", "done": done, "total": total})
                     ),
