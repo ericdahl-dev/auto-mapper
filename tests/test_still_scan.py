@@ -136,3 +136,21 @@ def test_after_a_scan_the_camera_is_back_as_its_owner_had_it(rig, tmp_path):
     assert single < shots[0]  # single shots before any photo
     assert (driver.config["capturemode"], driver.config["whitebalance"], driver.config["focusmode"]) == (
         "Continuous Med Speed", "Automatic", "AF-C")
+
+
+def test_status_shows_the_camera_battery_and_a_nearly_flat_one_stops_a_scan(rig, tmp_path):
+    scene, driver, hw, shown = rig
+    driver.config["batterylevel"] = "64%"
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        assert client.get("/api/status").json()["camera"]["battery"] is None  # not read until the camera is used
+        client.get("/api/camera/preview.jpg")
+        assert client.get("/api/status").json()["camera"]["battery"] == 64
+        driver.config["batterylevel"] = "8%"
+        photos = driver.calls.count(("capture",))
+        client.post("/api/scan")
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+        assert msg["type"] == "scan_failed" and "battery" in msg["error"].lower() and "8%" in msg["error"]
+        assert client.get("/api/status").json()["camera"]["battery"] == 8
+        assert driver.calls.count(("capture",)) == photos  # stopped before any photo

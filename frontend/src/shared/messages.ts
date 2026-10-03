@@ -45,7 +45,8 @@ export interface StatusMessage {
   output_video_sound_blocked?: boolean;
   output_sound_output_error?: string | null;
   output_sound_channels?: number | null;
-  camera: { selected: string | null; calibration: Calibration | null };
+  /** battery: a still camera's last reading in percent, taken when the app uses it (null before). */
+  camera: { selected: string | null; calibration: Calibration | null; battery?: number | null };
   project: { name: string; slug: string } | null;
   can_scan: boolean;
   unsaved?: boolean; // the show differs from what was last saved or opened

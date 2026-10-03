@@ -176,3 +176,19 @@ describe("why Scan is disabled", () => {
       .toBe("Choose the camera that scans (Hardware)");
   });
 });
+
+describe("camera battery (still cameras)", () => {
+  const cam = (battery: number | null) =>
+    describeStatus(status({ camera: { selected: AC410.unique_id, calibration: null, battery } }));
+
+  it("shows the last reading, and nothing before the camera is used", () => {
+    expect(cam(64).battery).toBe("Battery 64%");
+    expect(cam(null).battery).toBeNull();
+    expect(cam(64).notes).toEqual([]);
+  });
+
+  it("warns when low, and says a scan won't start when nearly flat", () => {
+    expect(cam(20).notes).toEqual(["Camera battery is at 20%: charge or swap it soon."]);
+    expect(cam(10).banners).toContain("Camera battery is at 10%: charge or swap it before scanning.");
+  });
+});

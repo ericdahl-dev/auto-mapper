@@ -22,7 +22,7 @@ from engine.hub import OutputNotResponding
 from engine.scan import apply_camera_mask, block_coverage, diagnose, projector_space_image
 from engine.scan_folder import ScanFolder
 from engine.scan_runner import ScanCanceled, ScanError, capture_scan
-from engine.still_camera import CaptureFailed, StillCamera, is_still
+from engine.still_camera import FLAT_BATTERY, CaptureFailed, StillCamera, is_still
 from engine.show import CurrentShow
 from engine.surfaces import detect_surfaces
 
@@ -41,6 +41,7 @@ class ScanHub(Protocol):
     """What a scan needs from the hub: the output window, and the editors to report to."""
 
     output_resolution: dict | None
+    still_battery: int | None  # a still camera's last battery reading (percent)
 
     async def show_pattern(self, pattern: dict, timeout: float) -> None: ...
     async def send_to_output(self, msg: dict) -> None: ...
@@ -144,6 +145,9 @@ class ScanJob:
                     # Full control for the scan (single shots, fixed white balance, ...), given back after.
                     still = self.make_still(selected)
                     try:
+                        hub.still_battery = level = still.battery()
+                        if level is not None and level <= FLAT_BATTERY:
+                            raise CaptureFailed(f"The camera battery is at {level}%: charge or swap it before scanning.")
                         with still.scan_profile(aperture=_aperture(self.settings.scan_settings(selected))):
                             show({"kind": "white"})
                             still.focus_and_lock()

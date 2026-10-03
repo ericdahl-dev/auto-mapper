@@ -44,6 +44,8 @@ const scanReason = $("scan-reason");
 const hardwareNotes = $("hardware-notes");
 const cameraSelect = $<HTMLSelectElement>("camera-select");
 const calibration = $("calibration");
+const batteryLabel = $("battery-label");
+const battery = $("battery");
 const preview = $<HTMLImageElement>("preview");
 const previewToggle = $<HTMLButtonElement>("preview-toggle");
 const calibrate = $<HTMLButtonElement>("calibrate");
@@ -1194,6 +1196,8 @@ function render() {
     projectSaveName.value = status.project.name;
   }
   calibration.textContent = view.calibration;
+  battery.textContent = view.battery?.replace("Battery ", "") ?? "";
+  battery.hidden = batteryLabel.hidden = view.battery === null;
   syncOptions(cameraSelect, cameraOptions(status));
   calibrate.disabled = !status?.output_connected || !status.camera.selected;
 }

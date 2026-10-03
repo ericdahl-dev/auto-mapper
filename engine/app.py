@@ -197,6 +197,7 @@ def create_app(
                 def take():
                     cam = (still_factory or open_gphoto2_camera)(selected)
                     try:
+                        app.state.hub.still_battery = cam.battery()
                         cam.prepare(aperture=_aperture(settings.scan_settings(selected)))
                         return cam.read()
                     finally:
@@ -250,6 +251,7 @@ def create_app(
             if is_still(selected):  # focused on the white frame first, as a scan does
                 still = (still_factory or open_gphoto2_camera)(selected)
                 try:
+                    app.state.hub.still_battery = still.battery()
                     with still.scan_profile(aperture=_aperture(settings.scan_settings(selected))):
                         still.focus_and_lock()
                         with locked_camera(still, data_path):
