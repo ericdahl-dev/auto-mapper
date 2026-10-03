@@ -145,3 +145,52 @@ def test_no_mask_or_an_empty_one_keeps_everything():
     r = decode(Scene())
     assert apply_camera_mask(r, None).valid.sum() == r.valid.sum()
     assert apply_camera_mask(decode(Scene()), []).valid.sum() == r.valid.sum()
+
+
+def _decode_at(scene: Scene, gains: list[float]):
+    """Decodes with each pattern captured at every gain and merged (HDR); one gain = a plain scan."""
+    from engine.scan import HdrDecoder
+
+    dec = HdrDecoder(scene.proj_w, scene.proj_h, gains)
+    for p in pattern_sequence(scene.proj_w, scene.proj_h):
+        frames = []
+        for g in gains:
+            scene.exposure_gain = g
+            frames.append(scene.frame(p))
+        dec.add(p, frames)
+    return dec.result()
+
+
+def test_hdr_decodes_a_dark_and_bright_scene_better_than_any_single_exposure():
+    """#66: a near-black box and a bright, well-lit wall. Short exposures lose the box in the noise;
+    long ones saturate the wall in both stripe states (room light too); merging per pixel keeps both."""
+    def coverage(r):
+        return int(r.valid.sum())
+
+    scene = lambda: Scene(box_albedo=0.05, wall_albedo=0.9, ambient=110, room_light=True)  # noqa: E731
+    short = coverage(_decode_at(scene(), [0.8]))
+    long = coverage(_decode_at(scene(), [3.0]))
+    hdr_result = _decode_at(scene(), [0.8, 3.0])
+    assert coverage(hdr_result) > max(short, long)
+    s = scene()
+    assert hdr_result.valid[s.box_region & s.lit].mean() > 0.9  # the dark box decodes
+    err = np.abs(hdr_result.proj_x - s.true_x)[hdr_result.valid]
+    assert (err <= 1).mean() > 0.999
+    assert hdr_result.white.dtype == np.uint8 and hdr_result.white.max() <= 255  # shown as the first exposure
+
+
+def test_one_exposure_decodes_exactly_like_before():
+    a = _decode_at(Scene(), [1.0])
+    b = decode(Scene())
+    assert (a.valid == b.valid).all() and (a.proj_x == b.proj_x).all()
+
+
+def test_exact_reads_stay_exact_next_to_an_objects_edge():
+    """Smoothing for unreadable fine stripes only touches pixels that have them: it used to blur
+    every pixel, pulling the box's edge toward the wall behind it."""
+    s = Scene(box_albedo=0.05, wall_albedo=0.9, ambient=110, room_light=True)
+    s.exposure_gain = 0.8
+    r = decode(s)
+    t = Scene(box_albedo=0.05, wall_albedo=0.9, ambient=110, room_light=True)
+    err = np.abs(r.proj_x - t.true_x)[r.valid]
+    assert (err > 1).sum() < 50  # was about 1,500

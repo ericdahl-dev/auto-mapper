@@ -36,6 +36,7 @@ describe("engine client", () => {
     await client.setScanSettings({ hole_fill: 5 });
     await client.setScanSettings({ mask: [[[0, 0], [0.5, 0], [0.5, 1]]] });
     await client.setScanSettings({ clear_mask: true });
+    await client.setScanSettings({ hdr: 2 });
     await client.schedule();
     await client.setSchedule({ enabled: true, on: "17:30", off: "23:00", days: {} });
     await client.setAutostart(true);
@@ -73,6 +74,7 @@ describe("engine client", () => {
       { url: "/api/camera/scan-settings", method: "POST", body: { hole_fill: 5 } },
       { url: "/api/camera/scan-settings", method: "POST", body: { mask: [[[0, 0], [0.5, 0], [0.5, 1]]] } },
       { url: "/api/camera/scan-settings", method: "POST", body: { clear_mask: true } },
+      { url: "/api/camera/scan-settings", method: "POST", body: { hdr: 2 } },
       { url: "/api/schedule", method: "GET", body: undefined },
       { url: "/api/schedule", method: "POST", body: { enabled: true, on: "17:30", off: "23:00", days: {} } },
       { url: "/api/autostart", method: "POST", body: { enabled: true } },

@@ -90,7 +90,9 @@ def _refine(values: np.ndarray, valid: np.ndarray, unknown: np.ndarray, coarse: 
     num = cv2.GaussianBlur(np.where(valid, values, 0).astype(np.float32), (0, 0), sigma)
     den = cv2.GaussianBlur(w, (0, 0), sigma)
     refined = np.where(den > 1e-3, num / np.maximum(den, 1e-3), -1)
-    return np.where(valid, np.round(refined), -1).astype(np.int32)
+    # Only pixels with unreadable bits need it: blurring exact reads would pull pixels at a depth
+    # step (an object's edge) toward the surface behind it.
+    return np.where(valid & (unknown > 0), np.round(refined), np.where(valid, values, -1)).astype(np.int32)
 
 
 class GrayDecoder:
@@ -155,6 +157,50 @@ class GrayDecoder:
             width=self.width,
             height=self.height,
         )
+
+
+SATURATED = 250  # a pixel this bright in a white frame has no headroom left at that exposure
+
+
+class HdrDecoder:
+    """HDR scanning (#66): each pattern captured at several exposures (gains relative to the first,
+    the calibrated one) and merged per pixel before decoding. Each pixel uses the longest exposure
+    whose white frame isn't saturated there, scaled to that exposure's brightness, so dark surfaces
+    get the long exposure and bright ones a short one. With one gain it's a plain GrayDecoder.
+    The image shown (the result's white) is the first exposure's, as for a plain scan.
+    """
+
+    def __init__(self, width: int, height: int, gains: list[float]):
+        self.gains = gains
+        self.decoder = GrayDecoder(width, height)
+        self._choice: np.ndarray | None = None  # per pixel: which exposure to use
+        self._first_white: np.ndarray | None = None
+
+    def _merge(self, frames: list[np.ndarray]) -> np.ndarray:
+        top = max(self.gains)
+        stack = np.stack([f.astype(np.float32) * (top / g) for f, g in zip(frames, self.gains)])
+        return np.take_along_axis(stack, self._choice[None, :, :, None], axis=0)[0]
+
+    def add(self, pattern: dict, frames: list[np.ndarray]) -> None:
+        if len(self.gains) == 1:
+            self.decoder.add(pattern, frames[0])
+            return
+        if pattern["kind"] == "white":
+            self._first_white = frames[0]
+            # Longest exposure first: the first that isn't saturated wins; none unsaturated: the shortest.
+            order = np.argsort(self.gains)[::-1]
+            choice = np.full(frames[0].shape[:2], order[-1], np.int64)
+            for i in order[::-1]:  # from shortest to longest: later (longer) unsaturated ones win
+                ok = _gray(frames[i]) < SATURATED
+                choice = np.where(ok, i, choice)
+            self._choice = choice
+        self.decoder.add(pattern, self._merge(frames))
+
+    def result(self) -> DecodeResult:
+        r = self.decoder.result()
+        if self._first_white is not None:
+            r.white = self._first_white
+        return r
 
 
 def apply_camera_mask(r: DecodeResult, polygons: list[list[list[float]]] | None) -> DecodeResult:

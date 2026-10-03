@@ -864,9 +864,10 @@ let cameraMask: number[][][] | null = null; // 0..1 camera coordinates
 async function loadScanSettings() {
   const r = await engine.scanSettings();
   if (!r.ok) return;
-  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null };
+  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null; hdr: number };
   cameraMask = s.mask;
   renderMask();
+  if (document.activeElement !== hdrSelect) hdrSelect.value = String(s.hdr);
   if (document.activeElement === holeFill) return;
   holeFill.value = String(s.hole_fill);
   holeFillReadout.textContent = `${s.hole_fill} px`;
@@ -924,6 +925,8 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") maskStep({ type: "finish" });
   if (ev.key === "Escape") maskStep({ type: "cancel" });
 });
+const hdrSelect = $<HTMLSelectElement>("hdr");
+hdrSelect.addEventListener("change", () => void engine.setScanSettings({ hdr: Number(hdrSelect.value) }));
 holeFill.addEventListener("input", () => { holeFillReadout.textContent = `${holeFill.value} px`; });
 holeFill.addEventListener("change", () => void engine.setScanSettings({ hole_fill: Number(holeFill.value) }));
 void loadScanSettings();
