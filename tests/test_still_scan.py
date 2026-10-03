@@ -20,8 +20,9 @@ def rig():
     shown: list[dict] = []
 
     def photo():
-        # Brightness follows the shutter speed the scan chose (like the webcam rig follows exposure).
-        scene.exposure_gain = (_seconds(driver.config["shutterspeed"]) or 0.01) * 10000 / 200
+        # Brightness follows shutter x ISO, like a real camera (the scan sets ISO; the shutter is the dial's).
+        iso = float(driver.config["iso"]) if driver.config["iso"].isdigit() else 100
+        scene.exposure_gain = (_seconds(driver.config["shutterspeed"]) or 0.01) * iso / 100 * 10000 / 200
         return scene.frame()
 
     driver = FakeStillDriver(shutters=SHUTTERS, isos=ISOS, frame=photo)
@@ -95,7 +96,7 @@ def test_a_scan_sets_the_cameras_aperture_and_calibrates_for_it(rig, tmp_path):
 
 
 
-def test_an_hdr_scan_with_a_still_camera_takes_each_pattern_at_two_shutter_speeds(rig, tmp_path):
+def test_an_hdr_scan_with_a_still_camera_takes_each_pattern_at_two_isos_and_never_touches_the_shutter(rig, tmp_path):
     scene, driver, hw, shown = rig
 
     def scan(client, ed, out):
@@ -108,7 +109,9 @@ def test_an_hdr_scan_with_a_still_camera_takes_each_pattern_at_two_shutter_speed
         assert msg["type"] == "scan_result", msg
         calls = driver.calls[mark:]
         photos = sum(c == ("capture",) for c in driver.calls) - before
-        return photos, {c[2] for c in calls if c[:2] == ("set", "shutterspeed")}, msg
+        assert not any(c[:2] == ("set", "shutterspeed") for c in calls)  # the dial's, never written
+        # The ISOs photos were taken at (Auto ISO: the owner's, given back after).
+        return photos, {c[2] for c in calls if c[:2] == ("set", "iso")} - {"Auto ISO"}, msg
 
     with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
             editor(client) as ed, output(client, W, H) as out:
@@ -117,7 +120,7 @@ def test_an_hdr_scan_with_a_still_camera_takes_each_pattern_at_two_shutter_speed
         client.post("/api/camera/scan-settings", json={"hdr": 2})
         hdr, hdr_shutters, msg = scan(client, ed, out)
     assert hdr == 2 * plain  # every pattern twice
-    assert len(hdr_shutters) == 2 and len(plain_shutters) <= 1  # two shutter speeds, alternating
+    assert len(hdr_shutters) == 2 and len(plain_shutters) <= 1  # two ISOs, alternating
     assert msg["coverage"] > 0.9
 
 
