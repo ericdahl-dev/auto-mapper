@@ -115,6 +115,10 @@ _Avoid_: Master dimmer, opacity
 Daily times between which the show plays by itself; outside them it is in blackout. Weekdays can have their own times or stay dark.
 _Avoid_: Timer, on/off rules
 
+**Sync group**:
+Videos on different surfaces that start together and are kept playing together, such as one soundtrack split over two walls.
+_Avoid_: Video group, link
+
 **Undo step**:
 One change to the show that Undo takes back as a whole: a drag, a burst of typing, a merge. Choosing surfaces, Play mode, Blackout and sound aren't undo steps. A new scan or opening a project starts over.
 

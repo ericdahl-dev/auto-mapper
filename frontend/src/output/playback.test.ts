@@ -31,9 +31,9 @@ describe("playbackPlan", () => {
 
 describe("the media effect's playback settings", () => {
   it("come from its settings, with defaults and ranges", () => {
-    expect(media.playback!({})).toEqual({ rate: 1, start: 0, sound: false, volume: 1, channel: "all", pan: 0 });
+    expect(media.playback!({})).toEqual({ rate: 1, start: 0, sound: false, volume: 1, channel: "all", pan: 0, group: "none" });
     expect(media.playback!({ speed: 2, start: 3, sound: "on", volume: 0.5, channel: "3", pan: 0.4 }))
-      .toEqual({ rate: 2, start: 3, sound: true, volume: 0.5, channel: "3", pan: 0.4 });
+      .toEqual({ rate: 2, start: 3, sound: true, volume: 0.5, channel: "3", pan: 0.4, group: "none" });
     expect(media.playback!({ speed: 99, volume: -1 })).toMatchObject({ rate: 4, volume: 0 }); // clamped to the ranges
   });
 });
@@ -48,5 +48,17 @@ describe("sound channel", () => {
     ], PLAY);
     expect(plan.get("a.mp4")).toMatchObject({ channel: "left", pan: 0 });
     expect(plan.get("b.mp4")).toMatchObject({ channel: "all", pan: 0 });
+  });
+});
+
+describe("sync group", () => {
+  it("is the first surface's choice for a file, and none by default", () => {
+    const plan = playbackPlan([
+      { src: "a.mp4", rate: 1, start: 0, sound: false, volume: 1, group: "B" },
+      { src: "a.mp4", rate: 1, start: 0, sound: false, volume: 1, group: "C" },
+      { src: "b.mp4", rate: 1, start: 0, sound: false, volume: 1 },
+    ], { mode: "play", blackout: false });
+    expect(plan.get("a.mp4")!.group).toBe("B");
+    expect(plan.get("b.mp4")!.group).toBe("none");
   });
 });
