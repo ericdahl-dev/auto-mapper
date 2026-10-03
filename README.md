@@ -147,6 +147,7 @@ Detected surfaces appear as numbered outlines over the scan. In the editor:
 | To | Do this |
 |----|---------|
 | Select a surface | Click it. On the projector, the selected surface pulses white so you can find it on the wall. Click again, or click empty space, to deselect. |
+| See which surface has which effect | Each surface on the scan is tinted by its effect: its main color for color effects (Fill, Outline trace, Noise flow, Tint, Edge glow, Text), a hue of its own for Image / video and Posterize, and hatched for None (dark). |
 | Rename | Type in the name field of the surface panel. |
 | Delete | **Delete** in the surface panel. |
 | Merge | Shift-click other surfaces, then **Merge N surfaces**. The result keeps the first surface's id and effect. |
