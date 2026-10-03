@@ -74,6 +74,28 @@ class ScheduleRequest(BaseModel):
     days: dict[Literal["0", "1", "2", "3", "4", "5", "6"], DayTimes | None] = {}
 
 
+class MidiSettingTarget(BaseModel, extra="forbid"):
+    surface: int
+    param: str
+
+
+class MidiActionTarget(BaseModel, extra="forbid"):
+    action: Literal["play", "edit", "blackout", "next", "previous"]
+
+
+class MidiBinding(BaseModel, extra="forbid"):
+    """A knob or fader (cc) or a key or pad (note), on a channel, bound to a setting or an action."""
+
+    kind: Literal["cc", "note"]
+    channel: Annotated[int, Field(ge=0, le=15)]
+    number: Annotated[int, Field(ge=0, le=127)]
+    target: MidiSettingTarget | MidiActionTarget
+
+
+class MidiBindings(BaseModel):
+    bindings: Annotated[list[MidiBinding], Field(max_length=256)]
+
+
 class OscRequest(BaseModel):
     enabled: bool
     port: Annotated[int, Field(ge=0, le=65535)] | None = None  # 0: any free port (tests)
@@ -213,6 +235,7 @@ class ShowOut(_Out):
     scenes: list[dict]
     scene: int
     playlist: dict
+    midi: list[dict]
     scan_rev: str | None
 
 

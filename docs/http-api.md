@@ -54,6 +54,7 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | POST | `/api/show/playlist` | `{"crossfade"?: 1.5, "loop"?: true}` | Playlist settings: seconds the output blends one scene into the next (0..60), and whether it starts over after the last. In Play mode the engine opens each scene after the previous one's duration |
 | POST | `/api/show/scenes/order` | `{"ids": [3, 1, 2]}` | Playlist order; must list every scene once (422 otherwise) |
 | DELETE | `/api/show/scenes/{id}` | | Deletes a scene; deleting the open one opens the next. 409 for the last scene |
+| PUT | `/api/show/midi` | `{"bindings": [{"kind": "cc" or "note", "channel": 0..15, "number": 0..127, "target": {"surface": 2, "param": "zoom"} or {"action": "play", "edit", "blackout", "next" or "previous"}}]}` | MIDI bindings, saved with the show (so each project has its own). The Editor learns them and does the MIDI itself (Web MIDI); the engine only stores them |
 | POST | `/api/show/undo` | | Undoes the last show change (surfaces, effects, settings, alignment; not selection, Play/Blackout or sound). The show message's `history` names what Undo and Redo would do. 409 when there's nothing to undo. Up to 100 steps; a new scan or opening a project clears them |
 | POST | `/api/show/redo` | | Redoes the last undone change; any new change clears redo. 409 when there's nothing to redo |
 | POST | `/api/show/alignment/reset` | | Back to the projector's own corners at full brightness |

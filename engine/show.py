@@ -51,7 +51,8 @@ def _with_scenes(show: dict) -> dict:
         show["scene"] = 1
     for scene in show["scenes"]:
         scene.setdefault("effects", scene.pop("looks", {}))  # an earlier build's name for them
-    show.setdefault("playlist", {"crossfade": 1.0, "loop": True})  # seconds between scenes; wrap around
+    show.setdefault("playlist", {"crossfade": 1.0, "loop": True})
+    show.setdefault("midi", [])  # MIDI bindings: saved with the show, so each project has its own  # seconds between scenes; wrap around
     return show
 
 
@@ -452,6 +453,12 @@ class CurrentShow:
             self.data["playlist"]["crossfade"] = crossfade
         if loop is not None:
             self.data["playlist"]["loop"] = loop
+        self._save()
+        self._changed()
+
+    def set_midi(self, bindings: list[dict]) -> None:
+        self._record("MIDI bindings")
+        self.data["midi"] = bindings
         self._save()
         self._changed()
 

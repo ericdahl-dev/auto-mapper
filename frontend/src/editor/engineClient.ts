@@ -1,7 +1,7 @@
 // Every call the Editor makes to the engine, in one place: routes, methods and body shapes.
 // See docs/http-api.md. Each call returns the Response; callers check it where they need to.
 
-import type { TestFrameKind } from "../shared/messages";
+import type { MidiBinding, TestFrameKind } from "../shared/messages";
 import type { SurfaceEdit } from "./editSession";
 
 /** Daily on/off times; "days" overrides them per weekday ("0" = Monday), null = off all day. */
@@ -65,6 +65,9 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     schedule: () => get("/api/schedule"),
     setSchedule: (body: Schedule) => post("/api/schedule", body),
     setAutostart: (enabled: boolean) => post("/api/autostart", { enabled }),
+    // MIDI bindings, saved with the show
+    setMidi: (bindings: MidiBinding[]) =>
+      fetchFn("/api/show/midi", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bindings }) }),
     // Projects
     projects: () => get("/api/projects"),
     saveProject: (name: string) => post("/api/projects", { name }),

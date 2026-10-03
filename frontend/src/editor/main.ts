@@ -3,7 +3,7 @@ import { connect } from "../shared/connection";
 import type { StatusMessage, TestFrameKind } from "../shared/messages";
 import { EFFECTS, effectById } from "../effects/index";
 import type { ShowMessage } from "../shared/messages";
-import { bindPresentationKeys, setMode, toggleBlackout } from "../shared/presentation";
+import { bindPresentationKeys, setMode, stepScene, toggleBlackout } from "../shared/presentation";
 import { applyPlan } from "./applyEffect";
 import { controlsFor, mediaLabel, parseControlValue } from "./controls";
 import { type Bezier, curveBezierEdge, flatten, fromPolygon, insertAnchor, moveAnchor, moveControl, removeAnchor } from "./bezier";
@@ -16,6 +16,7 @@ import { createEngineClient, type Schedule } from "./engineClient";
 import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
 import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
+import { MidiRouter, parseMidi, settingValue, type MidiAction, type MidiTarget } from "./midi";
 import { moveScene } from "./sceneList";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
@@ -294,6 +295,7 @@ function renderSurfaces() {
   renderAlignment();
   renderHistory();
   renderScenes();
+  renderMidi();
 }
 
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
@@ -620,6 +622,100 @@ for (const el of [scheduleEnabled, scheduleOn, scheduleOff]) el.addEventListener
 autostart.addEventListener("change", () => void engine.setAutostart(autostart.checked));
 void loadSchedule();
 setInterval(() => void loadSchedule(), 60_000); // keep "Turns on today at ..." current
+
+// MIDI: knobs and keys bound to settings or actions, learned by moving one. Bindings are saved with
+// the show; access is asked for on Connect (the browser shows a permission prompt).
+const midi = new MidiRouter();
+const midiConnect = $<HTMLButtonElement>("midi-connect");
+const midiStatus = $("midi-status");
+const midiLearnRow = $("midi-learn-row");
+const midiTarget = $<HTMLSelectElement>("midi-target");
+const midiLearn = $<HTMLButtonElement>("midi-learn");
+const midiList = $("midi-list");
+const ACTIONS: { action: MidiAction; label: string }[] = [
+  { action: "play", label: "Play" }, { action: "edit", label: "Edit" }, { action: "blackout", label: "Blackout on/off" },
+  { action: "next", label: "Next scene" }, { action: "previous", label: "Previous scene" },
+];
+function targetLabel(t: MidiTarget): string {
+  if ("action" in t) return ACTIONS.find((a) => a.action === t.action)!.label;
+  const s = show?.surfaces.find((x) => x.id === t.surface);
+  const label = s ? effectById(s.effect).params.find((p) => p.name === t.param)?.label : undefined;
+  return `${s?.name ?? `Surface ${t.surface}`}: ${label ?? t.param}`;
+}
+function midiTargets(): MidiTarget[] {
+  const s = show?.surfaces.find((x) => x.id === show?.selected);
+  const settings = s ? effectById(s.effect).params.filter((p) => p.type === "number" || p.type === "choice")
+    .map((p) => ({ surface: s.id, param: p.name })) : [];
+  return [...settings, ...ACTIONS.map(({ action }) => ({ action }))];
+}
+function renderMidi() {
+  const targets = midiTargets();
+  const keep = midiTarget.value;
+  midiTarget.replaceChildren(...targets.map((t, i) => Object.assign(document.createElement("option"), { value: String(i), textContent: targetLabel(t) })));
+  if (Number(keep) < targets.length) midiTarget.value = keep;
+  midiLearn.textContent = midi.armed ? "Move a knob…" : "Learn";
+  midiLearn.classList.toggle("on", midi.armed !== null);
+  const bindings = show?.midi ?? [];
+  midiList.replaceChildren(...bindings.map((b, i) => {
+    const li = document.createElement("li");
+    const name = `${b.kind === "cc" ? "Knob" : "Key"} ${b.number}${b.channel ? ` (ch ${b.channel + 1})` : ""}`;
+    const remove = Object.assign(document.createElement("button"), { textContent: "×", title: "Remove" });
+    remove.addEventListener("click", () => void engine.setMidi(bindings.filter((_, j) => j !== i)));
+    li.append(`${name} → ${targetLabel(b.target)}`, remove);
+    return li;
+  }));
+}
+midiLearn.addEventListener("click", () => {
+  midi.arm(midi.armed ? null : midiTargets()[Number(midiTarget.value)] ?? null);
+  renderMidi();
+});
+function onMidi(data: Uint8Array) {
+  const msg = parseMidi(data);
+  if (!msg || !show) return;
+  const bindings = show.midi ?? [];
+  const result = midi.receive(msg, bindings);
+  if (!result) return;
+  if ("learned" in result) {
+    const b = result.learned; // one knob or key does one thing: replace what it did before
+    const others = bindings.filter((x) => !(x.kind === b.kind && x.channel === b.channel && x.number === b.number));
+    void engine.setMidi([...others, b]);
+    renderMidi();
+  } else if ("setting" in result) {
+    const { surface, param, value } = result.setting;
+    const s = show.surfaces.find((x) => x.id === surface);
+    const schema = s && effectById(s.effect).params.find((p) => p.name === param);
+    const v = schema && settingValue(schema, value);
+    if (v !== null && v !== undefined) {
+      patchSurface(surface, { params: { [param]: v } }); // shown at once; one undo step per twist
+      refresh();
+    }
+  } else {
+    const a = result.action;
+    if (a === "play" || a === "edit") void setMode(a);
+    else if (a === "blackout") void toggleBlackout();
+    else void stepScene(a === "next" ? 1 : -1);
+  }
+}
+midiConnect.addEventListener("click", async () => {
+  if (!("requestMIDIAccess" in navigator)) {
+    midiStatus.textContent = "This browser has no MIDI (use Chrome)";
+    return;
+  }
+  try {
+    const access = await navigator.requestMIDIAccess();
+    const listen = () => {
+      const inputs = [...access.inputs.values()];
+      inputs.forEach((input) => { input.onmidimessage = (ev) => ev.data && onMidi(ev.data); });
+      midiStatus.textContent = inputs.length ? inputs.map((i) => i.name).join(", ") : "No MIDI devices";
+    };
+    access.onstatechange = listen;
+    listen();
+    midiConnect.hidden = true;
+    midiLearnRow.hidden = false;
+  } catch {
+    midiStatus.textContent = "MIDI access was refused";
+  }
+});
 
 const playButton = $<HTMLButtonElement>("play");
 const blackoutButton = $<HTMLButtonElement>("blackout");

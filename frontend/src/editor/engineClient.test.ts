@@ -33,6 +33,7 @@ describe("engine client", () => {
     await client.schedule();
     await client.setSchedule({ enabled: true, on: "17:30", off: "23:00", days: {} });
     await client.setAutostart(true);
+    await client.setMidi([{ kind: "cc", channel: 0, number: 21, target: { action: "next" } }]);
     await client.align({ brightness: 0.5 });
     await client.resetAlignment();
     await client.patchSurface(3, { edge: 2 }, "g7");
@@ -63,6 +64,7 @@ describe("engine client", () => {
       { url: "/api/schedule", method: "GET", body: undefined },
       { url: "/api/schedule", method: "POST", body: { enabled: true, on: "17:30", off: "23:00", days: {} } },
       { url: "/api/autostart", method: "POST", body: { enabled: true } },
+      { url: "/api/show/midi", method: "PUT", body: { bindings: [{ kind: "cc", channel: 0, number: 21, target: { action: "next" } }] } },
       { url: "/api/show/alignment", method: "POST", body: { brightness: 0.5 } },
       { url: "/api/show/alignment/reset", method: "POST", body: undefined },
       { url: "/api/show/surfaces/3", method: "PATCH", body: { edge: 2, gesture: "g7" } },

@@ -63,6 +63,8 @@
       #project-list li { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); }
       #project-list li.active { color: var(--ok); }
       #scene-list { list-style: none; padding: 0; margin: 0 0 8px; }
+      #midi-list { list-style: none; padding: 0; margin: 0 0 16px; font-size: 12px; }
+      #midi-list li { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; border-bottom: 1px solid var(--line); }
       #scene-list li { display: flex; gap: 4px; align-items: center; padding: 3px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
       #scene-list li.open { outline: 1px solid var(--ok); }
       #scene-list li input[type="text"] { flex: 1; min-width: 0; }
@@ -155,6 +157,16 @@
         <p class="muted hint"><span id="schedule-next">Schedule off</span></p>
         <label class="muted" title="When the engine starts (e.g. after a power cut), go straight to Play with the last show">
           <input id="autostart" type="checkbox" /> Start in Play</label>
+        <h2>MIDI</h2>
+        <div class="row">
+          <button id="midi-connect" title="Use MIDI controllers plugged into this computer">Connect MIDI</button>
+          <span id="midi-status" class="muted"></span>
+        </div>
+        <div class="row" id="midi-learn-row" hidden>
+          <select id="midi-target" title="What the next knob or key controls"></select>
+          <button id="midi-learn" title="Then move a knob or press a key">Learn</button>
+        </div>
+        <ul id="midi-list"></ul>
         <h2>Hardware</h2>
         <dl>
           <dt>Projector</dt><dd><select id="projector-select" title="Which display is the projector"></select></dd>
