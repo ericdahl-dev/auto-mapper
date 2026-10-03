@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { effectById } from "../effects/index";
-import { controlsFor, mediaLabel, parseControlValue } from "./controls";
+import { controlsFor, mediaLabel, parseControlValue, readout } from "./controls";
 
 describe("controlsFor", () => {
   it("builds one control per param, using saved values over defaults", () => {
@@ -52,5 +52,25 @@ describe("mediaLabel", () => {
   it("shows the uploaded file's name, or that none is chosen", () => {
     expect(mediaLabel("/api/media/wall-0123456789ab.png")).toBe("wall-0123456789ab.png");
     expect(mediaLabel("")).toBe("No file chosen");
+  });
+});
+
+describe("a setting's readout", () => {
+  const control = (effect: string, name: string) => controlsFor(effectById(effect), {}).find((c) => c.name === name)!;
+
+  it("shows the value with its unit", () => {
+    expect(readout(control("outline", "width"), 6)).toBe("6 px");
+    expect(readout(control("outline", "speed"), 0.25)).toBe("0.25 laps/s");
+    expect(readout(control("fill", "angle"), 90)).toBe("90°");
+    expect(readout(control("media", "start"), 2.5)).toBe("2.5 s");
+  });
+
+  it("keeps the unit out of the label, now the readout has it", () => {
+    expect(control("outline", "width").label).toBe("Line width");
+    expect(control("media", "rotate").label).toBe("Rotate");
+  });
+
+  it("is the bare value for settings without a unit", () => {
+    expect(readout(control("fill", "brightness"), 0.5)).toBe("0.5");
   });
 });

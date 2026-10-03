@@ -7,7 +7,7 @@ export const fill: Effect = {
   params: [
     { name: "colorA", label: "Color", type: "color", default: "#2563eb" },
     { name: "colorB", label: "Gradient to", type: "color", default: "#2563eb" },
-    { name: "angle", label: "Gradient angle", type: "number", default: 90, min: 0, max: 360, step: 1 },
+    { name: "angle", label: "Gradient angle", type: "number", default: 90, min: 0, max: 360, step: 1, unit: "°" },
     { name: "brightness", label: "Brightness", type: "number", default: 1, min: 0, max: 1, step: 0.01 },
     { name: "react", label: "React to sound", type: "number", default: 0, min: 0, max: 1, step: 0.01 },
   ],

@@ -8,7 +8,7 @@ import type { ParamSchema, UniformValue } from "./types";
 /** An editor control for one setting, showing the surface's saved value or the default. */
 export type Control =
   | { name: string; label: string; kind: "color"; value: string }
-  | { name: string; label: string; kind: "range"; value: number; min: number; max: number; step: number }
+  | { name: string; label: string; kind: "range"; value: number; min: number; max: number; step: number; unit?: string }
   | { name: string; label: string; kind: "select"; value: string; options: { value: string; label: string }[] }
   | { name: string; label: string; kind: "media"; value: string }
   | { name: string; label: string; kind: "text"; value: string };
@@ -60,7 +60,7 @@ export const SETTING_TYPES: { [K in Kind]: SettingType<K> } = {
     },
     control: (p, v) => ({
       name: p.name, label: p.label, kind: "range", value: typeof v === "number" ? v : p.default,
-      min: p.min ?? 0, max: p.max ?? 1, step: p.step ?? 0.01,
+      min: p.min ?? 0, max: p.max ?? 1, step: p.step ?? 0.01, ...(p.unit ? { unit: p.unit } : {}),
     }),
     validate: (p) =>
       p.default < (p.min ?? -Infinity) || p.default > (p.max ?? Infinity)
