@@ -20,6 +20,7 @@ from engine import media
 from engine.scan_folder import ScanFolder
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
+from engine.osc import OscControl, OscServer
 from engine.playlist import PlaylistRunner
 from engine.schedule import ScheduleRunner, next_change
 from engine.show import CurrentShow, LastScene, NothingToUndo, UnknownScene, UnknownSurface
@@ -34,6 +35,7 @@ from engine.messages import (
     MergeRequest,
     NewSceneRequest,
     NewSurfaceRequest,
+    OscRequest,
     OutputHello,
     OutputMessage,
     OutputStats,
@@ -88,6 +90,7 @@ def create_app(
     )
 
     schedule = ScheduleRunner(show, settings, clock, schedule_poll_seconds)
+    osc = OscServer(OscControl(show, projects))
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -97,6 +100,11 @@ def create_app(
             show.present(mode="play", blackout=False)  # the last show, as it was left; no camera needed
         playlist = asyncio.create_task(PlaylistRunner(show).run())
         scheduled = asyncio.create_task(schedule.run())
+        if settings.osc()["enabled"]:
+            try:
+                await osc.start(settings.osc()["port"])
+            except OSError as e:  # port taken: carry on without OSC
+                log.warning("OSC: can't listen on port %s: %s", settings.osc()["port"], e)
         # A scan killed mid-way leaves the webcam locked; put its settings back.
         # Assumes the selected camera is the one that was locked.
         selected = settings.selected(app.state.hub.hardware.cameras)
@@ -108,6 +116,7 @@ def create_app(
         finally:
             playlist.cancel()
             scheduled.cancel()
+            osc.stop()
             session.close()
 
     app = FastAPI(title="auto-mapper engine", lifespan=lifespan)
@@ -312,6 +321,21 @@ def create_app(
         nxt = next_change(settings.schedule(), clock())
         return {"schedule": settings.schedule(), "next": nxt and {"at": nxt[0].isoformat(), "on": nxt[1]},
                 "autostart": settings.autostart()}
+
+    @app.get("/api/osc")
+    async def get_osc():
+        return {**settings.osc(), "listening": osc.port}
+
+    @app.post("/api/osc")
+    async def set_osc(req: OscRequest):
+        settings.set_osc(req.enabled, req.port)
+        osc.stop()
+        if req.enabled:
+            try:
+                await osc.start(settings.osc()["port"])
+            except OSError as e:
+                raise HTTPException(409, f"Can't listen on port {settings.osc()['port']}: {e}")
+        return await get_osc()
 
     @app.post("/api/autostart")
     async def set_autostart(req: AutostartRequest):
