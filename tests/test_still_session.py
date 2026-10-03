@@ -79,7 +79,8 @@ class FakeGpCamera:
 
 
 def session(cam):
-    return GPhoto2Session(camera=lambda: cam, stop_macos=lambda: calls.append("stop macos"))
+    return GPhoto2Session(camera=lambda: cam, stop_macos=lambda: calls.append("stop macos"), settle_seconds=0,
+                          retry_seconds=0.1)
 
 
 calls: list[str] = []
@@ -156,7 +157,8 @@ def test_connecting_keeps_trying_while_macos_grabs_the_camera_first():
             super().init()
 
     cam = Grabbed()
-    s = GPhoto2Session(camera=lambda: cam, stop_macos=lambda: stops.append(1), connect_seconds=3)
+    s = GPhoto2Session(camera=lambda: cam, stop_macos=lambda: stops.append(1), connect_seconds=3, settle_seconds=0,
+                       retry_seconds=0.1)
     assert s.get_config("shutterspeed") == "1/60"
     assert Grabbed.attempts == 4 and len(stops) >= 4
 
@@ -166,7 +168,7 @@ def test_a_camera_that_never_frees_up_fails_after_the_connect_time():
         def init(self):
             raise IOError("[-53] Could not claim the USB device")
 
-    s = GPhoto2Session(camera=NeverFree, stop_macos=lambda: None, connect_seconds=0.3)
+    s = GPhoto2Session(camera=NeverFree, stop_macos=lambda: None, connect_seconds=0.3, settle_seconds=0, retry_seconds=0.1)
     with pytest.raises(DriverError, match="claim"):
         s.get_config("shutterspeed")
 
@@ -199,10 +201,32 @@ def test_a_camera_call_that_never_returns_times_out_instead_of_freezing_the_engi
             return super().capture(kind)
 
     cam = Hangs()
-    s = GPhoto2Session(camera=lambda: cam, stop_macos=lambda: None, call_seconds=0.3)
+    s = GPhoto2Session(camera=lambda: cam, stop_macos=lambda: None, call_seconds=0.3, settle_seconds=0)
     t = time.monotonic()
     with pytest.raises(DriverError, match="didn't answer"):
         s.capture()
     assert time.monotonic() - t < 2
     release.set()
     assert s.capture().shape == (12, 16, 3)  # the next call reconnects and works
+
+
+def test_connect_attempts_are_few_and_spaced_so_the_camera_can_settle():
+    """A failed connect leaves a Sony 'Connecting'; hammering it every 0.1 s kept it there. Wait for
+    macOS's service to be gone before the first try, then a few tries a couple of seconds apart."""
+    import time
+
+    tries = []
+
+    class Busy(FakeGpCamera):
+        def init(self):
+            tries.append(time.monotonic())
+            raise IOError("[-10] Timeout reading from or writing to the port")
+
+    start = time.monotonic()
+    s = GPhoto2Session(camera=Busy, stop_macos=lambda: None, connect_seconds=2.5, settle_seconds=0.3,
+                       retry_seconds=1.0)
+    with pytest.raises(DriverError):
+        s.get_config("shutterspeed")
+    assert tries[0] - start >= 0.3  # waited for macOS to let go first
+    assert len(tries) <= 3
+    assert all(b - a >= 0.9 for a, b in zip(tries, tries[1:]))

@@ -235,11 +235,14 @@ class GPhoto2Session:
     One command at a time; a dropped connection is reopened once and the command retried."""
 
     def __init__(self, camera: Callable[[], object] | None = None, stop_macos: Callable[[], None] = _stop_macos_camera_service,
-                 connect_seconds: float = 6.0, call_seconds: float = 30.0):
+                 connect_seconds: float = 12.0, call_seconds: float = 30.0, settle_seconds: float = 1.0,
+                 retry_seconds: float = 3.0):
         self._new = camera or self._gphoto2_camera
         self._stop_macos = stop_macos
         self._connect_seconds = connect_seconds
         self._call_seconds = call_seconds
+        self._settle_seconds = settle_seconds  # macOS's service kept off this long before the first try
+        self._retry_seconds = retry_seconds  # between tries: a failed one leaves a Sony "Connecting"
         self._lock = threading.RLock()
         self._cam = None
 
@@ -265,17 +268,18 @@ class GPhoto2Session:
         guard.start()
         end = time.monotonic() + self._connect_seconds
         try:
+            self._stop_macos()
+            time.sleep(self._settle_seconds)  # let macOS's service actually let go first
             while True:
-                self._stop_macos()
                 cam = self._new()
                 try:
                     cam.init()
                     self._cam = cam
                     return cam
                 except Exception as e:
-                    if time.monotonic() > end:
+                    if time.monotonic() + self._retry_seconds > end:
                         raise DriverError(f"couldn't connect: {e}") from e
-                    time.sleep(0.1)
+                    time.sleep(self._retry_seconds)  # few, spaced tries: hammering kept it "Connecting"
         finally:
             done.set()
 
