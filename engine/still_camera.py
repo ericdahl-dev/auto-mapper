@@ -303,13 +303,14 @@ class GPhoto2Session:
 
     def __init__(self, camera: Callable[[], object] | None = None, stop_macos: Callable[[], None] = _stop_macos_camera_service,
                  connect_seconds: float = 12.0, call_seconds: float = 30.0, settle_seconds: float = 1.0,
-                 retry_seconds: float = 3.0):
+                 retry_seconds: float = 3.0, ready_seconds: float = 15.0, ready_poll_seconds: float = 0.5):
         self._new = camera or self._gphoto2_camera
         self._stop_macos = stop_macos
         self._connect_seconds = connect_seconds
         self._call_seconds = call_seconds
         self._settle_seconds = settle_seconds  # macOS's service kept off this long before the first try
         self._retry_seconds = retry_seconds  # between tries: a failed one leaves a Sony "Connecting"
+        self._ready_seconds, self._ready_poll_seconds = ready_seconds, ready_poll_seconds
         self._lock = threading.RLock()
         self._cam = None
 
@@ -341,14 +342,43 @@ class GPhoto2Session:
                 cam = self._new()
                 try:
                     cam.init()
-                    self._cam = cam
-                    return cam
                 except Exception as e:
                     if time.monotonic() + self._retry_seconds > end:
                         raise DriverError(f"couldn't connect: {e}") from e
                     time.sleep(self._retry_seconds)  # few, spaced tries: hammering kept it "Connecting"
+                    continue
+                self._wait_until_awake(cam)
+                self._cam = cam
+                return cam
         finally:
             done.set()
+
+    # What the a6600 reports for ~5 s after connecting, before its real settings (placeholders).
+    _PLACEHOLDERS = {"shutterspeed": "65535/65535", "f-number": "f/0", "iso": "0"}
+
+    def _wait_until_awake(self, cam) -> None:
+        """Waits until the camera reports real settings. Read before that, a scan's record of the
+        owner's settings was placeholders, and giving them back put the camera in RAW."""
+        end = time.monotonic() + self._ready_seconds
+        while True:
+            tree = cam.get_config()
+            asleep = []
+            for name, placeholder in self._PLACEHOLDERS.items():
+                try:
+                    if str(tree.get_child_by_name(name).get_value()) == placeholder:
+                        asleep.append(name)
+                except Exception:
+                    pass  # a camera without this setting
+            if not asleep:
+                return
+            if time.monotonic() > end:
+                try:
+                    cam.exit()
+                except Exception:
+                    pass
+                raise DriverError(f"the camera connected but hasn't reported its settings ({', '.join(asleep)}): "
+                                  "turn it off and on again")
+            time.sleep(self._ready_poll_seconds)
 
     def _timed(self, what: str, fn):
         """Runs one camera call with a time limit: a call stuck inside libgphoto2 (a camera that
