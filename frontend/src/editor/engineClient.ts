@@ -28,6 +28,7 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     openScene: (id: number) => post(`/api/show/scenes/${id}/open`),
     orderScenes: (ids: number[]) => post("/api/show/scenes/order", { ids }),
     deleteScene: (id: number) => fetchFn(`/api/show/scenes/${id}`, { method: "DELETE" }),
+    setPlaylist: (body: { crossfade?: number; loop?: boolean }) => post("/api/show/playlist", body),
     undo: () => post("/api/show/undo"),
     redo: () => post("/api/show/redo"),
     select: (id: number | null) => post("/api/show/select", { id }),

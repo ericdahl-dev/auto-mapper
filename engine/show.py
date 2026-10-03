@@ -49,6 +49,7 @@ def _with_scenes(show: dict) -> dict:
     if not show.get("scenes"):
         show["scenes"] = [{"id": 1, "name": "Scene 1", "duration": SCENE_SECONDS, "looks": {}}]
         show["scene"] = 1
+    show.setdefault("playlist", {"crossfade": 1.0, "loop": True})  # seconds between scenes; wrap around
     return show
 
 
@@ -442,6 +443,25 @@ class CurrentShow:
         self.data["scenes"].sort(key=lambda sc: ids.index(sc["id"]))
         self._save()
         self._changed()
+
+    def set_playlist(self, crossfade: float | None = None, loop: bool | None = None) -> None:
+        self._record("Playlist settings")
+        if crossfade is not None:
+            self.data["playlist"]["crossfade"] = crossfade
+        if loop is not None:
+            self.data["playlist"]["loop"] = loop
+        self._save()
+        self._changed()
+
+    def step_scene(self, delta: int) -> None:
+        """Opens the next (+1) or previous (-1) scene in the playlist; wraps around if it loops."""
+        scenes = self.data["scenes"]
+        i = next(n for n, sc in enumerate(scenes) if sc["id"] == self.data["scene"]) + delta
+        if not 0 <= i < len(scenes):
+            if not self.data["playlist"]["loop"]:
+                return
+            i %= len(scenes)
+        self.open_scene(scenes[i]["id"])
 
     def delete_scene(self, scene_id: int) -> None:
         scene = self._scene(scene_id)

@@ -19,6 +19,7 @@ from engine import media
 from engine.scan_folder import ScanFolder
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
+from engine.playlist import PlaylistRunner
 from engine.show import CurrentShow, LastScene, NothingToUndo, UnknownScene, UnknownSurface
 from engine.messages import (
     AlignmentRequest,
@@ -34,6 +35,7 @@ from engine.messages import (
     OutputMessage,
     OutputStats,
     PatternShown,
+    PlaylistRequest,
     PresentationRequest,
     ProjectorSelectRequest,
     ProjectSaveRequest,
@@ -83,6 +85,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         app.state.hub = Hub(await asyncio.to_thread(probe.probe), settings, show)
         app.state.hub.projects = projects
+        playlist = asyncio.create_task(PlaylistRunner(show).run())
         # A scan killed mid-way leaves the webcam locked; put its settings back.
         # Assumes the selected camera is the one that was locked.
         selected = settings.selected(app.state.hub.hardware.cameras)
@@ -92,6 +95,7 @@ def create_app(
         try:
             yield
         finally:
+            playlist.cancel()
             session.close()
 
     app = FastAPI(title="auto-mapper engine", lifespan=lifespan)
@@ -300,6 +304,27 @@ def create_app(
             show.add_scene(req.name, req.duplicate)
         except UnknownScene:
             raise HTTPException(404, "Unknown scene")
+        return show.public()
+
+    @app.post("/api/show/playlist")
+    async def set_playlist(req: PlaylistRequest):
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        show.set_playlist(req.crossfade, req.loop)
+        return show.public()
+
+    @app.post("/api/show/scenes/next")
+    async def next_scene():
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        show.step_scene(1)
+        return show.public()
+
+    @app.post("/api/show/scenes/previous")
+    async def previous_scene():
+        if show.data is None:
+            raise HTTPException(404, "No scan yet")
+        show.step_scene(-1)
         return show.public()
 
     @app.post("/api/show/scenes/order")

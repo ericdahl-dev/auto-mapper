@@ -134,6 +134,10 @@
       "redo": null,
       "undo": null
     },
+    "playlist": {
+      "crossfade": 1.0,
+      "loop": true
+    },
     "presentation": {
       "blackout": false,
       "mode": "edit"

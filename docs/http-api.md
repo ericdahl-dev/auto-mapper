@@ -50,6 +50,8 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | POST | `/api/show/scenes` | `{"name"?: "Night", "duplicate"?: 1}` | Adds a scene and opens it: dark, or a copy of another scene's look. Outlines (and their edge) are shared by every scene; effects and settings belong to each |
 | PATCH | `/api/show/scenes/{id}` | `{"name"?: "Night", "duration"?: 12.5}` | Renames a scene or sets how long it plays in the playlist (seconds, 0..3600) |
 | POST | `/api/show/scenes/{id}/open` | | Shows and edits that scene. Not an undo step |
+| POST | `/api/show/scenes/next`, `/api/show/scenes/previous` | | Opens the next or previous scene in the playlist; wraps around only if the playlist loops |
+| POST | `/api/show/playlist` | `{"crossfade"?: 1.5, "loop"?: true}` | Playlist settings: seconds the output blends one scene into the next (0..60), and whether it starts over after the last. In Play mode the engine opens each scene after the previous one's duration |
 | POST | `/api/show/scenes/order` | `{"ids": [3, 1, 2]}` | Playlist order; must list every scene once (422 otherwise) |
 | DELETE | `/api/show/scenes/{id}` | | Deletes a scene; deleting the open one opens the next. 409 for the last scene |
 | POST | `/api/show/undo` | | Undoes the last show change (surfaces, effects, settings, alignment; not selection, Play/Blackout or sound). The show message's `history` names what Undo and Redo would do. 409 when there's nothing to undo. Up to 100 steps; a new scan or opening a project clears them |

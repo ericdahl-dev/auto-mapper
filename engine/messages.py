@@ -57,6 +57,11 @@ class SceneUpdate(BaseModel):
     duration: Annotated[float, Field(gt=0, le=3600)] | None = None  # seconds in a playlist
 
 
+class PlaylistRequest(BaseModel):
+    crossfade: Annotated[float, Field(ge=0, le=60)] | None = None  # seconds blending one scene into the next
+    loop: bool | None = None  # after the last scene, start over
+
+
 class SceneOrder(BaseModel):
     ids: Annotated[list[int], Field(min_length=1)]
 
@@ -181,6 +186,7 @@ class ShowOut(_Out):
     history: dict
     scenes: list[dict]
     scene: int
+    playlist: dict
     scan_rev: str | None
 
 
