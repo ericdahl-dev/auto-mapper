@@ -230,3 +230,38 @@ def test_connect_attempts_are_few_and_spaced_so_the_camera_can_settle():
     assert tries[0] - start >= 0.3  # waited for macOS to let go first
     assert len(tries) <= 3
     assert all(b - a >= 0.9 for a, b in zip(tries, tries[1:]))
+
+
+def test_waits_after_connecting_until_the_camera_reports_its_real_settings():
+    """For ~5 s after connecting, the a6600 reports placeholders (RAW, f/0, shutter 65535/65535,
+    ISO 0). Read then, a scan's "owner's settings" were placeholders, and giving them back put the
+    camera in RAW. Nothing is read or set until it reports real values."""
+
+    class Waking(FakeGpCamera):
+        def __init__(self):
+            super().__init__()
+            self.reads = 0
+
+        def get_config(self):
+            self.reads += 1
+            if self.reads <= 3:  # still waking up
+                return Tree({"shutterspeed": Widget("65535/65535"), "imagequality": Widget("RAW"),
+                             "f-number": Widget("f/0"), "iso": Widget("0")})
+            return super().get_config()
+
+    cam = Waking()
+    s = GPhoto2Session(camera=lambda: cam, stop_macos=lambda: None, settle_seconds=0, ready_poll_seconds=0.01)
+    assert s.get_config("shutterspeed") == "1/60"
+    assert s.get_config("imagequality") == "RAW"  # the fake's real value, read after waking
+
+
+def test_a_camera_that_never_wakes_is_a_clear_error():
+    class Asleep(FakeGpCamera):
+        def get_config(self):
+            return Tree({"shutterspeed": Widget("65535/65535"), "f-number": Widget("f/0")})
+
+    cam = Asleep()
+    s = GPhoto2Session(camera=lambda: cam, stop_macos=lambda: None, settle_seconds=0,
+                       ready_seconds=0.2, ready_poll_seconds=0.01)
+    with pytest.raises(DriverError, match="settings"):
+        s.get_config("shutterspeed")
