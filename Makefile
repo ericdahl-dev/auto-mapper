@@ -1,4 +1,4 @@
-.PHONY: dev engine frontend test build install spelling
+.PHONY: dev engine frontend test build install spelling install-autostart uninstall-autostart
 
 install:
 	uv sync
@@ -24,3 +24,17 @@ build:
 # American spelling check (same as CI): the org's spelling-dialect tool.
 spelling:
 	pipx run --spec git+https://github.com/ericdahl-dev/spelling-dialect@v1.0.0 spelling-dialect --dialect american .
+
+# Unattended displays: start auto-mapper at login (engine, web app, output fullscreen on the projector).
+AGENT := $(HOME)/Library/LaunchAgents/dev.ericdahl.auto-mapper.plist
+install-autostart:
+	@mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/.auto-mapper
+	@sed -e 's|@SCRIPT@|$(CURDIR)/scripts/autostart.sh|' -e 's|@LOG@|$(HOME)/.auto-mapper/autostart.log|' \
+		scripts/autostart.plist > $(AGENT)
+	launchctl bootout gui/$$(id -u) $(AGENT) 2>/dev/null || true
+	launchctl bootstrap gui/$$(id -u) $(AGENT)
+	@echo "Installed: auto-mapper starts at login. Log: ~/.auto-mapper/autostart.log"
+
+uninstall-autostart:
+	launchctl bootout gui/$$(id -u) $(AGENT) 2>/dev/null || true
+	rm -f $(AGENT)

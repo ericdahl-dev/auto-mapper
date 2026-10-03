@@ -57,6 +57,27 @@ class SceneUpdate(BaseModel):
     duration: Annotated[float, Field(gt=0, le=3600)] | None = None  # seconds in a playlist
 
 
+HHMM = r"^([01]\d|2[0-3]):[0-5]\d$"
+
+
+class DayTimes(BaseModel):
+    on: Annotated[str, Field(pattern=HHMM)]
+    off: Annotated[str, Field(pattern=HHMM)]
+
+
+class ScheduleRequest(BaseModel):
+    """Daily on and off times; "days" overrides them per weekday ("0" = Monday), None = off all day."""
+
+    enabled: bool
+    on: Annotated[str, Field(pattern=HHMM)]
+    off: Annotated[str, Field(pattern=HHMM)]
+    days: dict[Literal["0", "1", "2", "3", "4", "5", "6"], DayTimes | None] = {}
+
+
+class AutostartRequest(BaseModel):
+    enabled: bool
+
+
 class PlaylistRequest(BaseModel):
     crossfade: Annotated[float, Field(ge=0, le=60)] | None = None  # seconds blending one scene into the next
     loop: bool | None = None  # after the last scene, start over

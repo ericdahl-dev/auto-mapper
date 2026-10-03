@@ -228,6 +228,16 @@ Type a name under **Project** and click **Save**. This copies the current scan, 
 
 Opening a project replaces the working scan and goes straight to Play. It needs no camera: just the projector, an output window fullscreen on it, and the same projector position as when it was scanned.
 
+
+## Unattended displays
+
+For a shop window or holiday lights that run on their own:
+
+1. **Schedule.** In the Editor's **Schedule** section, tick **On** and set the times, for example 17:30 to 23:00. Between them the output plays; outside them it goes to Blackout. An off time earlier than the on time runs past midnight. To give weekdays their own times, or keep a day dark, send `days` to `POST /api/schedule` (see [docs/http-api.md](docs/http-api.md)). Switching by hand holds until the next scheduled change.
+2. **Start in Play.** Tick **Start in Play** so that when the engine starts it goes straight to Play with the last show, as it was left. No camera is needed.
+3. **Start at login.** `make install-autostart` installs a LaunchAgent that, at login, starts the engine and the web app, then opens the output window fullscreen on the chosen projector in its own Chrome profile (video and sound start without a click). The log is `~/.auto-mapper/autostart.log`. `make uninstall-autostart` removes it.
+4. **Keep the Mac running.** While the agent runs, `caffeinate` keeps the Mac and the display awake. Also turn on automatic login (System Settings → Users & Groups) and *Start up automatically after a power failure* (System Settings → Energy, or `sudo pmset autorestart 1`), and turn off the screen saver and *Require password after screen saver*.
+
 ## Scanning tips
 
 From real use on the rig:

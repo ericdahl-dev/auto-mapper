@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
@@ -20,10 +21,12 @@ from engine.scan_folder import ScanFolder
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
 from engine.playlist import PlaylistRunner
+from engine.schedule import ScheduleRunner, next_change
 from engine.show import CurrentShow, LastScene, NothingToUndo, UnknownScene, UnknownSurface
 from engine.messages import (
     AlignmentRequest,
     ApplyEffectRequest,
+    AutostartRequest,
     CameraSelectRequest,
     EditorHello,
     EffectErrorReport,
@@ -41,6 +44,7 @@ from engine.messages import (
     ProjectSaveRequest,
     SceneOrder,
     SceneUpdate,
+    ScheduleRequest,
     SelectRequest,
     SoundRequest,
     SurfaceUpdate,
@@ -66,6 +70,8 @@ def create_app(
     scan_frames_per_pattern: int = 3,  # quality over speed: average out sensor noise
     ack_timeout: float = 2.0,
     capture_size: tuple[int, int] = CAPTURE_SIZE,
+    clock: Callable[[], datetime] = datetime.now,  # local time, for the schedule
+    schedule_poll_seconds: float = 5.0,
 ) -> FastAPI:
     probe = hardware or MacHardware()
     settings = CameraSettings(data_dir or DEFAULT_DATA_DIR)
@@ -81,11 +87,16 @@ def create_app(
         frames_per_pattern=scan_frames_per_pattern, ack_timeout=ack_timeout,
     )
 
+    schedule = ScheduleRunner(show, settings, clock, schedule_poll_seconds)
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.hub = Hub(await asyncio.to_thread(probe.probe), settings, show)
         app.state.hub.projects = projects
+        if settings.autostart() and show.data is not None:
+            show.present(mode="play", blackout=False)  # the last show, as it was left; no camera needed
         playlist = asyncio.create_task(PlaylistRunner(show).run())
+        scheduled = asyncio.create_task(schedule.run())
         # A scan killed mid-way leaves the webcam locked; put its settings back.
         # Assumes the selected camera is the one that was locked.
         selected = settings.selected(app.state.hub.hardware.cameras)
@@ -96,6 +107,7 @@ def create_app(
             yield
         finally:
             playlist.cancel()
+            scheduled.cancel()
             session.close()
 
     app = FastAPI(title="auto-mapper engine", lifespan=lifespan)
@@ -290,6 +302,28 @@ def create_app(
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         return show.public()
+
+    @app.get("/api/presentation")
+    async def get_presentation():
+        return show.presentation
+
+    @app.get("/api/schedule")
+    async def get_schedule():
+        nxt = next_change(settings.schedule(), clock())
+        return {"schedule": settings.schedule(), "next": nxt and {"at": nxt[0].isoformat(), "on": nxt[1]},
+                "autostart": settings.autostart()}
+
+    @app.post("/api/autostart")
+    async def set_autostart(req: AutostartRequest):
+        settings.set_autostart(req.enabled)
+        return {"autostart": settings.autostart()}
+
+    @app.post("/api/schedule")
+    async def set_schedule(req: ScheduleRequest):
+        settings.set_schedule(req.model_dump())
+        schedule.restart()
+        schedule.check()
+        return await get_schedule()
 
     @app.post("/api/presentation")
     async def set_presentation(req: PresentationRequest):

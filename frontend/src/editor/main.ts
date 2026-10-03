@@ -12,11 +12,12 @@ import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
 import { EditSession, type SurfaceEdit } from "./editSession";
-import { createEngineClient } from "./engineClient";
+import { createEngineClient, type Schedule } from "./engineClient";
 import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
 import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
 import { moveScene } from "./sceneList";
+import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
 import { placeOutput } from "./screens";
 import { describeSound } from "./soundView";
@@ -583,6 +584,42 @@ function renderScenes() {
     return li;
   }));
 }
+
+// Schedule: daily on/off times for unattended displays. Per-weekday times: see docs/http-api.md.
+const scheduleEnabled = $<HTMLInputElement>("schedule-enabled");
+const scheduleOn = $<HTMLInputElement>("schedule-on");
+const scheduleOff = $<HTMLInputElement>("schedule-off");
+const scheduleNext = $("schedule-next");
+const autostart = $<HTMLInputElement>("autostart");
+let schedule: Schedule | null = null;
+let scheduleSaves = 0; // saves in flight: a reload mustn't overwrite fields a newer save holds
+async function loadSchedule() {
+  const r = await engine.schedule();
+  if (!r.ok || scheduleSaves > 0) return;
+  const got = (await r.json()) as { schedule: Schedule; next: { at: string; on: boolean } | null; autostart: boolean };
+  schedule = got.schedule;
+  scheduleEnabled.checked = schedule.enabled;
+  if (document.activeElement !== scheduleOn) scheduleOn.value = schedule.on;
+  if (document.activeElement !== scheduleOff) scheduleOff.value = schedule.off;
+  scheduleNext.textContent = nextChangeText(got.next, new Date());
+  autostart.checked = got.autostart;
+}
+async function saveSchedule() {
+  if (!schedule || !scheduleOn.value || !scheduleOff.value) return;
+  // Read every field now: each save sends the whole schedule as the fields show it.
+  schedule = { ...schedule, enabled: scheduleEnabled.checked, on: scheduleOn.value, off: scheduleOff.value };
+  scheduleSaves++;
+  try {
+    await engine.setSchedule(schedule);
+  } finally {
+    scheduleSaves--;
+  }
+  await loadSchedule();
+}
+for (const el of [scheduleEnabled, scheduleOn, scheduleOff]) el.addEventListener("change", () => void saveSchedule());
+autostart.addEventListener("change", () => void engine.setAutostart(autostart.checked));
+void loadSchedule();
+setInterval(() => void loadSchedule(), 60_000); // keep "Turns on today at ..." current
 
 const playButton = $<HTMLButtonElement>("play");
 const blackoutButton = $<HTMLButtonElement>("blackout");
