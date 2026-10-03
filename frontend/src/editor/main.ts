@@ -18,6 +18,7 @@ import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
 import { ACTIONS, MidiRouter, parseMidi, settingValue, targetMenu, type MidiTarget, type TargetItem } from "./midi";
 import { deleteKeyTargets } from "./deleteKey";
+import { foldOpen, problemFolds } from "./folds";
 import { moveScene } from "./sceneList";
 import { FIT, panBy, type View, zoomAt } from "./viewZoom";
 import { nextChangeText } from "./scheduleView";
@@ -786,6 +787,37 @@ midiConnect.addEventListener("click", async () => {
   }
 });
 
+// Sidebar sections fold (#110): set-up-once ones start folded, your choice is remembered in this
+// browser, and a section with a problem opens itself (folds.ts).
+const FOLDS_KEY = "auto-mapper.folds";
+const folds = [...document.querySelectorAll<HTMLDetailsElement>("details.fold")];
+let savedFolds: Record<string, boolean> = {};
+try {
+  savedFolds = JSON.parse(localStorage.getItem(FOLDS_KEY) ?? "{}") ?? {};
+} catch { /* private window or blocked storage: defaults */ }
+const foldShown = new Map<string, boolean>(); // what applyFolds last set, to tell its toggles from yours
+function applyFolds() {
+  const problems = problemFolds(status ?? null);
+  for (const d of folds) {
+    const name = d.dataset.fold!;
+    const open = foldOpen(name, savedFolds, problems);
+    foldShown.set(name, open);
+    if (d.open !== open) d.open = open;
+  }
+}
+for (const d of folds) {
+  d.addEventListener("toggle", () => {
+    const name = d.dataset.fold!;
+    if (foldShown.get(name) === d.open) return; // applyFolds did that
+    foldShown.set(name, d.open);
+    savedFolds[name] = d.open;
+    try {
+      localStorage.setItem(FOLDS_KEY, JSON.stringify(savedFolds));
+    } catch { /* not remembered: still works this session */ }
+  });
+}
+applyFolds();
+
 const playButton = $<HTMLButtonElement>("play");
 const blackoutButton = $<HTMLButtonElement>("blackout");
 playButton.addEventListener("click", () => void setMode(show?.presentation.mode === "play" ? "edit" : "play"));
@@ -1065,6 +1097,7 @@ connect({
       if (projectChanged) void refreshProjects();
       render();
       renderSound();
+      applyFolds(); // a problem opens its section
       renderScan();
     } else if (msg.type === "show") {
       session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below
