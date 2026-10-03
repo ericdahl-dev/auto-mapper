@@ -16,7 +16,7 @@ import { createEngineClient, type Schedule } from "./engineClient";
 import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
 import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
-import { MidiRouter, parseMidi, settingValue, type MidiAction, type MidiTarget } from "./midi";
+import { ACTIONS, MidiRouter, parseMidi, settingValue, targetMenu, type MidiTarget, type TargetItem } from "./midi";
 import { deleteKeyTargets } from "./deleteKey";
 import { moveScene } from "./sceneList";
 import { FIT, panBy, type View, zoomAt } from "./viewZoom";
@@ -692,41 +692,50 @@ const midiLearnRow = $("midi-learn-row");
 const midiTarget = $<HTMLSelectElement>("midi-target");
 const midiLearn = $<HTMLButtonElement>("midi-learn");
 const midiList = $("midi-list");
-const ACTIONS: { action: MidiAction; label: string }[] = [
-  { action: "play", label: "Play" }, { action: "edit", label: "Edit" }, { action: "blackout", label: "Blackout on/off" },
-  { action: "next", label: "Next scene" }, { action: "previous", label: "Previous scene" },
-];
 function targetLabel(t: MidiTarget): string {
   if ("action" in t) return ACTIONS.find((a) => a.action === t.action)!.label;
   const s = show?.surfaces.find((x) => x.id === t.surface);
   const label = s ? effectById(s.effect).params.find((p) => p.name === t.param)?.label : undefined;
   return `${s?.name ?? `Surface ${t.surface}`}: ${label ?? t.param}`;
 }
-function midiTargets(): MidiTarget[] {
+function midiMenu(): TargetItem[] {
   const s = show?.surfaces.find((x) => x.id === show?.selected);
-  const settings = s ? effectById(s.effect).params.filter((p) => p.type === "number" || p.type === "choice")
-    .map((p) => ({ surface: s.id, param: p.name })) : [];
-  return [...settings, ...ACTIONS.map(({ action }) => ({ action }))];
+  return targetMenu(s ? { id: s.id, name: s.name ?? `Surface ${s.id}`, effect: effectById(s.effect) } : null);
 }
+// Rebuilt only when what they show changes: replacing the options of an open menu closes it, and
+// renderMidi runs on every redraw (drags, zoom, show updates).
+let midiChoice = ""; // the chosen target's key: stable when the list changes
+let midiMenuShown = "";
+let midiListShown = "";
+midiTarget.addEventListener("change", () => { midiChoice = midiTarget.value; });
+midiTarget.addEventListener("blur", () => renderMidi()); // catch up on changes held back while it was open
 function renderMidi() {
-  const targets = midiTargets();
-  const keep = midiTarget.value;
-  midiTarget.replaceChildren(...targets.map((t, i) => Object.assign(document.createElement("option"), { value: String(i), textContent: targetLabel(t) })));
-  if (Number(keep) < targets.length) midiTarget.value = keep;
+  const items = midiMenu();
+  const menu = items.map((i) => `${i.key}=${i.label}`).join("|");
+  if (menu !== midiMenuShown && document.activeElement !== midiTarget) {
+    midiMenuShown = menu;
+    midiTarget.replaceChildren(...items.map((i) => Object.assign(document.createElement("option"), { value: i.key, textContent: i.label })));
+    if (!items.some((i) => i.key === midiChoice)) midiChoice = items[0]?.key ?? "";
+    midiTarget.value = midiChoice;
+  }
   midiLearn.textContent = midi.armed ? "Move a knob…" : "Learn";
   midiLearn.classList.toggle("on", midi.armed !== null);
   const bindings = show?.midi ?? [];
-  midiList.replaceChildren(...bindings.map((b, i) => {
+  const list = JSON.stringify(bindings.map((b) => [b, targetLabel(b.target)]));
+  if (list === midiListShown) return;
+  midiListShown = list;
+  midiList.replaceChildren(...bindings.map((b) => {
     const li = document.createElement("li");
     const name = `${b.kind === "cc" ? "Knob" : "Key"} ${b.number}${b.channel ? ` (ch ${b.channel + 1})` : ""}`;
     const remove = Object.assign(document.createElement("button"), { textContent: "×", title: "Remove" });
-    remove.addEventListener("click", () => void engine.setMidi(bindings.filter((_, j) => j !== i)));
+    // Remove this binding by what it is, not where it was in the list.
+    remove.addEventListener("click", () => void engine.setMidi((show?.midi ?? []).filter((x) => JSON.stringify(x) !== JSON.stringify(b))));
     li.append(`${name} → ${targetLabel(b.target)}`, remove);
     return li;
   }));
 }
 midiLearn.addEventListener("click", () => {
-  midi.arm(midi.armed ? null : midiTargets()[Number(midiTarget.value)] ?? null);
+  midi.arm(midi.armed ? null : midiMenu().find((i) => i.key === midiTarget.value)?.target ?? null);
   renderMidi();
 });
 function onMidi(data: Uint8Array) {

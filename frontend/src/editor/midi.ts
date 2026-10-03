@@ -70,3 +70,31 @@ export class MidiRouter {
     return high && !was ? { action: b.target.action } : null;
   }
 }
+
+export const ACTIONS: { action: MidiAction; label: string }[] = [
+  { action: "play", label: "Play" }, { action: "edit", label: "Edit" }, { action: "blackout", label: "Blackout on/off" },
+  { action: "next", label: "Next scene" }, { action: "previous", label: "Previous scene" },
+];
+
+export interface TargetItem {
+  key: string; // stable across redraws and selection changes: "surface:4:zoom", "action:blackout"
+  label: string;
+  target: MidiTarget;
+}
+
+/** A target's key: the same for a menu item and for a binding to that target. */
+export function targetKey(t: MidiTarget): string {
+  return "action" in t ? `action:${t.action}` : `surface:${t.surface}:${t.param}`;
+}
+
+/** What a knob or key can be bound to: the selected surface's number and choice settings, then the actions. */
+export function targetMenu(surface: { id: number; name: string; effect: { params: ParamSchema[] } } | null): TargetItem[] {
+  const settings: TargetItem[] = (surface?.effect.params ?? [])
+    .filter((p) => p.type === "number" || p.type === "choice")
+    .map((p) => {
+      const target = { surface: surface!.id, param: p.name };
+      return { key: targetKey(target), label: `${surface!.name}: ${p.label}`, target };
+    });
+  const actions = ACTIONS.map(({ action, label }) => ({ key: targetKey({ action }), label, target: { action } }));
+  return [...settings, ...actions];
+}
