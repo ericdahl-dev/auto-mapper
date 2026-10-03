@@ -261,6 +261,33 @@ class FakeStillDriver:
 
 # The real camera, through the gphoto2 command line.
 
+def decode_photo(data: bytes) -> np.ndarray | None:
+    """The photo in what the camera sent: a JPEG, or (the a6600 over USB, seen 2026-10-03) a Sony
+    wrapper holding EXIF tags, a thumbnail, the main photo's JPEG without its start marker, and a
+    1920x1080 preview. Each JPEG inside is tried, with the start marker put back where it's missing;
+    the largest that decodes is the photo."""
+    import cv2
+
+    frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+    if frame is not None:
+        return frame
+    starts = set()
+    for marker in (b"\xff\xd8\xff", b"\xff\xdb"):  # a JPEG's start, or its first table (start lost)
+        i = data.find(marker)
+        while i != -1:
+            starts.add(i if marker[1] == 0xD8 else -i)
+            i = data.find(marker, i + 1)
+    best = None
+    for start in starts:
+        chunk = data[start:] if start >= 0 else b"\xff\xd8" + data[-start:]
+        if start < 0 and data[-start - 2:-start] == b"\xff\xd8":
+            continue  # a table right after a start marker: tried as that JPEG already
+        img = cv2.imdecode(np.frombuffer(chunk, np.uint8), cv2.IMREAD_COLOR)
+        if img is not None and (best is None or img.shape[0] * img.shape[1] > best.shape[0] * best.shape[1]):
+            best = img
+    return best
+
+
 def parse_auto_detect(text: str) -> list[dict]:
     """`gphoto2 --auto-detect` output -> camera entries for Hardware (device_type "still")."""
     cameras = []
@@ -457,7 +484,7 @@ class GPhoto2Session:
         def shoot(cam):
             path = cam.capture(0)  # GP_CAPTURE_IMAGE
             data = cam.file_get(path.folder, path.name, 1).get_data_and_size()  # GP_FILE_TYPE_NORMAL
-            frame = cv2.imdecode(np.frombuffer(memoryview(data), np.uint8), cv2.IMREAD_COLOR)
+            frame = decode_photo(bytes(memoryview(data)))
             if frame is None:
                 raise DriverError("the camera sent no photo (set File Format to JPEG)")
             return frame
