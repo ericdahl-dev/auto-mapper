@@ -47,6 +47,11 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | POST | `/api/show/apply` | `{"from": 3, "to"?: [5, 6]}` | Copies a surface's effect and params to the listed surfaces, or to all of them if `to` is omitted |
 | POST | `/api/show/redetect` | | Reruns detection on the saved scan, keeping drawn and edited surfaces. 404 before a scan, 409 while scanning |
 | POST | `/api/show/alignment` | `{"corners"?: [[x,y]×4], "brightness"?: 0..1}` | Realigns the whole show (where the output's TL, TR, BR, BL go) and sets the master brightness. Saved with the show; a new scan drops the corners, keeps brightness. 404 before a scan |
+| POST | `/api/show/scenes` | `{"name"?: "Night", "duplicate"?: 1}` | Adds a scene and opens it: dark, or a copy of another scene's look. Outlines (and their edge) are shared by every scene; effects and settings belong to each |
+| PATCH | `/api/show/scenes/{id}` | `{"name"?: "Night", "duration"?: 12.5}` | Renames a scene or sets how long it plays in the playlist (seconds, 0..3600) |
+| POST | `/api/show/scenes/{id}/open` | | Shows and edits that scene. Not an undo step |
+| POST | `/api/show/scenes/order` | `{"ids": [3, 1, 2]}` | Playlist order; must list every scene once (422 otherwise) |
+| DELETE | `/api/show/scenes/{id}` | | Deletes a scene; deleting the open one opens the next. 409 for the last scene |
 | POST | `/api/show/undo` | | Undoes the last show change (surfaces, effects, settings, alignment; not selection, Play/Blackout or sound). The show message's `history` names what Undo and Redo would do. 409 when there's nothing to undo. Up to 100 steps; a new scan or opening a project clears them |
 | POST | `/api/show/redo` | | Redoes the last undone change; any new change clears redo. 409 when there's nothing to redo |
 | POST | `/api/show/alignment/reset` | | Back to the projector's own corners at full brightness |

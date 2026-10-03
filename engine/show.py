@@ -31,6 +31,27 @@ class NothingToUndo(LookupError):
     pass
 
 
+class UnknownScene(LookupError):
+    pass
+
+
+class LastScene(ValueError):
+    pass
+
+
+SCENE_SECONDS = 10.0  # how long a new scene plays in a playlist
+
+
+def _with_scenes(show: dict) -> dict:
+    """Scenes: each a look (effect and settings per surface) on the same outlines. The open scene's
+    look lives on the surfaces themselves; the others keep theirs in "looks". Shows saved before
+    scenes existed open as one scene."""
+    if not show.get("scenes"):
+        show["scenes"] = [{"id": 1, "name": "Scene 1", "duration": SCENE_SECONDS, "looks": {}}]
+        show["scene"] = 1
+    return show
+
+
 class CurrentShow:
     def __init__(self, folder: ScanFolder):
         self.folder = folder  # the scan this show is mapped on, and where the show is saved
@@ -58,6 +79,7 @@ class CurrentShow:
                 surface.setdefault("source", "detected")
                 if surface["source"] == "manual":
                     surface["source"] = "drawn"  # older name for surfaces made by hand
+            _with_scenes(show)
             return show
         meta = self.folder.meta()
         return self._from_scan(meta) if meta is not None else None
@@ -70,7 +92,7 @@ class CurrentShow:
 
     @staticmethod
     def _from_scan(summary: dict) -> dict:
-        return {
+        return _with_scenes({
             "width": summary["width"],
             "height": summary["height"],
             "surfaces": [
@@ -78,7 +100,7 @@ class CurrentShow:
                  "params": {}, "source": "detected"}
                 for i, s in enumerate(summary.get("surfaces", []), 1)
             ],
-        }
+        })
 
     def subscribe(self, listener: Callable[[], None]) -> None:
         """Called after every change, so editors and the output window can be told (see Hub)."""
@@ -360,10 +382,85 @@ class CurrentShow:
         self._save()
         self._changed()
 
+    # Scenes
+    def _scene(self, scene_id: int) -> dict:
+        for sc in self.data["scenes"]:
+            if sc["id"] == scene_id:
+                return sc
+        raise UnknownScene(scene_id)
+
+    def _look(self) -> dict:
+        """The open scene's effects and settings, by surface id."""
+        return {str(s["id"]): {"effect": s["effect"], "params": copy.deepcopy(s["params"])} for s in self.data["surfaces"]}
+
+    def _show_scene(self, scene: dict) -> None:
+        """Stores the open scene's look and puts another scene's on the surfaces."""
+        self._scene(self.data["scene"])["looks"] = self._look()
+        for s in self.data["surfaces"]:
+            look = scene["looks"].get(str(s["id"]), {"effect": "none", "params": {}})
+            s["effect"], s["params"] = look["effect"], copy.deepcopy(look["params"])
+        self.data["scene"] = scene["id"]
+
+    def add_scene(self, name: str | None = None, duplicate: int | None = None) -> int:
+        """A new scene, opened: dark, or a copy of another scene's look."""
+        source = self._scene(duplicate) if duplicate is not None else None
+        self._record("Duplicate scene" if source else "Add scene")
+        new_id = max(sc["id"] for sc in self.data["scenes"]) + 1
+        looks = {}
+        if source is not None:
+            looks = self._look() if source["id"] == self.data["scene"] else copy.deepcopy(source["looks"])
+        scene = {"id": new_id, "name": name or (f"{source['name']} copy" if source else f"Scene {new_id}"),
+                 "duration": source["duration"] if source else SCENE_SECONDS, "looks": looks}
+        self.data["scenes"].append(scene)
+        self._show_scene(scene)
+        self._save()
+        self._changed()
+        return new_id
+
+    def open_scene(self, scene_id: int) -> None:
+        """Shows and edits another scene. Not an undo step: like choosing a surface."""
+        scene = self._scene(scene_id)
+        if scene_id != self.data["scene"]:
+            self._show_scene(scene)
+            self._save()
+            self._changed()
+
+    def update_scene(self, scene_id: int, name: str | None = None, duration: float | None = None) -> None:
+        scene = self._scene(scene_id)
+        self._record("Rename scene" if name is not None else "Scene length")
+        if name is not None:
+            scene["name"] = name.strip() or scene["name"]
+        if duration is not None:
+            scene["duration"] = duration
+        self._save()
+        self._changed()
+
+    def order_scenes(self, ids: list[int]) -> None:
+        if sorted(ids) != sorted(sc["id"] for sc in self.data["scenes"]):
+            raise ValueError("ids must list every scene once")
+        self._record("Reorder scenes")
+        self.data["scenes"].sort(key=lambda sc: ids.index(sc["id"]))
+        self._save()
+        self._changed()
+
+    def delete_scene(self, scene_id: int) -> None:
+        scene = self._scene(scene_id)
+        if len(self.data["scenes"]) == 1:
+            raise LastScene
+        self._record("Delete scene")
+        i = self.data["scenes"].index(scene)
+        if scene_id == self.data["scene"]:
+            nxt = self.data["scenes"][i + 1 if i + 1 < len(self.data["scenes"]) else i - 1]
+            self._show_scene(nxt)
+        self.data["scenes"].remove(scene)
+        self._save()
+        self._changed()
+
     def public(self) -> dict | None:
         if not self.data:
             return None
         data = {k: v for k, v in self.data.items() if k != "alignment"}
+        data["scenes"] = [{k: v for k, v in sc.items() if k != "looks"} for sc in self.data["scenes"]]
         return {**data, "selected": self.selected, "presentation": dict(self.presentation),
                 "sound": dict(self.sound), "alignment": self.alignment(), "history": self.history(), "scan_rev": self.scan_rev}
 

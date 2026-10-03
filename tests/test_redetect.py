@@ -101,3 +101,15 @@ def test_redetect_can_be_undone(rig, scanned):
         assert client.post("/api/show/redetect").status_code == 200
         assert client.get("/api/show").json()["history"]["undo"] == "Redetect"
         assert client.post("/api/show/undo").json()["surfaces"] == before
+
+
+def test_redetect_keeps_every_scenes_effects_on_their_surfaces(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        box = surfaces(client)[1]["id"]
+        client.patch(f"/api/show/surfaces/{box}", json={"effect": "fill"})
+        client.post("/api/show/scenes", json={"name": "Night"})
+        client.patch(f"/api/show/surfaces/{box}", json={"effect": "outline"})
+        assert client.post("/api/show/redetect").status_code == 200
+        assert next(s for s in surfaces(client) if s["id"] == box)["effect"] == "outline"
+        client.post("/api/show/scenes/1/open")
+        assert next(s for s in surfaces(client) if s["id"] == box)["effect"] == "fill"
