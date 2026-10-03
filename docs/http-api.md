@@ -23,7 +23,7 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | GET | `/api/camera/preview.jpg` | | A JPEG frame, downscaled to 1280 px wide. 409 if no camera is selected or a scan is running |
 | POST | `/api/camera/release` | | Closes the camera. 409 while scanning |
 | GET | `/api/camera/scan-settings` | | The selected camera's scan settings: `{"hole_fill": 9, "hdr": 1, "mask": null}`. 404 with no camera |
-| POST | `/api/camera/scan-settings` | `{"hole_fill"?: 0..31}` | Changes them for the selected camera (saved with its calibration in settings.json); the next scan uses them. `hole_fill`: how wide a gap between decoded pixels is filled (0 = none) |
+| POST | `/api/camera/scan-settings` | `{"hole_fill"?: 0..31, "mask"?: [[[x, y], ...], ...], "clear_mask"?: true}` | Changes them for the selected camera (saved with its calibration in settings.json); the next scan uses them. `hole_fill`: how wide a gap between decoded pixels is filled (0 = none). `mask`: areas of the camera image to scan (up to 16 shapes of 3+ points, 0..1 camera coordinates); everything outside is ignored. `clear_mask`: scan the whole image again |
 | POST | `/api/camera/calibrate` | | Shows white on the output and runs the exposure search; returns `{"exposure", "gain", "p99"}`. 409 without a USB webcam or output window, 422 if calibration fails |
 
 ## Scan

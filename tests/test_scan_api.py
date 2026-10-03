@@ -209,3 +209,27 @@ def test_scan_settings_are_kept_per_camera_and_hole_fill_changes_the_scan(rig, t
         assert loose > tight
     settings = json.loads((tmp_path / "settings.json").read_text())
     assert settings["scan_settings"][AC410["unique_id"]]["hole_fill"] == 25  # by camera, like calibration
+
+
+def test_a_camera_mask_limits_what_the_scan_finds(rig, tmp_path):
+    scene, uvc, hw, cams = rig
+
+    def scan(client, ed, out):
+        client.post("/api/scan")
+        play_output(out, scene)
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+        assert msg["type"] == "scan_result", msg
+        return msg
+
+    with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        full = scan(client, ed, out)
+        left = [[[0, 0], [0.5, 0], [0.5, 1], [0, 1]]]
+        assert client.post("/api/camera/scan-settings", json={"mask": left}).json()["mask"] == left
+        masked = scan(client, ed, out)
+        assert masked["coverage"] < full["coverage"]
+        assert len(masked["surfaces"]) < len(full["surfaces"])
+        assert client.post("/api/camera/scan-settings", json={"mask": [[[0, 0], [2, 0], [0, 1]]]}).status_code == 422
+        assert client.post("/api/camera/scan-settings", json={"mask": [[[0, 0], [1, 0]]]}).status_code == 422
+        assert client.post("/api/camera/scan-settings", json={"clear_mask": True}).json()["mask"] is None

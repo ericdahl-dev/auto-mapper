@@ -195,7 +195,10 @@ def create_app(
 
     @app.post("/api/camera/scan-settings")
     async def set_scan_settings(req: ScanSettingsRequest):
-        return settings.save_scan_settings(selected_camera(), req.model_dump(exclude_none=True))
+        changes = req.model_dump(exclude_none=True, exclude={"clear_mask"})
+        if req.clear_mask:
+            changes["mask"] = None
+        return settings.save_scan_settings(selected_camera(), changes)
 
     @app.post("/api/camera/calibrate")
     async def calibrate():

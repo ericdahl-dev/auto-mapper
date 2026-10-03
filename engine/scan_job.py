@@ -19,7 +19,7 @@ from engine.camera_device import CameraSession
 from engine.camera_lock import Uvc
 from engine.cameras import CameraSettings, UsbAddress
 from engine.hub import OutputNotResponding
-from engine.scan import block_coverage, diagnose, projector_space_image
+from engine.scan import apply_camera_mask, block_coverage, diagnose, projector_space_image
 from engine.scan_folder import ScanFolder
 from engine.scan_runner import ScanCanceled, ScanError, capture_scan
 from engine.show import CurrentShow
@@ -136,6 +136,7 @@ class ScanJob:
             try:
                 started = time.monotonic()
                 decoded, calibration = await asyncio.to_thread(capture)
+                decoded = apply_camera_mask(decoded, self.settings.scan_settings(selected)["mask"])
                 self.settings.save_calibration(selected, calibration)
                 hole_fill = self.settings.scan_settings(selected)["hole_fill"]
                 image, covered = await asyncio.to_thread(projector_space_image, decoded, hole_fill)
