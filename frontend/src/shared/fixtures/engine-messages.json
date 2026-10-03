@@ -233,6 +233,9 @@
     "type": "show",
     "width": 256
   },
+  "show_cleared": {
+    "type": "show_cleared"
+  },
   "show_pattern": {
     "pattern": {
       "kind": "white"

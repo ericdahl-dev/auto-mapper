@@ -41,6 +41,27 @@ const projectSaveName = $<HTMLInputElement>("project-save-name");
 const projectSave = $<HTMLButtonElement>("project-save");
 const projectList = $("project-list");
 
+// New project: clears the scan and show to start over; saved projects are kept. Two clicks, so a
+// stray one doesn't wipe the work.
+const newProject = $<HTMLButtonElement>("project-new");
+let newArmed: ReturnType<typeof setTimeout> | null = null;
+newProject.addEventListener("click", async () => {
+  if (!newArmed) {
+    newProject.textContent = "Clear everything?";
+    newProject.classList.add("on");
+    newArmed = setTimeout(() => {
+      newArmed = null;
+      newProject.textContent = "New";
+      newProject.classList.remove("on");
+    }, 4000);
+    return;
+  }
+  clearTimeout(newArmed);
+  newArmed = null;
+  const r = await engine.newProject();
+  if (!r.ok) notice(r.status === 409 ? "Wait for the scan to finish, or cancel it." : "Couldn't start a new project.");
+});
+
 async function refreshProjects() {
   const res = await engine.projects();
   if (!res.ok) return;
@@ -984,6 +1005,8 @@ connect({
       renderScan();
     } else if (msg.type === "show") {
       session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below
+    } else if (msg.type === "show_cleared") {
+      location.reload(); // a new project: start the Editor over, empty
     } else if (msg.type === "scan_reload") {
       void reloadScan();
       void refreshProjects();

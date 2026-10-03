@@ -149,6 +149,19 @@ export class ShowRenderer {
     this.media.apply(playbackPlan(wants, show.presentation), Math.max(0, -(show.sound?.delay ?? 0)) / 1000);
   }
 
+  /** Drops the show (a new project): nothing is drawn until the next one. */
+  clear() {
+    const { gl } = this;
+    this.endFade();
+    this.buffers.forEach((b) => gl.deleteBuffer(b));
+    this.vaos.forEach((v) => gl.deleteVertexArray(v));
+    this.buffers = [];
+    this.vaos = [];
+    this.surfaces = [];
+    this.show = null;
+    this.media.sync(new Set());
+  }
+
   /** The latest sound values, used by every following draw. */
   setAudio(values: AudioValues) {
     this.audio = values;

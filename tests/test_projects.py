@@ -94,3 +94,24 @@ def test_saving_again_after_a_rescan_updates_the_project(rig, scanned):
 
     assert len(listed) == 1 and listed[0]["surfaces"] == 1
     assert (scanned / "projects" / "island" / "scan.png").read_bytes() == b"new png"
+
+
+def test_a_new_project_starts_from_nothing_and_keeps_saved_projects(rig, scanned):
+    with engine(rig, data_dir=scanned) as client, output(client) as out:
+        out.receive_json()
+        client.patch("/api/show/surfaces/2", json={"effect": "fill"})
+        client.post("/api/projects", json={"name": "Porch"})
+        client.post("/api/presentation", json={"mode": "play", "blackout": True})
+        assert client.post("/api/projects/new").status_code == 200
+        assert client.get("/api/show").status_code == 404  # no scan, no show
+        assert client.get("/api/scan/latest").status_code == 404
+        status = client.get("/api/status").json()
+        assert status["project"] is None
+        assert client.get("/api/presentation").json() == {"mode": "edit", "blackout": False}
+        assert [p["slug"] for p in client.get("/api/projects").json()] == ["porch"]  # still saved
+        while out.receive_json()["type"] != "show_cleared":
+            pass  # the output drops the old show and goes dark
+    with engine(rig, data_dir=scanned) as client:  # still empty after a restart
+        assert client.get("/api/show").status_code == 404
+        assert client.post("/api/projects/porch/open").status_code == 200  # and the saved one comes back
+        assert client.get("/api/show").json()["surfaces"][1]["effect"] == "fill"

@@ -72,6 +72,7 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     projects: () => get("/api/projects"),
     saveProject: (name: string) => post("/api/projects", { name }),
     openProject: (slug: string) => post(`/api/projects/${slug}/open`),
+    newProject: () => post("/api/projects/new"),
   };
 }
 

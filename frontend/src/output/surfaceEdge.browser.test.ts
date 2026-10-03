@@ -42,3 +42,20 @@ describe("surface edge", () => {
     expect(lit(10, 32)).toBe(false);
   });
 });
+
+describe("clearing the show (a new project)", () => {
+  it("draws nothing once cleared", () => {
+    const canvas = Object.assign(document.createElement("canvas"), { width: W, height: H });
+    const gl = canvas.getContext("webgl2", { preserveDrawingBuffer: true })!;
+    const r = new ShowRenderer(gl, EFFECTS, () => {});
+    r.setShow({
+      type: "show", width: W, height: H, selected: null, presentation: { mode: "play", blackout: false },
+      surfaces: [{ id: 1, polygon: SQUARE, area: 1024, effect: "fill", params: { colorA: "#ffffff", colorB: "#ffffff" } }],
+    });
+    r.clear();
+    r.draw(0);
+    const p = new Uint8Array(4);
+    gl.readPixels(32, 32, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, p);
+    expect(p[0]).toBe(0);
+  });
+});

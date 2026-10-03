@@ -504,6 +504,15 @@ def create_app(
         await app.state.hub.broadcast_status()
         return info
 
+    @app.post("/api/projects/new")
+    async def new_project():
+        if job.busy:
+            raise HTTPException(409, "A scan is running")
+        async with job.exclusive():  # clearing the working scan: no scan meanwhile
+            await asyncio.to_thread(projects.new)
+        await app.state.hub.broadcast_status()
+        return {"ok": True}
+
     @app.post("/api/projects/{slug}/open")
     async def open_project(slug: str):
         if job.busy:
