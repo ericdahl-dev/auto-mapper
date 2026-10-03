@@ -534,7 +534,17 @@ $("add-scene").addEventListener("click", () => void engine.addScene({}));
 $("duplicate-scene").addEventListener("click", () => {
   if (show?.scene != null) void engine.addScene({ duplicate: show.scene });
 });
+const crossfade = $<HTMLInputElement>("crossfade");
+const loop = $<HTMLInputElement>("loop");
+crossfade.addEventListener("change", () => {
+  const v = Number(crossfade.value);
+  if (v >= 0) void engine.setPlaylist({ crossfade: v });
+});
+loop.addEventListener("change", () => void engine.setPlaylist({ loop: loop.checked }));
 function renderScenes() {
+  const p = show?.playlist;
+  if (p && document.activeElement !== crossfade) crossfade.value = String(p.crossfade);
+  if (p) loop.checked = p.loop;
   const scenes = show?.scenes ?? [];
   // Don't rebuild under someone typing a name or a length.
   if (sceneList.contains(document.activeElement) && sceneList.children.length === scenes.length) {

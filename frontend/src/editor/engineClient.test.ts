@@ -40,6 +40,7 @@ describe("engine client", () => {
     await client.openScene(2);
     await client.orderScenes([2, 1]);
     await client.deleteScene(2);
+    await client.setPlaylist({ crossfade: 2, loop: false });
     expect(calls).toEqual([
       { url: "/api/show/surfaces/3", method: "PATCH", body: { params: { zoom: 2 } } },
       { url: "/api/show/select", method: "POST", body: { id: 3 } },
@@ -66,6 +67,7 @@ describe("engine client", () => {
       { url: "/api/show/scenes/2/open", method: "POST", body: undefined },
       { url: "/api/show/scenes/order", method: "POST", body: { ids: [2, 1] } },
       { url: "/api/show/scenes/2", method: "DELETE", body: undefined },
+      { url: "/api/show/playlist", method: "POST", body: { crossfade: 2, loop: false } },
     ]);
   });
 

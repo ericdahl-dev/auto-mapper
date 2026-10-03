@@ -9,11 +9,12 @@ const post = (url: string, body?: object) =>
 
 export const toggleBlackout = () => post("/api/presentation/blackout/toggle");
 export const setMode = (mode: "edit" | "play") => post("/api/presentation", { mode });
+export const stepScene = (delta: 1 | -1) => post(`/api/show/scenes/${delta > 0 ? "next" : "previous"}`);
 
 let modeOf: () => "edit" | "play" = () => "edit";
 let bound = false;
 
-/** B = blackout, P = play/edit. Ignored while typing in a field. Binding again only updates
+/** B = blackout, P = play/edit, Right/Left arrow = next/previous scene. Ignored while typing in a field. Binding again only updates
  *  where the current mode is read from: a second listener would toggle everything twice. */
 export function bindPresentationKeys(currentMode: () => "edit" | "play") {
   modeOf = currentMode;
@@ -25,5 +26,7 @@ export function bindPresentationKeys(currentMode: () => "edit" | "play") {
     if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     if (ev.key === "b" || ev.key === "B") void toggleBlackout();
     if (ev.key === "p" || ev.key === "P") void setMode(modeOf() === "play" ? "edit" : "play");
+    if (ev.key === "ArrowRight") void stepScene(1);
+    if (ev.key === "ArrowLeft") void stepScene(-1);
   });
 }
