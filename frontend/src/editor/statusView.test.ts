@@ -5,6 +5,10 @@ import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 const AC410: CameraInfo = { name: "Webcam AC410", unique_id: "0x2110000f1311306", device_type: "external" };
 const FACETIME: CameraInfo = { name: "FaceTime HD Camera", unique_id: "3F45E80A", device_type: "builtin" };
 
+function camera(over: Partial<StatusMessage["camera"]> = {}): StatusMessage["camera"] {
+  return { selected: AC410.unique_id, calibration: null, at_light_limit: false, battery: null, battery_state: null, ...over };
+}
+
 function status(over: Partial<StatusMessage> = {}, issues: StatusMessage["hardware"]["issues"] = []): StatusMessage {
   return {
     type: "status",
@@ -20,9 +24,10 @@ function status(over: Partial<StatusMessage> = {}, issues: StatusMessage["hardwa
     },
     output_connected: true,
     output_resolution: { width: 1920, height: 1080 },
-    camera: { selected: issues.includes("no_camera") ? null : AC410.unique_id, calibration: null },
+    camera: camera({ selected: issues.includes("no_camera") ? null : AC410.unique_id }),
     project: null,
     can_scan: issues.length === 0,
+    scan_blocker: null,
     ...over,
   };
 }
@@ -90,7 +95,7 @@ describe("cameraOptions", () => {
 
 describe("calibration summary", () => {
   it("shows the saved exposure for the selected camera", () => {
-    const view = describeStatus(status({ camera: { selected: AC410.unique_id, calibration: { exposure: 124, gain: 0, p99: 248 } } }));
+    const view = describeStatus(status({ camera: camera({ calibration: { exposure: 124, gain: 0, p99: 248 } }) }));
     expect(view.calibration).toBe("Exposure 124, gain 0 (white frame peak 248)");
   });
 
@@ -107,9 +112,17 @@ describe("project label", () => {
 });
 
 describe("calibration at the camera's limit", () => {
-  it("says so when exposure and gain are both maxed out", () => {
-    const view = describeStatus(status({ camera: { selected: AC410.unique_id, calibration: { exposure: 1000, gain: 15, p99: 120 } } }));
+  const calibration = { exposure: 1000, gain: 15, p99: 120 };
+
+  it("says so when the engine says the camera is at its light limit", () => {
+    const view = describeStatus(status({ camera: camera({ calibration, at_light_limit: true }) }));
     expect(view.calibration).toBe("Exposure 1000, gain 15 (white frame peak 120) - camera at its light limit");
+  });
+
+  it("keeps no limits of its own: the engine decides, per camera (#142)", () => {
+    // 100 ms and gain 15 was the AC410's old limit; a still camera goes to seconds.
+    const view = describeStatus(status({ camera: camera({ calibration, at_light_limit: false }) }));
+    expect(view.calibration).toBe("Exposure 1000, gain 15 (white frame peak 120)");
   });
 });
 
@@ -163,32 +176,26 @@ describe("why Scan is disabled", () => {
     expect(describeStatus(status()).scanReason).toBeNull();
   });
 
-  it("names what stops the scan, first things first", () => {
+  it("shows the engine's reason, which decides readiness (#142)", () => {
     const reason = (s: StatusMessage | null) => describeStatus(s).scanReason;
     expect(reason(null)).toBe("The engine isn't running: start it with make dev");
-    expect(reason(status({}, ["no_projector"]))).toBe("No projector: connect it as an extended display");
-    expect(reason(status({}, ["no_camera"]))).toBe("No camera: plug in the webcam");
-    expect(reason(status({ output_connected: false, output_resolution: null, can_scan: false })))
-      .toBe("Open the output window (Hardware) and make it fullscreen on the projector");
-    expect(reason(status({ output_resolution: { width: 1920, height: 927 }, can_scan: false })))
-      .toBe("Output window must be 1920×1080: make it fullscreen on the projector");
-    expect(reason(status({ camera: { selected: null, calibration: null }, can_scan: false })))
-      .toBe("Choose the camera that scans (Hardware)");
+    expect(reason(status({ can_scan: false, scan_blocker: "The camera battery is at 8%: charge or swap it before scanning" })))
+      .toBe("The camera battery is at 8%: charge or swap it before scanning");
   });
 });
 
 describe("camera battery (still cameras)", () => {
-  const cam = (battery: number | null) =>
-    describeStatus(status({ camera: { selected: AC410.unique_id, calibration: null, battery } }));
+  const cam = (battery: number | null, battery_state: StatusMessage["camera"]["battery_state"]) =>
+    describeStatus(status({ camera: camera({ battery, battery_state }) }));
 
   it("shows the last reading, and nothing before the camera is used", () => {
-    expect(cam(64).battery).toBe("Battery 64%");
-    expect(cam(null).battery).toBeNull();
-    expect(cam(64).notes).toEqual([]);
+    expect(cam(64, "ok").battery).toBe("Battery 64%");
+    expect(cam(null, null).battery).toBeNull();
+    expect(cam(64, "ok").notes).toEqual([]);
   });
 
-  it("warns when low, and says a scan won't start when nearly flat", () => {
-    expect(cam(20).notes).toEqual(["Camera battery is at 20%: charge or swap it soon."]);
-    expect(cam(10).banners).toContain("Camera battery is at 10%: charge or swap it before scanning.");
+  it("warns as the engine judges it, keeping no thresholds of its own (#142)", () => {
+    expect(cam(25, "low").notes).toEqual(["Camera battery is at 25%: charge or swap it soon."]);
+    expect(cam(15, "flat").banners).toContain("Camera battery is at 15%: charge or swap it before scanning.");
   });
 });

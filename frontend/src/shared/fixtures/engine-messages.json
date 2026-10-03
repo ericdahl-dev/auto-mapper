@@ -249,7 +249,9 @@
   },
   "status": {
     "camera": {
+      "at_light_limit": false,
       "battery": null,
+      "battery_state": null,
       "calibration": null,
       "selected": "0x2110000f1311306"
     },
@@ -295,6 +297,7 @@
     "output_sound_output_error": null,
     "output_video_sound_blocked": false,
     "project": null,
+    "scan_blocker": "Open the output window (Hardware) and make it fullscreen on the projector",
     "type": "status",
     "unsaved": false
   }

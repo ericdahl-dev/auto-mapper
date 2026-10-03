@@ -216,6 +216,22 @@ class _Out(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CalibrationOut(_Out):
+    exposure: int
+    gain: int
+    p99: float
+    max_exposure: int | None = None  # older saved calibrations lack these
+    at_light_limit: bool | None = None
+
+
+class CameraStatusOut(_Out):
+    selected: str | None
+    calibration: CalibrationOut | None
+    at_light_limit: bool  # longest exposure and most gain, still too dim
+    battery: int | None  # a still camera's last reading in percent; None before one
+    battery_state: Literal["ok", "low", "flat"] | None  # flat: Scan is disabled
+
+
 class StatusOut(_Out):
     type: Literal["status"]
     hardware: dict
@@ -226,10 +242,11 @@ class StatusOut(_Out):
     output_video_sound_blocked: bool
     output_sound_output_error: str | None
     output_sound_channels: int | None
-    camera: dict
+    camera: "CameraStatusOut"
     project: dict | None
     unsaved: bool  # the show differs from what was last saved or opened
     can_scan: bool
+    scan_blocker: str | None  # why Scan is disabled, in the editor's words; None when it can run
 
 
 class ShowSurfaceOut(_Out):
