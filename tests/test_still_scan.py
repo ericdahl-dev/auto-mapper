@@ -41,8 +41,10 @@ def test_a_scan_with_a_still_camera_focuses_once_then_takes_a_photo_per_pattern(
     assert msg["coverage"] > 0.9 and len(msg["surfaces"]) == 2
     focus = [c for c in driver.calls if c[:2] == ("set", "autofocus")]
     assert focus == [("set", "autofocus", "1"), ("set", "autofocus", "0")]  # once
-    assert driver.config["focusmode"] == "Manual"
-    assert driver.config["imagesize"] == "Medium" and driver.config["capturetarget"] == "sdram"
+    first_photo = driver.calls.index(("capture",))
+    before = driver.calls[:first_photo]
+    assert ("set", "focusmode", "Manual") in before  # focus held for the photos
+    assert ("set", "imagesize", "Medium") in before and ("set", "capturetarget", "sdram") in before
     first_capture = driver.calls.index(next(c for c in driver.calls if c == ("capture",)))
     assert driver.calls.index(("set", "autofocus", "1")) < first_capture  # focus before any photo
 
@@ -89,7 +91,7 @@ def test_a_scan_sets_the_cameras_aperture_and_calibrates_for_it(rig, tmp_path):
         while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
             pass
     assert msg["type"] == "scan_result", msg
-    assert driver.config["f-number"] == "f/11"
+    assert ("set", "f-number", "f/11") in driver.calls[:driver.calls.index(("capture",))]
 
 
 
@@ -117,3 +119,20 @@ def test_an_hdr_scan_with_a_still_camera_takes_each_pattern_at_two_shutter_speed
     assert hdr == 2 * plain  # every pattern twice
     assert len(hdr_shutters) == 2 and len(plain_shutters) <= 1  # two shutter speeds, alternating
     assert msg["coverage"] > 0.9
+
+
+def test_after_a_scan_the_camera_is_back_as_its_owner_had_it(rig, tmp_path):
+    scene, driver, hw, shown = rig
+    driver.config.update({"capturemode": "Continuous Med Speed", "whitebalance": "Automatic", "focusmode": "AF-C"})
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        client.post("/api/scan")
+        play_output(out, scene)
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+    assert msg["type"] == "scan_result", msg
+    shots = [i for i, c in enumerate(driver.calls) if c == ("capture",)]
+    single = driver.calls.index(("set", "capturemode", "Single Shot"))
+    assert single < shots[0]  # single shots before any photo
+    assert (driver.config["capturemode"], driver.config["whitebalance"], driver.config["focusmode"]) == (
+        "Continuous Med Speed", "Automatic", "AF-C")

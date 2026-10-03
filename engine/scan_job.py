@@ -141,13 +141,14 @@ class ScanJob:
                 if is_still(selected):
                     # A still camera (#136): photos sized for scanning, focused once on a white frame
                     # and held (refocusing on stripes fails); each frame is a fresh photo.
+                    # Full control for the scan (single shots, fixed white balance, ...), given back after.
                     still = self.make_still(selected)
                     try:
-                        still.prepare(aperture=_aperture(self.settings.scan_settings(selected)))
-                        show({"kind": "white"})
-                        still.focus_and_lock()
-                        return capture_scan(**common, read_frame=still.read, uvc=still, drop_frames=0,
-                                            frames_per_pattern=1)
+                        with still.scan_profile(aperture=_aperture(self.settings.scan_settings(selected))):
+                            show({"kind": "white"})
+                            still.focus_and_lock()
+                            return capture_scan(**common, read_frame=still.read, uvc=still, drop_frames=0,
+                                                frames_per_pattern=1)
                     finally:
                         still.close()
                 return capture_scan(

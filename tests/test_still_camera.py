@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from engine.still_camera import CaptureFailed, FakeStillDriver, StillCamera
+from engine.still_camera import CaptureFailed, DriverError, FakeStillDriver, StillCamera
 
 SHUTTERS = ["30", "1", "1/2", "1/4", "1/10", "1/30", "1/60", "1/160", "1/500", "1/4000"]
 ISOS = ["Auto ISO", "100", "200", "400", "800", "1600"]
@@ -136,3 +136,45 @@ def test_a_still_camera_may_expose_for_seconds():
     """At f/8 a dim room needs long exposures: still cameras on a tripod can take them."""
     cam, driver = camera()
     assert max(cam.longer_exposures) >= 20000  # 2 s, in 100 us units
+
+
+def test_a_scan_takes_full_control_and_gives_the_camera_back_as_it_was():
+    """Every pattern photo must be made the same way: single shots (no bursts), fixed white balance,
+    no DRO or flash, M mode, the scan's aperture; the owner's own settings come back afterwards."""
+    cam, driver = camera()
+    driver._choices["f-number"] = APERTURES
+    mine = {"capturemode": "Continuous Med Speed", "whitebalance": "Automatic", "dro": "DRO Auto",
+            "flashmode": "Automatic Flash", "exposurecompensation": "0.7", "expprogram": "A", "focusarea": "Flexible Spot: S",
+            "imagequality": "RAW", "imagesize": "Large", "capturetarget": "card+sdram", "f-number": "f/3.5",
+            "shutterspeed": "1/60", "iso": "Auto ISO", "focusmode": "AF-C"}
+    driver.config.update(mine)
+    with cam.scan_profile(aperture="8"):
+        c = driver.config
+        assert (c["capturemode"], c["whitebalance"], c["dro"], c["flashmode"]) == ("Single Shot", "Daylight", "Off", "Flash off")
+        assert (c["exposurecompensation"], c["expprogram"], c["focusarea"], c["f-number"]) == ("0", "M", "Wide", "f/8")
+        assert (c["imagequality"], c["imagesize"], c["capturetarget"]) == ("Fine", "Medium", "sdram")
+        cam.set("exposure-time-abs", "1000")  # the scan changes exposure, ISO and focus as it goes
+        cam.set("gain", "15")
+        cam.focus_and_lock()
+    for name, value in mine.items():
+        assert driver.config[name] == value, name
+
+
+def test_settings_a_camera_doesnt_have_are_skipped():
+    cam, driver = camera()
+
+    class Missing(FakeStillDriver):
+        def set_config(self, name, value):
+            if name == "dro":
+                raise DriverError("dro: not found")
+            super().set_config(name, value)
+
+        def get_config(self, name):
+            if name == "dro":
+                raise DriverError("dro: not found")
+            return super().get_config(name)
+
+    driver = Missing(shutters=SHUTTERS, isos=ISOS)
+    cam = StillCamera(driver)
+    with cam.scan_profile():
+        assert driver.config["capturemode"] == "Single Shot"
