@@ -20,11 +20,18 @@ describe("which sidebar sections are open", () => {
 });
 
 describe("sections with a problem", () => {
-  const ok = { hardware: { issues: [], projector_missing: null }, output_sound: null, output_sound_output_error: null, output_video_sound_blocked: false };
+  const ok = {
+    hardware: { issues: [], projector_missing: null }, output_connected: true,
+    output_sound: null, output_sound_output_error: null, output_video_sound_blocked: false,
+  };
 
   it("Hardware when the projector or camera is missing", () => {
     expect(problemFolds({ ...ok, hardware: { issues: ["no_projector"], projector_missing: null } })).toEqual(new Set(["hardware"]));
     expect(problemFolds({ ...ok, hardware: { issues: [], projector_missing: "P24q-10" } })).toEqual(new Set(["hardware"]));
+  });
+
+  it("Hardware when the output window isn't connected (its Open button is there)", () => {
+    expect(problemFolds({ ...ok, output_connected: false })).toEqual(new Set(["hardware"]));
   });
 
   it("Sound when sound can't play or listen", () => {

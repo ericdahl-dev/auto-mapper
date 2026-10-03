@@ -93,8 +93,19 @@
       .banner { background: #3a2a05; color: var(--warn); border-left: 3px solid var(--warn); padding: 8px 16px; }
       button { background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px 10px; cursor: pointer; }
       button:disabled { opacity: 0.4; cursor: not-allowed; }
-      button.on { background: #b45309; border-color: #b45309; }
-      button.primary { background: #2563eb; border-color: #2563eb; }
+      button.on { background: #92400e; border-color: #92400e; color: #fff; }
+      button.primary { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+      button.primary:disabled { background: var(--panel); border-color: var(--line); color: var(--muted); }
+      header .group { display: flex; gap: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
+      header .group.live { margin-left: auto; }
+      header .group.live #blackout { border-color: #dc2626; }
+      header button.history { width: 9.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pill { font: 600 11px system-ui, sans-serif; letter-spacing: 0.06em; padding: 3px 8px; border-radius: 999px; }
+      .pill.edit { background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
+      .pill.live { background: #15803d; color: #fff; }
+      .pill.dark { background: #b91c1c; color: #fff; }
+      #toasts { position: fixed; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 10; max-width: 420px; }
+      #toasts .banner { border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
       .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
       [hidden] { display: none !important; } /* hidden wins over display rules like .row */
       select { width: 100%; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
@@ -105,16 +116,21 @@
   <body>
     <header>
       <h1>auto-mapper <span id="project-name" class="muted"></span></h1>
-      <button id="open-output">Open output window</button>
-      <button id="refresh">Refresh hardware</button>
-      <button id="scan" class="primary" disabled>Scan</button>
-      <button id="draw" title="Click corners on the scan; double-click or Enter to finish, Esc to cancel">Draw surface</button>
-      <button id="redetect" title="Detect surfaces again; keeps the ones you drew or edited">Redetect</button>
-      <button id="undo" title="Cmd-Z" disabled>Undo</button>
-      <button id="redo" title="Cmd-Shift-Z" disabled>Redo</button>
-      <button id="play" title="P">Play</button>
-      <button id="blackout" title="B">Blackout</button>
-      <button id="realign" title="Projector got bumped? Drag the output's corners back into place, no rescan">Realign</button>
+      <span id="mode-pill" class="pill" aria-live="polite"></span>
+      <div class="group" aria-label="Mapping">
+        <button id="scan" class="primary" disabled>Scan</button>
+        <button id="draw" title="Click corners on the scan; double-click or Enter to finish, Esc to cancel">Draw surface</button>
+        <button id="redetect" title="Detect surfaces again; keeps the ones you drew or edited">Redetect</button>
+        <button id="realign" title="Projector got bumped? Drag the output's corners back into place, no rescan">Realign</button>
+      </div>
+      <div class="group" aria-label="History">
+        <button id="undo" class="history" title="Cmd-Z" disabled>Undo</button>
+        <button id="redo" class="history" title="Cmd-Shift-Z" disabled>Redo</button>
+      </div>
+      <div class="group live" aria-label="Show">
+        <button id="play" title="P">Play</button>
+        <button id="blackout" title="B">Blackout</button>
+      </div>
     </header>
     <div id="realign-bar" class="row" hidden>
       <span class="muted">Drag the green corners until the show lines up again.</span>
@@ -125,6 +141,7 @@
       <button id="reset-alignment">Reset</button>
     </div>
     <div id="banners"></div>
+    <div id="toasts" aria-live="polite"></div>
     <main>
       <div>
         <div class="stage">
@@ -212,6 +229,10 @@
           <dt>Output</dt><dd id="output">…</dd>
           <dt>Frame rate</dt><dd id="fps">…</dd>
         </dl>
+        <div class="row">
+          <button id="open-output">Open output window</button>
+          <button id="refresh">Refresh hardware</button>
+        </div>
         </details>
         <details class="fold" data-fold="sound"><summary><h2>Sound</h2></summary>
         <div class="row">

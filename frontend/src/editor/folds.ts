@@ -11,6 +11,7 @@ export function foldOpen(name: string, saved: Record<string, boolean>, problems:
 
 interface StatusLike {
   hardware: { issues: string[]; projector_missing: string | null };
+  output_connected?: boolean;
   output_sound?: { level: number; error: string | null } | null;
   output_sound_output_error?: string | null;
   output_video_sound_blocked?: boolean;
@@ -20,7 +21,7 @@ interface StatusLike {
 export function problemFolds(status: StatusLike | null): Set<string> {
   const out = new Set<string>();
   if (!status) return out;
-  if (status.hardware.issues.length || status.hardware.projector_missing) out.add("hardware");
+  if (status.hardware.issues.length || status.hardware.projector_missing || status.output_connected === false) out.add("hardware");
   if (status.output_video_sound_blocked || status.output_sound_output_error || status.output_sound?.error) out.add("sound");
   return out;
 }
