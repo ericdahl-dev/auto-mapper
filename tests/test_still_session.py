@@ -265,3 +265,29 @@ def test_a_camera_that_never_wakes_is_a_clear_error():
                        ready_seconds=0.2, ready_poll_seconds=0.01)
     with pytest.raises(DriverError, match="settings"):
         s.get_config("shutterspeed")
+
+
+def sony_wrapped(main: bytes, thumb: bytes, preview: bytes) -> bytes:
+    """What the a6600 sent over USB on 2026-10-03: a Sony header, EXIF tags with a small thumbnail,
+    the main photo's JPEG *without its start marker*, then a 1920x1080 preview JPEG."""
+    header = b"\x01\x00\x00\x00" + b"\x00" * 28 + b"\x00\x00\x0f\x01\x02\x00\x05\x00"
+    return header + b"\x00" * 64 + thumb + b"\x00" * 32 + b"II*\x00" + b"\x00" * 64 + main[2:] + b"\x00" * 16 + preview
+
+
+def test_a_photo_sent_wrapped_by_the_camera_is_unwrapped_to_the_full_size_image():
+    import cv2
+
+    rng = np.random.default_rng(0)
+    big = rng.integers(0, 255, (240, 424, 3), np.uint8)
+    jpg = lambda img: cv2.imencode(".jpg", img)[1].tobytes()  # noqa: E731
+    data = sony_wrapped(jpg(big), jpg(cv2.resize(big, (16, 12))), jpg(cv2.resize(big, (192, 108))))
+
+    class Wrapping(FakeGpCamera):
+        def file_get(self, folder, name, kind):
+            class F:
+                def get_data_and_size(self_):
+                    return data
+            return F()
+
+    s = GPhoto2Session(camera=lambda: Wrapping(), stop_macos=lambda: None, settle_seconds=0)
+    assert s.capture().shape == (240, 424, 3)  # the main photo, not the thumbnail or the preview
