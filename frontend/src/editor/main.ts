@@ -304,12 +304,19 @@ function toggleMulti(id: number) {
 
 // The Surfaces list (#121): pick a surface by name; the selected row follows clicks on the scan.
 const surfaceListSection = $("surface-list-section");
+/** A pick in the list wins over a deselect still pending from the scan; drawing or curving ignore it, like the scan does. */
+function listPick(run: () => void) {
+  if (draw.active || curving) return;
+  if (pendingDeselect) clearTimeout(pendingDeselect);
+  pendingDeselect = null;
+  run();
+}
 const surfaceList = new SurfaceList($("surface-list"), {
-  select: (id) => {
+  select: (id) => listPick(() => {
     multi.clear();
     select(id);
-  },
-  toggle: toggleMulti,
+  }),
+  toggle: (id) => listPick(() => toggleMulti(id)),
 });
 function renderSurfaceList() {
   const surfaces = show?.surfaces ?? [];

@@ -80,4 +80,37 @@ describe("the Surfaces list", () => {
     list.render([ROWS[0], { ...ROWS[1], name: "Renamed" }, ROWS[2]], 2, new Set());
     expect(document.activeElement).toBe(row(2));
   });
+
+  it("puts focus on the next row when the focused surface is deleted", () => {
+    list.render(ROWS, 2, new Set());
+    row(2).focus();
+    list.render([ROWS[0], ROWS[2]], null, new Set());
+    expect(document.activeElement).toBe(row(5));
+  });
+
+  it("focuses a row on click, so the arrow keys work after a mouse pick (Safari doesn't by itself)", () => {
+    list.render(ROWS, null, new Set());
+    row(2).click();
+    expect(document.activeElement).toBe(row(2));
+  });
+
+  it("is one Tab stop: the selected row", () => {
+    list.render(ROWS, 2, new Set());
+    expect([1, 2, 5].map((id) => row(id).tabIndex)).toEqual([-1, 0, -1]);
+    list.render(ROWS, null, new Set());
+    expect([1, 2, 5].map((id) => row(id).tabIndex)).toEqual([0, -1, -1]);
+  });
+
+  it("tells screen readers which rows are in the Shift-click selection", () => {
+    list.render(ROWS, 1, new Set([1, 5]));
+    expect([1, 2, 5].map((id) => row(id).getAttribute("aria-pressed"))).toEqual(["true", "false", "true"]);
+  });
+
+  it("doesn't rebuild the rows when only a color changes (a color drag)", () => {
+    list.render(ROWS, null, new Set());
+    const before = row(1);
+    list.render([{ ...ROWS[0], swatch: "rgba(1, 2, 3, 0.35)" }, ROWS[1], ROWS[2]], null, new Set());
+    expect(row(1)).toBe(before);
+    expect(row(1).querySelector<HTMLElement>(".swatch")!.style.background).toBe("rgba(1, 2, 3, 0.35)");
+  });
 });

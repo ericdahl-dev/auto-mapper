@@ -48,36 +48,49 @@ export class SurfaceList {
   }
 
   render(rows: SurfaceRow[], selected: number | null, multi: Set<number>): void {
-    const key = JSON.stringify(rows);
+    const key = JSON.stringify(rows.map((r) => [r.id, r.name, r.effect, r.dark])); // not the swatch: color drags
     if (key !== this.shown) {
       this.shown = key;
-      const focused = (document.activeElement as HTMLElement | null)?.closest?.("[data-surface]");
-      const refocus = focused && this.el.contains(focused) ? (focused as HTMLElement).dataset.surface : null;
+      // Keep keyboard focus on the same surface; if it was deleted, on the row now in its place.
+      const before = [...this.el.querySelectorAll<HTMLElement>("[data-surface]")];
+      const at = before.indexOf(document.activeElement as HTMLElement);
+      const focusedId = at >= 0 ? before[at].dataset.surface : null;
       this.el.replaceChildren(...rows.map((r) => {
         const li = document.createElement("li");
         const b = Object.assign(document.createElement("button"), { type: "button" });
         b.dataset.surface = String(r.id);
         b.classList.toggle("dark", r.dark);
-        const swatch = Object.assign(document.createElement("span"), { className: "swatch" });
-        if (r.swatch) swatch.style.background = r.swatch;
         b.append(
-          swatch,
+          Object.assign(document.createElement("span"), { className: "swatch" }),
           Object.assign(document.createElement("span"), { className: "id", textContent: String(r.id) }),
           Object.assign(document.createElement("span"), { className: "name", textContent: r.name }),
           Object.assign(document.createElement("span"), { className: "effect", textContent: r.effect }),
         );
-        b.addEventListener("click", (ev) => (ev.shiftKey ? this.on.toggle(r.id) : this.on.select(r.id)));
+        b.addEventListener("click", (ev) => {
+          b.focus(); // Safari doesn't focus a clicked button; the arrow keys need it
+          if (ev.shiftKey) this.on.toggle(r.id);
+          else this.on.select(r.id);
+        });
         li.append(b);
         return li;
       }));
-      if (refocus) this.el.querySelector<HTMLElement>(`[data-surface="${refocus}"]`)?.focus();
+      if (at >= 0) {
+        const after = [...this.el.querySelectorAll<HTMLElement>("[data-surface]")];
+        (after.find((b) => b.dataset.surface === focusedId) ?? after[Math.min(at, after.length - 1)])?.focus();
+      }
     }
-    // The selection changes often (clicks on the scan, arrow keys): marked in place.
-    for (const b of this.el.querySelectorAll<HTMLButtonElement>("button[data-surface]")) {
+    // The selection and colors change often (clicks on the scan, arrow keys, color drags): set in place.
+    // One Tab stop, the selected row (else the first); the arrow keys move between rows.
+    const buttons = [...this.el.querySelectorAll<HTMLButtonElement>("button[data-surface]")];
+    const tabStop = buttons.find((b) => Number(b.dataset.surface) === selected) ?? buttons[0];
+    buttons.forEach((b, i) => {
       const id = Number(b.dataset.surface);
       if (id === selected) b.setAttribute("aria-current", "true");
       else b.removeAttribute("aria-current");
       b.classList.toggle("multi", multi.has(id));
-    }
+      b.setAttribute("aria-pressed", String(multi.has(id)));
+      b.tabIndex = b === tabStop ? 0 : -1;
+      b.querySelector<HTMLElement>(".swatch")!.style.background = rows[i]?.swatch ?? "";
+    });
   }
 }
