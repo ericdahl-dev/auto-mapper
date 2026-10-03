@@ -1,18 +1,28 @@
-"""#66: which exposures an HDR scan captures, relative to the calibrated one."""
+"""#66: which camera settings an HDR scan captures, relative to the calibrated one."""
 
-from engine.scan_runner import hdr_exposures
+from engine.scan_runner import hdr_captures
 
 
-def test_off_is_just_the_calibrated_exposure():
-    assert hdr_exposures(200, 1) == [200]
+def cal(exposure, gain=0):
+    return {"exposure": exposure, "gain": gain}
+
+
+def test_off_is_just_the_calibrated_setting():
+    assert hdr_captures(cal(200), 1) == [(200, 0)]
 
 
 def test_hdr_adds_longer_exposures_for_dark_surfaces():
-    # Calibration already keeps bright areas just under clipping, so the extra ones are longer.
-    assert hdr_exposures(100, 2) == [100, 400]
-    assert hdr_exposures(100, 3) == [100, 300, 900]
+    assert hdr_captures(cal(100), 2) == [(100, 0), (400, 0)]
+    assert hdr_captures(cal(100), 3) == [(100, 0), (300, 0), (900, 0)]
 
 
-def test_longer_exposures_stop_at_the_camera_limit_and_never_repeat():
-    assert hdr_exposures(400, 3) == [400, 1000]
-    assert hdr_exposures(1000, 3) == [1000]  # already at the limit: a plain scan
+def test_past_the_longest_exposure_it_brightens_with_gain():
+    # A dim room calibrates at the longest exposure: extra captures raise gain instead (15 ~ x3).
+    assert hdr_captures(cal(1000), 2) == [(1000, 0), (1000, 15)]
+    assert hdr_captures(cal(1000), 3) == [(1000, 0), (1000, 15)]  # capped, never repeated
+    assert hdr_captures(cal(400), 3) == [(400, 0), (1000, 2), (1000, 15)]
+
+
+def test_gain_already_in_use_is_kept_and_capped():
+    assert hdr_captures(cal(1000, 10), 2) == [(1000, 10), (1000, 15)]
+    assert hdr_captures(cal(1000, 15), 2) == [(1000, 15)]

@@ -1,12 +1,13 @@
 """Runs a scan: projects every pattern in lockstep with the output window and captures it."""
 
+import math
 import time
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
-from engine.calibrate import MAX_EXPOSURE, MIN_RESPONSE, calibrate_exposure
+from engine.calibrate import MAX_EXPOSURE, MAX_GAIN, MIN_RESPONSE, calibrate_exposure
 from engine.camera_lock import Uvc, locked_camera
 from engine.scan import DecodeResult, HdrDecoder, pattern_sequence
 
@@ -22,14 +23,21 @@ class ScanCanceled(Exception):
 HDR_STEPS = {1: [1], 2: [1, 4], 3: [1, 3, 9]}  # exposure multiples per HDR setting
 
 
-def hdr_exposures(calibrated: int, hdr: int) -> list[int]:
-    """The exposures each pattern is captured at (#66): the calibrated one first, then longer ones
-    for dark surfaces, capped at the camera's limit, without repeats."""
-    out: list[int] = []
+GAIN_TRIPLES = 15  # AC410: gain 15 brightens about as much as 3x the exposure (calibrate.py)
+
+
+def hdr_captures(calibration: dict, hdr: int) -> list[tuple[int, int]]:
+    """The (exposure, gain) settings each pattern is captured at (#66): the calibrated one first,
+    then brighter ones for dark surfaces. Longer exposures first; past the camera's longest, the rest
+    of the step is gain (a dim room calibrates there already). Capped, without repeats."""
+    e0, g0 = calibration["exposure"], calibration.get("gain", 0)
+    out: list[tuple[int, int]] = []
     for k in HDR_STEPS.get(hdr, [1]):
-        e = min(MAX_EXPOSURE, int(round(calibrated * k)))
-        if e not in out:
-            out.append(e)
+        exposure = min(MAX_EXPOSURE, int(round(e0 * k)))
+        rest = e0 * k / exposure  # what a longer exposure couldn't give
+        gain = g0 if rest <= 1.0001 else min(MAX_GAIN, g0 + int(round(GAIN_TRIPLES * math.log(rest) / math.log(3))))
+        if (exposure, gain) not in out:
+            out.append((exposure, gain))
     return out
 
 
@@ -57,8 +65,10 @@ def capture_scan(
         # Calibration leaves the camera at whatever it probed last; set the chosen values.
         uvc.set("gain", str(calibration["gain"]))
         uvc.set("exposure-time-abs", str(calibration["exposure"]))
-        exposures = hdr_exposures(calibration["exposure"], hdr)
-        decoder = HdrDecoder(width, height, [e / exposures[0] for e in exposures])
+        captures = hdr_captures(calibration, hdr)
+        # Roughly how much brighter each capture is (see HdrDecoder: it needn't be exact).
+        e0, _ = captures[0]
+        decoder = HdrDecoder(width, height, [e / e0 * 3 ** ((g - captures[0][1]) / GAIN_TRIPLES) for e, g in captures])
 
         for i, pattern in enumerate(seq, 1):
             if canceled():
@@ -68,9 +78,10 @@ def capture_scan(
             for _ in range(drop_frames):  # frames already buffered before the pattern changed
                 read_frame()
             frames = []
-            for n, exposure in enumerate(exposures):
-                if len(exposures) > 1:  # HDR: the same pattern at each exposure in turn
+            for n, (exposure, gain) in enumerate(captures):
+                if len(captures) > 1:  # HDR: the same pattern at each setting in turn
                     uvc.set("exposure-time-abs", str(exposure))
+                    uvc.set("gain", str(gain))
                     if n:
                         time.sleep(settle_seconds)
                     for _ in range(drop_frames):  # frames taken before the new exposure applied

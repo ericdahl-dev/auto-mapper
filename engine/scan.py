@@ -163,8 +163,10 @@ SATURATED = 250  # a pixel this bright in a white frame has no headroom left at 
 
 
 class HdrDecoder:
-    """HDR scanning (#66): each pattern captured at several exposures (gains relative to the first,
-    the calibrated one) and merged per pixel before decoding. Each pixel uses the longest exposure
+    """HDR scanning (#66): each pattern captured at several exposures (or gains), relative to the
+    first, the calibrated one, and merged per pixel before decoding. Each pixel is decoded from one
+    capture and the decoder's thresholds scale with its own contrast, so the gains only need to be
+    roughly right (gain steps have no exact multiplier). Each pixel uses the longest exposure
     whose white frame isn't saturated there, scaled to that exposure's brightness, so dark surfaces
     get the long exposure and bright ones a short one. With one gain it's a plain GrayDecoder.
     The image shown (the result's white) is the first exposure's, as for a plain scan.
