@@ -80,7 +80,9 @@
       #surfaces circle.draft { fill: #fbbf24; pointer-events: none; }
       #surfaces text { pointer-events: none; fill: #fff; font: 600 28px system-ui, sans-serif; paint-order: stroke; stroke: #000; stroke-width: 4px; }
       .muted { color: var(--muted); margin: 8px 0 0; }
-      .stage { overflow: hidden; aspect-ratio: 16 / 9; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
+      #zoom-controls { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 4px; align-items: center; background: rgba(0, 0, 0, 0.6); padding: 4px 6px; border-radius: 6px; z-index: 2; }
+      .stage:has(#scan-view[hidden]) #zoom-controls { display: none; } /* no scan: nothing to zoom */
+      .stage { position: relative; overflow: hidden; aspect-ratio: 16 / 9; background: var(--panel); border: 1px solid var(--line); display: grid; place-items: center; color: var(--muted); }
       aside { background: var(--panel); border: 1px solid var(--line); padding: 12px; overflow-y: auto; min-height: 0; }
       dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0 0 16px; }
       dt { color: var(--muted); }
@@ -130,11 +132,11 @@
             <svg id="surfaces" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"></svg>
           </div>
           <span id="stage-empty">Scan image appears here after a scan.</span>
-        </div>
-        <p class="row"><span id="scan-label" class="muted">No scan yet</span>
-          <span class="zoom" title="Pinch or Cmd-scroll on the scan to zoom; two-finger scroll to move around">
+          <span class="zoom" id="zoom-controls" title="Pinch or Cmd-scroll on the scan to zoom; two-finger scroll to move around">
             <button id="zoom-out" title="Zoom out">−</button><span id="zoom-readout" class="muted">100%</span><button id="zoom-in" title="Zoom in">+</button><button id="zoom-fit" title="Show the whole scan">Fit</button>
           </span>
+        </div>
+        <p class="row"><span id="scan-label" class="muted">No scan yet</span>
           <label class="muted"><input id="show-missed" type="checkbox" /> Show missed areas</label></p>
         <div id="scan-warnings"></div>
       </div>
