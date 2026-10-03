@@ -20,6 +20,7 @@ import { ACTIONS, MidiRouter, parseMidi, settingValue, targetMenu, type MidiTarg
 import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
 import { labelPoint } from "./labelPoint";
+import { modePill } from "./modePill";
 import { moveScene } from "./sceneList";
 import { syncOptions } from "./selectOptions";
 import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
@@ -623,8 +624,11 @@ function renderHistory() {
   const h = show?.history;
   undoButton.disabled = !h?.undo;
   redoButton.disabled = !h?.redo;
+  // Fixed width (the full step in the tooltip), so Play and Blackout don't shift under the pointer.
   undoButton.textContent = h?.undo ? `Undo ${h.undo.toLowerCase()}` : "Undo";
   redoButton.textContent = h?.redo ? `Redo ${h.redo.toLowerCase()}` : "Redo";
+  undoButton.title = `${undoButton.textContent} (Cmd-Z)`;
+  redoButton.title = `${redoButton.textContent} (Cmd-Shift-Z)`;
 }
 
 // Scenes: effects and settings for the same surfaces, in playlist order. Clicking a row opens (shows and edits) it.
@@ -864,6 +868,11 @@ function renderPresentation() {
   playButton.textContent = p?.mode === "play" ? "Edit" : "Play";
   playButton.classList.toggle("on", p?.mode === "play");
   blackoutButton.classList.toggle("on", !!p?.blackout);
+  const pill = modePill(p);
+  const el = $("mode-pill");
+  el.textContent = pill.text;
+  el.className = `pill ${pill.kind}`;
+  el.hidden = pill.kind === "none";
 }
 
 function renderPanel() {
@@ -1100,8 +1109,9 @@ function renderSound() {
 }
 
 function notice(text: string) {
+  // A floating toast: the page doesn't move, so a click just after Save still lands where you aimed.
   const note = Object.assign(document.createElement("div"), { className: "banner", textContent: text });
-  banners.append(note);
+  $("toasts").append(note);
   setTimeout(() => note.remove(), 6000);
 }
 
