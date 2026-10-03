@@ -116,3 +116,18 @@ def test_scene_changes_are_undo_steps(rig, scanned):
         assert show(client)["history"]["undo"] == "Add scene"
         client.post("/api/show/undo")
         assert [x["name"] for x in show(client)["scenes"]] == ["Scene 1"]
+
+
+def test_the_show_message_lists_scenes_without_their_saved_effects(rig, scanned):
+    path = scanned / "scans" / "latest" / "scene.json"
+    with engine(rig, data_dir=scanned) as client:
+        client.patch("/api/show/surfaces/1", json={"effect": "fill"})
+        client.post("/api/show/scenes", json={"name": "Night"})
+    # Saved by an earlier build, which called each scene's saved effects "looks".
+    data = json.loads(path.read_text())
+    data["scenes"][0]["looks"] = data["scenes"][0].pop("effects")
+    path.write_text(json.dumps(data))
+    with engine(rig, data_dir=scanned) as client:
+        assert all(set(sc) == {"id", "name", "duration"} for sc in show(client)["scenes"])
+        client.post("/api/show/scenes/1/open")
+        assert effects(client)[1] == "fill"

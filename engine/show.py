@@ -49,6 +49,8 @@ def _with_scenes(show: dict) -> dict:
     if not show.get("scenes"):
         show["scenes"] = [{"id": 1, "name": "Scene 1", "duration": SCENE_SECONDS, "effects": {}}]
         show["scene"] = 1
+    for scene in show["scenes"]:
+        scene.setdefault("effects", scene.pop("looks", {}))  # an earlier build's name for them
     show.setdefault("playlist", {"crossfade": 1.0, "loop": True})  # seconds between scenes; wrap around
     return show
 
@@ -480,7 +482,7 @@ class CurrentShow:
         if not self.data:
             return None
         data = {k: v for k, v in self.data.items() if k != "alignment"}
-        data["scenes"] = [{k: v for k, v in sc.items() if k != "effects"} for sc in self.data["scenes"]]
+        data["scenes"] = [{k: sc[k] for k in ("id", "name", "duration")} for sc in self.data["scenes"]]
         return {**data, "selected": self.selected, "presentation": dict(self.presentation),
                 "sound": dict(self.sound), "alignment": self.alignment(), "history": self.history(), "scan_rev": self.scan_rev}
 
