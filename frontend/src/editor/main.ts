@@ -19,6 +19,7 @@ import { movePin, pinHandles } from "./pin";
 import { ACTIONS, MidiRouter, parseMidi, settingValue, targetMenu, type MidiTarget, type TargetItem } from "./midi";
 import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
+import { labelPoint } from "./labelPoint";
 import { moveScene } from "./sceneList";
 import { syncOptions } from "./selectOptions";
 import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
@@ -276,6 +277,18 @@ function draftElements(): SVGElement[] {
   return [line, ...dots];
 }
 
+const labelPoints = new Map<string, number[]>(); // by outline: redraws happen every drag frame
+function labelAt(polygon: number[][]): number[] {
+  const key = polygon.flat().join(",");
+  let p = labelPoints.get(key);
+  if (!p) {
+    if (labelPoints.size > 500) labelPoints.clear();
+    p = labelPoint(polygon);
+    labelPoints.set(key, p);
+  }
+  return p;
+}
+
 function renderSurfaces() {
   const surfaces = show?.surfaces ?? [];
   const width = show?.width ?? 1920;
@@ -315,11 +328,13 @@ function renderSurfaces() {
           select(s.id);
         }
       });
-      const [x, y] = polygon[0];
+      const [x, y] = labelAt(polygon); // inside the surface, clear of its edges
       const label = document.createElementNS(SVG_NS, "text");
       // Same size on screen however far the view is zoomed in, so labels don't cover what you're editing.
-      label.setAttribute("x", String(x + 12 / view.scale));
-      label.setAttribute("y", String(y + 34 / view.scale));
+      label.setAttribute("x", String(x));
+      label.setAttribute("y", String(y));
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("dominant-baseline", "central");
       label.style.fontSize = `${28 / view.scale}px`;
       label.style.strokeWidth = `${4 / view.scale}px`;
       label.textContent = String(s.id);
