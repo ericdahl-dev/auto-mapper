@@ -20,6 +20,8 @@ import { ACTIONS, MidiRouter, parseMidi, settingValue, targetMenu, type MidiTarg
 import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
 import { moveScene } from "./sceneList";
+import { syncOptions } from "./selectOptions";
+import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
 import { FIT, panBy, type View, zoomAt } from "./viewZoom";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
@@ -287,14 +289,18 @@ function renderSurfaces() {
           renderSurfaces();
           return;
         }
-        multi.clear();
-        select(s.id === show?.selected ? null : s.id);
-      });
-      poly.addEventListener("dblclick", (ev) => {
-        if (s.id !== show?.selected) return;
-        ev.stopPropagation();
-        if (s.bezier) patchBezier(s.id, insertAnchor(s.bezier, projectorPoint(ev)));
-        else patchSurface(s.id, { polygon: insertVertex(s.polygon, projectorPoint(ev)) });
+        const action = surfaceClick({ detail: ev.detail, selected: s.id === show?.selected });
+        if (action === "add-corner") { // double-click on the selected surface's edge
+          if (pendingDeselect) clearTimeout(pendingDeselect);
+          pendingDeselect = null;
+          if (s.bezier) patchBezier(s.id, insertAnchor(s.bezier, projectorPoint(ev)));
+          else patchSurface(s.id, { polygon: insertVertex(s.polygon, projectorPoint(ev)) });
+        } else if (action === "deselect-soon") {
+          pendingDeselect = setTimeout(() => { pendingDeselect = null; multi.clear(); select(null); }, DESELECT_DELAY_MS);
+        } else if (action === "select") {
+          multi.clear();
+          select(s.id);
+        }
       });
       const [x, y] = polygon[0];
       const label = document.createElementNS(SVG_NS, "text");
@@ -360,6 +366,7 @@ function renderSurfaces() {
 
 // Framing media by hand: drag inside the selected surface to pan, scroll to zoom.
 let framedJustNow = false;
+let pendingDeselect: ReturnType<typeof setTimeout> | null = null; // see surfaceClick.ts
 function bindFraming(poly: SVGPolygonElement, s: ShowMessage["surfaces"][number]) {
   poly.dataset.framing = "1"; // its scroll frames the media; the view zoom leaves it alone
   const effect = effectById(s.effect);
@@ -995,9 +1002,7 @@ function render() {
   banners.replaceChildren(
     ...view.banners.map((text) => Object.assign(document.createElement("div"), { className: "banner", textContent: text })),
   );
-  projectorSelect.replaceChildren(
-    ...projectorOptions(status).map((o) => Object.assign(document.createElement("option"), o)),
-  );
+  syncOptions(projectorSelect, projectorOptions(status)); // only when they change: an open menu stays open
   output.textContent = view.output;
   output.className = status?.output_connected ? "ok" : "bad";
   scan.disabled = !view.scanEnabled;
@@ -1007,9 +1012,7 @@ function render() {
     projectSaveName.value = status.project.name;
   }
   calibration.textContent = view.calibration;
-  cameraSelect.replaceChildren(
-    ...cameraOptions(status).map((o) => Object.assign(document.createElement("option"), o)),
-  );
+  syncOptions(cameraSelect, cameraOptions(status));
   calibrate.disabled = !status?.output_connected || !status.camera.selected;
 }
 
@@ -1102,7 +1105,11 @@ connect({
     } else if (msg.type === "show") {
       session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below
     } else if (msg.type === "show_cleared") {
-      location.reload(); // a new project: start the Editor over, empty
+      // A new project: start the Editor over, empty. If you're typing in a field, after you leave it.
+      const field = document.activeElement;
+      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+        field.addEventListener("blur", () => location.reload(), { once: true });
+      } else location.reload();
     } else if (msg.type === "scan_reload") {
       void reloadScan();
       void refreshProjects();
