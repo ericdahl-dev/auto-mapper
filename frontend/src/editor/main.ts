@@ -21,7 +21,7 @@ import { moveScene } from "./sceneList";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
 import { placeOutput } from "./screens";
-import { describeSound } from "./soundView";
+import { channelNote, describeSound } from "./soundView";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -942,6 +942,9 @@ function renderSound() {
   soundToggle.classList.toggle("on", v.on);
   $<HTMLMeterElement>("sound-meter").value = v.meter;
   $("sound-note").textContent = v.note;
+  const chosen = (show?.surfaces ?? []).filter((s) => s.effect === "media" && s.params.sound === "on")
+    .map((s) => String(s.params.channel ?? "all"));
+  $("sound-channels").textContent = channelNote(status?.output_connected ? status.output_sound_channels ?? null : null, chosen);
   if (document.activeElement !== soundDelay) {
     soundDelay.value = String(show?.sound?.delay ?? 0);
     $("sound-delay-readout").textContent = delayText(Number(soundDelay.value));

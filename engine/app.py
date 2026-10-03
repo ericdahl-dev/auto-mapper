@@ -555,6 +555,8 @@ def create_app(
                         hub.output_fps = round(msg.fps, 1)
                     if "sound_output_error" in msg.model_fields_set:
                         hub.output_sound_output_error = (msg.sound_output_error or "")[:200] or None
+                    if msg.sound_channels is not None:
+                        hub.output_sound_channels = msg.sound_channels
                     if msg.video_sound_blocked is not None:
                         hub.output_video_sound_blocked = msg.video_sound_blocked
                     if msg.sound is not None:

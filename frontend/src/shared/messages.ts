@@ -44,6 +44,7 @@ export interface StatusMessage {
   output_sound?: { level: number; error: string | null } | null;
   output_video_sound_blocked?: boolean;
   output_sound_output_error?: string | null;
+  output_sound_channels?: number | null;
   camera: { selected: string | null; calibration: Calibration | null };
   project: { name: string; slug: string } | null;
   can_scan: boolean;
@@ -174,6 +175,7 @@ export type ClientMessage =
       sound?: { level: number; error: string | null };
       video_sound_blocked?: boolean;
       sound_output_error?: string | null;
+      sound_channels?: number;
     }
   | { type: "effect_error"; surface: number; effect: string; log: string };
 
