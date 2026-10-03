@@ -80,7 +80,7 @@ def test_engine_start_restores_camera_left_locked_by_a_crash(rig, tmp_path):
 
 def test_dim_surface_raises_gain_once_exposure_is_maxed(rig, tmp_path):
     """A dark surface: even the longest exposure leaves the white frame dim, so use gain."""
-    uvc = FakeUvc(DEFAULTS)
+    uvc = FakeUvc(DEFAULTS, limits={"exposure-time-abs": (1, 1000)})  # a camera that stops at 100 ms
 
     def brightness():
         # Dim even at the longest exposure: 1000 x 0.12 = 120.
@@ -91,9 +91,7 @@ def test_dim_surface_raises_gain_once_exposure_is_maxed(rig, tmp_path):
                 uvc_factory=lambda address: uvc) as client, output(client):
         result = client.post("/api/camera/calibrate").json()
 
-    from engine.calibrate import MAX_EXPOSURE
-
-    assert result["exposure"] == MAX_EXPOSURE  # all the exposure first...
+    assert result["exposure"] == result["max_exposure"]  # all the exposure the camera allows first...
     assert result["gain"] > 0  # ...then gain
     assert result["p99"] >= 150  # bright enough to separate lit from unlit
     assert result["p99"] < 250  # but still not clipped
@@ -115,3 +113,36 @@ def test_longer_exposure_is_used_before_any_gain(rig, tmp_path):
 
     assert result["gain"] == 0
     assert 800 <= result["exposure"] <= 840  # clips at ~833 (0.3 x 833 = 250)
+
+
+def test_a_dim_room_uses_longer_exposures_the_camera_allows_before_gain(rig, tmp_path):
+    """More light from exposure (no added noise) where the camera allows it: the AC410 had been
+    capped at 100 ms and turned to gain in a dim room."""
+    uvc = FakeUvc(DEFAULTS, limits={"exposure-time-abs": (1, 3000)})
+
+    def brightness():
+        level = int(uvc.values["exposure-time-abs"]) * 0.12 * (1 + int(uvc.values["gain"]) * 0.25)
+        return min(255, int(level))
+
+    with engine(rig, data_dir=tmp_path, camera_factory=FakeCameraFactory(brightness=brightness),
+                uvc_factory=lambda address: uvc) as client, output(client):
+        result = client.post("/api/camera/calibrate").json()
+
+    assert result["gain"] == 0
+    assert 1000 < result["exposure"] <= 2083  # 0.12 x 2083 = 250: just under clipping, past the old 1000 cap
+    assert result["max_exposure"] == 3000  # remembered: HDR uses it too
+    assert uvc.values == DEFAULTS
+
+
+def test_a_camera_that_refuses_long_exposures_keeps_the_100_ms_limit(rig, tmp_path):
+    uvc = FakeUvc(DEFAULTS, limits={"exposure-time-abs": (1, 1000)})
+
+    def brightness():
+        level = int(uvc.values["exposure-time-abs"]) * 0.12 * (1 + int(uvc.values["gain"]) * 0.25)
+        return min(255, int(level))
+
+    with engine(rig, data_dir=tmp_path, camera_factory=FakeCameraFactory(brightness=brightness),
+                uvc_factory=lambda address: uvc) as client, output(client):
+        result = client.post("/api/camera/calibrate").json()
+
+    assert result["exposure"] == 1000 and result["gain"] > 0 and result["max_exposure"] == 1000

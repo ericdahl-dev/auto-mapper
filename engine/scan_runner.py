@@ -31,9 +31,10 @@ def hdr_captures(calibration: dict, hdr: int) -> list[tuple[int, int]]:
     then brighter ones for dark surfaces. Longer exposures first; past the camera's longest, the rest
     of the step is gain (a dim room calibrates there already). Capped, without repeats."""
     e0, g0 = calibration["exposure"], calibration.get("gain", 0)
+    longest = calibration.get("max_exposure", MAX_EXPOSURE)  # what this camera accepts (calibrate.py)
     out: list[tuple[int, int]] = []
     for k in HDR_STEPS.get(hdr, [1]):
-        exposure = min(MAX_EXPOSURE, int(round(e0 * k)))
+        exposure = min(longest, int(round(e0 * k)))
         rest = e0 * k / exposure  # what a longer exposure couldn't give
         gain = g0 if rest <= 1.0001 else min(MAX_GAIN, g0 + int(round(GAIN_TRIPLES * math.log(rest) / math.log(3))))
         if (exposure, gain) not in out:
