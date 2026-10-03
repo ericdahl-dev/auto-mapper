@@ -47,15 +47,21 @@ class UvcUtil:
 class FakeUvc:
     """Test double: holds control values and records every write in order."""
 
-    def __init__(self, values: dict[str, str]):
+    def __init__(self, values: dict[str, str], limits: dict[str, tuple[int, int]] | None = None):
         self.values = dict(values)
         self.writes: list[tuple[str, str]] = []
+        self.limits = limits or {}  # like a real camera: values outside are clamped, and UvcUtil says so
 
     def get(self, name: str) -> str:
         return self.values[name]
 
     def set(self, name: str, value: str) -> None:
         self.writes.append((name, value))
+        lo, hi = self.limits.get(name, (None, None))
+        if lo is not None and value.lstrip("-").isdigit() and not lo <= int(value) <= hi:
+            applied = str(min(hi, max(lo, int(value))))
+            self.values[name] = applied
+            raise RuntimeError(f"{name}: asked for {value}, camera applied {applied}")
         self.values[name] = value
 
 

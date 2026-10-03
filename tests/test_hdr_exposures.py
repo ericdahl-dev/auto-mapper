@@ -26,3 +26,7 @@ def test_past_the_longest_exposure_it_brightens_with_gain():
 def test_gain_already_in_use_is_kept_and_capped():
     assert hdr_captures(cal(1000, 10), 2) == [(1000, 10), (1000, 15)]
     assert hdr_captures(cal(1000, 15), 2) == [(1000, 15)]
+
+
+def test_hdr_uses_the_longest_exposure_this_camera_allows():
+    assert hdr_captures({"exposure": 1000, "gain": 0, "max_exposure": 3000}, 2) == [(1000, 0), (3000, 4)]
