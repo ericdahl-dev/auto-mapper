@@ -22,7 +22,8 @@ class CalibrationError(Exception):
     pass
 
 
-def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray]) -> dict:
+def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray],
+                       longer_exposures: tuple[int, ...] = LONGER_EXPOSURES) -> dict:
     def brightness_at(exposure: int) -> float:
         uvc.set("exposure-time-abs", str(exposure))
         for _ in range(STALE_FRAMES):
@@ -30,7 +31,7 @@ def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray]) -> dict:
         return float(np.percentile(read_frame(), 99))
 
     uvc.set("gain", "0")
-    longest = longest_exposure(uvc)
+    longest = longest_exposure(uvc, longer_exposures)
     darkest, brightest = brightness_at(1), brightness_at(longest)
     if brightest - darkest < MIN_RESPONSE:
         raise CalibrationError(
@@ -57,9 +58,10 @@ def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray]) -> dict:
     return {"exposure": lo, "gain": 0, "p99": best, "max_exposure": longest, "at_light_limit": False}
 
 
-def longest_exposure(uvc: Uvc) -> int:
-    """The longest exposure this camera accepts, up to 300 ms (UvcUtil reports a clamped value)."""
-    for exposure in getattr(uvc, "longer_exposures", LONGER_EXPOSURES):  # still cameras: seconds
+def longest_exposure(uvc: Uvc, longer_exposures: tuple[int, ...] = LONGER_EXPOSURES) -> int:
+    """The longest of `longer_exposures` this camera accepts (UvcUtil reports a clamped value);
+    a webcam tries up to 300 ms, a still camera seconds (ScanCamera.longer_exposures)."""
+    for exposure in longer_exposures:
         try:
             uvc.set("exposure-time-abs", str(exposure))
             return exposure

@@ -7,6 +7,7 @@ downloads a photo. Focus is set once, on a white frame, before the scan (focus_a
 focusing per pattern fails on dark or striped frames.
 """
 
+import json
 import math
 from contextlib import contextmanager
 import re
@@ -19,6 +20,8 @@ from pathlib import Path
 from typing import Callable, Protocol
 
 import numpy as np
+
+from engine.files import write_text_atomic
 
 BASE_ISO = 100
 MAX_ISO = 12800  # past this the a6600's photos get too noisy to decode fine stripes reliably
@@ -134,16 +137,23 @@ class StillCamera:
     SCAN_CHANGES = ("f-number", "iso", "focusmode")
 
     @contextmanager
-    def scan_profile(self, aperture: str | None = None):
+    def scan_profile(self, aperture: str | None = None, snapshot: Path | None = None):
         """Takes full control of the camera for a scan or calibration, then gives it back exactly as
-        the owner had it."""
-        names = [n for n, _ in self.SCAN_SETTINGS] + list(self.SCAN_CHANGES)
-        original: dict[str, str] = {}
-        for name in names:
-            try:
-                original[name] = self.driver.get_config(name)
-            except DriverError:
-                pass  # this camera doesn't have it
+        the owner had it. The owner's settings are kept in `snapshot` meanwhile: a scan killed mid-way
+        never gives the camera back, so the next take-over gives back those instead of the scan's."""
+        if snapshot is not None and snapshot.exists():
+            original: dict[str, str] = json.loads(snapshot.read_text())
+        else:
+            names = [n for n, _ in self.SCAN_SETTINGS] + list(self.SCAN_CHANGES)
+            original = {}
+            for name in names:
+                try:
+                    original[name] = self.driver.get_config(name)
+                except DriverError:
+                    pass  # this camera doesn't have it
+            if snapshot is not None:
+                snapshot.parent.mkdir(parents=True, exist_ok=True)
+                write_text_atomic(snapshot, json.dumps(original))
         try:
             for name, value in self.SCAN_SETTINGS:
                 if name in original:
@@ -159,6 +169,8 @@ class StillCamera:
                     self.driver.set_config(name, original[name])
                 except DriverError:
                     pass  # best effort: never fail a finished scan over a setting
+            if snapshot is not None:
+                snapshot.unlink(missing_ok=True)
 
     def prepare(self, aperture: str | None = None) -> None:
         """Photos sized for scanning, kept off the memory card (faster, no card wear); and the

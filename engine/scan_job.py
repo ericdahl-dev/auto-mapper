@@ -11,18 +11,16 @@ import logging
 import threading
 import time
 from contextlib import asynccontextmanager
-from pathlib import Path
-from typing import Callable, Protocol
+from typing import Protocol
 
 from engine.calibrate import CalibrationError
-from engine.camera_device import CameraSession
-from engine.camera_lock import Uvc
-from engine.cameras import CameraSettings, UsbAddress
+from engine.cameras import CameraSettings
 from engine.hub import OutputNotResponding
 from engine.scan import apply_camera_mask, block_coverage, diagnose, projector_space_image
 from engine.scan_folder import ScanFolder
 from engine.scan_runner import ScanCanceled, ScanError, capture_scan
-from engine.still_camera import FLAT_BATTERY, CaptureFailed, StillCamera, is_still
+from engine.scan_camera import NotScannable, ScanCameras
+from engine.still_camera import CaptureFailed
 from engine.show import CurrentShow
 from engine.surfaces import detect_surfaces
 
@@ -41,7 +39,6 @@ class ScanHub(Protocol):
     """What a scan needs from the hub: the output window, and the editors to report to."""
 
     output_resolution: dict | None
-    still_battery: int | None  # a still camera's last battery reading (percent)
 
     async def show_pattern(self, pattern: dict, timeout: float) -> None: ...
     async def send_to_output(self, msg: dict) -> None: ...
@@ -55,32 +52,19 @@ def latest_image_url() -> str:
     return f"/api/scan/latest.png?t={int(time.time() * 1000)}"
 
 
-def _aperture(scan_settings: dict) -> str | None:
-    """The f-number a still camera scans at; None leaves the lens as set ("camera")."""
-    value = scan_settings.get("aperture", "8")
-    return None if value == "camera" else value
-
-
 class ScanJob:
     def __init__(
         self,
         *,
-        session: CameraSession,
+        cameras: ScanCameras,
         settings: CameraSettings,
         latest: ScanFolder,
         show: CurrentShow,
-        make_uvc: Callable[[UsbAddress], Uvc],
-        data_dir: Path,
         settle_seconds: float,
-        drop_frames: int,
-        frames_per_pattern: int,
         ack_timeout: float,
-        make_still: Callable[[str], StillCamera] | None = None,  # still cameras over USB (#136)
     ):
-        self.session, self.settings, self.latest, self.show = session, settings, latest, show
-        self.make_uvc, self.make_still, self.data_dir = make_uvc, make_still, Path(data_dir)
-        self.settle_seconds, self.drop_frames = settle_seconds, drop_frames
-        self.frames_per_pattern, self.ack_timeout = frames_per_pattern, ack_timeout
+        self.cameras, self.settings, self.latest, self.show = cameras, settings, latest, show
+        self.settle_seconds, self.ack_timeout = settle_seconds, ack_timeout
         self._lock = asyncio.Lock()
         self._task: asyncio.Task | None = None
         self._cancel = threading.Event()  # read by the capture thread
@@ -90,12 +74,12 @@ class ScanJob:
         """A scan is running, or other work holds the working scan."""
         return self._lock.locked() or (self._task is not None and not self._task.done())
 
-    def start(self, hub: ScanHub, cameras: list[dict], selected: str, address: UsbAddress | None) -> None:
+    def start(self, hub: ScanHub, cameras: list[dict], selected: str) -> None:
         if self.busy:
             raise ScanBusy("A scan is already running")
         self._cancel.clear()
         # Claimed before the task starts, so a double click can't start two.
-        self._task = asyncio.create_task(self._run(hub, cameras, selected, address))
+        self._task = asyncio.create_task(self._run(hub, cameras, selected))
 
     def cancel(self) -> None:
         if self._task is None or self._task.done():
@@ -115,7 +99,7 @@ class ScanJob:
         async with self._lock:
             yield
 
-    async def _run(self, hub: ScanHub, cameras: list[dict], selected: str, address: UsbAddress | None) -> None:
+    async def _run(self, hub: ScanHub, cameras: list[dict], selected: str) -> None:
         async with self._lock:
             loop = asyncio.get_running_loop()
             res = hub.output_resolution
@@ -126,42 +110,22 @@ class ScanJob:
 
             def capture():
                 show = lambda p: call(hub.show_pattern(p, self.ack_timeout))  # noqa: E731
-                common = dict(
-                    show=show,
-                    data_dir=self.data_dir,
-                    width=res["width"],
-                    height=res["height"],
-                    calibration=self.settings.calibration(selected),
-                    hdr=self.settings.scan_settings(selected)["hdr"],
-                    progress=lambda done, total: call(
-                        hub.broadcast({"type": "scan_progress", "done": done, "total": total})
-                    ),
-                    settle_seconds=self.settle_seconds,
-                    canceled=self._cancel.is_set,
-                )
-                if is_still(selected):
-                    # A still camera (#136): photos sized for scanning, focused once on a white frame
-                    # and held (refocusing on stripes fails); each frame is a fresh photo.
-                    # Full control for the scan (single shots, fixed white balance, ...), given back after.
-                    still = self.make_still(selected)
-                    try:
-                        hub.still_battery = level = still.battery()
-                        if level is not None and level <= FLAT_BATTERY:
-                            raise CaptureFailed(f"The camera battery is at {level}%: charge or swap it before scanning.")
-                        with still.scan_profile(aperture=_aperture(self.settings.scan_settings(selected))):
-                            show({"kind": "white"})
-                            still.focus_and_lock()
-                            return capture_scan(**common, read_frame=still.read, uvc=still, drop_frames=0,
-                                                frames_per_pattern=1)
-                    finally:
-                        still.close()
-                return capture_scan(
-                    **common,
-                    read_frame=lambda: self.session.read(cameras, selected),
-                    uvc=self.make_uvc(address),
-                    drop_frames=self.drop_frames,
-                    frames_per_pattern=self.frames_per_pattern,
-                )
+                camera = self.cameras.open(cameras, selected)
+                show({"kind": "white"})  # a still camera focuses on it as it's taken over
+                with camera.taken_over():
+                    return capture_scan(
+                        show=show,
+                        camera=camera,
+                        width=res["width"],
+                        height=res["height"],
+                        calibration=self.settings.calibration(selected),
+                        hdr=self.settings.scan_settings(selected)["hdr"],
+                        progress=lambda done, total: call(
+                            hub.broadcast({"type": "scan_progress", "done": done, "total": total})
+                        ),
+                        settle_seconds=self.settle_seconds,
+                        canceled=self._cancel.is_set,
+                    )
 
             try:
                 started = time.monotonic()
@@ -187,7 +151,7 @@ class ScanJob:
                 await hub.broadcast({"type": "scan_result", **summary, "image": latest_image_url()})
             except ScanCanceled:
                 await hub.broadcast({"type": "scan_canceled"})
-            except (ScanError, CalibrationError, OutputNotResponding, CaptureFailed) as e:
+            except (ScanError, CalibrationError, OutputNotResponding, CaptureFailed, NotScannable) as e:
                 log.warning("scan failed: %s", e)
                 await hub.broadcast({"type": "scan_failed", "error": str(e)})
             except Exception as e:  # never leave the editor waiting on a dead scan
@@ -195,7 +159,7 @@ class ScanJob:
                 await hub.broadcast({"type": "scan_failed", "error": f"Scan crashed: {e}"})
                 raise
             finally:
-                await asyncio.to_thread(self.session.close)
+                await asyncio.to_thread(self.cameras.release)
                 await hub.send_to_output({"type": "show_test_frame", "kind": "black"})
                 await hub.broadcast_show()  # back to the projected show
                 await hub.broadcast_status()
