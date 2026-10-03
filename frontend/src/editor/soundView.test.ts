@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { channelNote, describeSound } from "./soundView";
+import { effectById } from "../effects/index";
+import { channelNote, describeSound, soundOffSettings } from "./soundView";
 
 describe("describeSound", () => {
   it("off: says so, no meter", () => {
@@ -31,5 +32,20 @@ describe("the sound output's channels", () => {
   it("warns when a surface uses a channel the output doesn't have", () => {
     expect(channelNote(2, ["left", "5"])).toBe(
       "2 channels, but a surface uses channel 5. Set up the interface's channels in Audio MIDI Setup, or pick another Sound output.");
+  });
+});
+
+describe("soundOffSettings", () => {
+  it("names the React to sound setting when sound is off", () => {
+    for (const id of ["fill", "noise", "outline", "text"]) expect(soundOffSettings(effectById(id), false)).toEqual(["react"]);
+  });
+
+  it("names nothing when sound is on", () => {
+    expect(soundOffSettings(effectById("fill"), true)).toEqual([]);
+  });
+
+  it("names nothing for effects that don't react to sound", () => {
+    expect(soundOffSettings(effectById("none"), false)).toEqual([]);
+    expect(soundOffSettings(effectById("tint"), false)).toEqual([]);
   });
 });

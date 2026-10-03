@@ -16,3 +16,8 @@ export function channelNote(channels: number | null, chosen: string[]): string {
   return `${channels} channels, but a surface uses channel ${Math.max(...beyond)}. ` +
     "Set up the interface's channels in Audio MIDI Setup, or pick another Sound output.";
 }
+
+/** The settings of an effect that follow sound (React to sound), when sound is off and so they do nothing. */
+export function soundOffSettings(effect: { params: { name: string }[] }, soundOn: boolean): string[] {
+  return soundOn ? [] : effect.params.filter((p) => p.name === "react").map((p) => p.name);
+}

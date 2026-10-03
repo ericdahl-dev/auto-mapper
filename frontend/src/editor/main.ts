@@ -28,7 +28,8 @@ import { FIT, panBy, type View, zoomAt } from "./viewZoom";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
 import { placeOutput } from "./screens";
-import { channelNote, describeSound } from "./soundView";
+import { channelNote, describeSound, soundOffSettings } from "./soundView";
+import { soundOffNote } from "./soundOffNote";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -992,10 +993,15 @@ function renderPanel() {
           patchSurface(surface.id, { params: { [c.name]: parseControlValue(c.kind, input.value) } });
         });
         row.append(Object.assign(document.createElement("span"), { textContent: c.label }), readout, input);
+        // Shown below while sound is off (see the end of renderPanel); after the slider, so the label names it.
+        if (c.name === "react") row.append(Object.assign(soundOffNote(), { hidden: true }));
         return row;
       }),
     );
   }
+  // Sound can be switched while the controls stay: say so on every redraw, not only when they're built.
+  const quiet = soundOffSettings(effect, !!show?.sound?.enabled);
+  effectControls.querySelectorAll<HTMLElement>(".sound-off").forEach((note) => { note.hidden = quiet.length === 0; });
   const plan = applyPlan(surface.id, multi, show?.surfaces.length ?? 0);
   applyButton.textContent = plan.label;
   applyButton.onclick = () =>
