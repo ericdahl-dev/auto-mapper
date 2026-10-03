@@ -36,9 +36,13 @@ def opencv_index(cameras: list[dict], unique_id: str) -> int | None:
 
 
 def default_camera(cameras: list[dict]) -> str | None:
-    """First USB webcam; never the built-in, Continuity (phone) or virtual cameras."""
+    """First USB webcam, else a still camera over USB (#136); never the built-in, Continuity
+    (phone) or virtual cameras."""
     for c in cameras:
         if usb_address(c["unique_id"]):
+            return c["unique_id"]
+    for c in cameras:
+        if c.get("device_type") == "still":
             return c["unique_id"]
     return None
 
@@ -120,7 +124,7 @@ class CameraSettings:
         """A camera's scan settings (#66), kept with its calibration: hole fill (px), HDR exposures
         per pattern (1 = off), and a mask of the camera image to scan (None = all of it)."""
         saved = self._load().get("scan_settings", {}).get(unique_id, {}) if unique_id else {}
-        return {"hole_fill": 9, "hdr": 1, "mask": None, **saved}
+        return {"hole_fill": 9, "hdr": 1, "mask": None, "aperture": "8", **saved}
 
     def save_scan_settings(self, unique_id: str, changes: dict) -> dict:
         data = self._load()

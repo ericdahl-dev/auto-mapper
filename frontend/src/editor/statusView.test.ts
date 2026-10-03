@@ -69,6 +69,13 @@ describe("describeStatus", () => {
 });
 
 describe("cameraOptions", () => {
+  it("labels a still camera over USB", () => {
+    const a6600: CameraInfo = { name: "Sony Alpha-A6600", unique_id: "gphoto2:Sony Alpha-A6600 (PC Control)", device_type: "still" };
+    const s = status();
+    s.hardware.cameras = [a6600];
+    expect(cameraOptions(s)[0].label).toBe("Sony Alpha-A6600 (photos over USB)");
+  });
+
   it("lists cameras, marks the selected one and flags non-USB cameras", () => {
     expect(cameraOptions(status())).toEqual([
       { value: "3F45E80A", label: "FaceTime HD Camera (built-in)", selected: false },
@@ -167,5 +174,21 @@ describe("why Scan is disabled", () => {
       .toBe("Output window must be 1920×1080: make it fullscreen on the projector");
     expect(reason(status({ camera: { selected: null, calibration: null }, can_scan: false })))
       .toBe("Choose the camera that scans (Hardware)");
+  });
+});
+
+describe("camera battery (still cameras)", () => {
+  const cam = (battery: number | null) =>
+    describeStatus(status({ camera: { selected: AC410.unique_id, calibration: null, battery } }));
+
+  it("shows the last reading, and nothing before the camera is used", () => {
+    expect(cam(64).battery).toBe("Battery 64%");
+    expect(cam(null).battery).toBeNull();
+    expect(cam(64).notes).toEqual([]);
+  });
+
+  it("warns when low, and says a scan won't start when nearly flat", () => {
+    expect(cam(20).notes).toEqual(["Camera battery is at 20%: charge or swap it soon."]);
+    expect(cam(10).banners).toContain("Camera battery is at 10%: charge or swap it before scanning.");
   });
 });

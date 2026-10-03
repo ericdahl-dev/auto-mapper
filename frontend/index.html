@@ -301,7 +301,16 @@
           <button id="preview-toggle">Show preview</button>
           <button id="calibrate">Calibrate exposure</button>
         </div>
-        <dl><dt>Exposure</dt><dd id="calibration">…</dd></dl>
+        <dl><dt>Exposure</dt><dd id="calibration">…</dd><dt id="battery-label" hidden>Battery</dt><dd id="battery" hidden></dd></dl>
+        <div class="row" id="aperture-row" hidden title="Still cameras: the lens opening for scans. f/8 keeps a scene with depth in focus; wider lets in more light but blurs what's nearer or farther than the focus. Needs the mode dial on M. Applies to the next scan.">
+          <select id="aperture" aria-label="Aperture for scans">
+            <option value="camera">Aperture: as set on the camera</option>
+            <option value="4">Aperture: f/4</option>
+            <option value="5.6">Aperture: f/5.6</option>
+            <option value="8">Aperture: f/8 (deep focus)</option>
+            <option value="11">Aperture: f/11</option>
+          </select>
+        </div>
         <div class="row" title="Capture each pattern at more than one exposure and keep the best-lit reading per pixel: helps when dark and bright surfaces share the scene. Slower. Applies to the next scan.">
           <select id="hdr" aria-label="HDR scan">
             <option value="1">HDR: off</option>
@@ -313,6 +322,7 @@
           <span>Hole fill</span><span id="hole-fill-readout" class="muted">9 px</span>
           <input id="hole-fill" type="range" min="0" max="31" step="1" value="9" aria-label="Hole fill" />
         </label>
+        <p id="preview-note" class="muted hint" role="status"></p>
         <div id="preview-box" hidden>
           <img id="preview" alt="Camera preview" />
           <svg id="mask-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>

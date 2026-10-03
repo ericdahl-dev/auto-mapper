@@ -42,6 +42,7 @@ class Hub:
         self.output_video_sound_blocked = False  # a video should be heard but waits for a click
         self.output_sound_output_error: str | None = None  # the chosen sound output couldn't be used
         self.output_sound_channels: int | None = None  # channels the sound output has (2 for most)
+        self.still_battery: int | None = None  # a still camera's last battery reading, taken when it's used
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
         # Every change to the show is announced to editors and the output window from here.
@@ -79,7 +80,7 @@ class Hub:
 
     def _camera_status(self) -> dict:
         selected = self.settings.selected(self.hardware.cameras)
-        return {"selected": selected, "calibration": self.settings.calibration(selected)}
+        return {"selected": selected, "calibration": self.settings.calibration(selected), "battery": self.still_battery}
 
     def _output_fills_projector(self) -> bool:
         # Patterns are generated at projector resolution, so the output window must be

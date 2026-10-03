@@ -10,6 +10,7 @@ dependencies = [
     "opencv-contrib-python>=5.0.0.93",
     "numpy>=2.5.3",
     "pyobjc-framework-avfoundation>=12.2.2 ; sys_platform == 'darwin'",
+    "gphoto2>=2.6 ; sys_platform == 'darwin'",
 ]
 
 [dependency-groups]

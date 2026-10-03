@@ -1,4 +1,5 @@
 import asyncio
+import time
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -18,11 +19,12 @@ from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub
 from engine import media
 from engine.scan_folder import ScanFolder
-from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
+from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, _aperture, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
 from engine.osc import OscControl, OscServer
 from engine.playlist import PlaylistRunner
 from engine.schedule import ScheduleRunner, next_change
+from engine.still_camera import CaptureFailed, StillCamera, close_still_cameras, is_still, open_gphoto2_camera
 from engine.show import CurrentShow, LastScene, NothingToUndo, UnknownScene, UnknownSurface
 from engine.messages import (
     AlignmentRequest,
@@ -59,6 +61,7 @@ from engine.messages import (
 
 DEFAULT_DATA_DIR = Path.home() / ".auto-mapper"
 log = logging.getLogger("auto-mapper")
+STILL_PREVIEW_SECONDS = 5.0  # how long a still camera's preview photo is reused
 PREVIEW_WIDTH = 1280
 
 
@@ -67,6 +70,7 @@ def create_app(
     data_dir: Path | None = None,
     camera_factory: CameraFactory | None = None,
     uvc_factory: Callable[[UsbAddress], Uvc] | None = None,
+    still_factory: Callable[[str], StillCamera] | None = None,  # still cameras over USB (#136)
     settle_seconds: float = 0.5,
     # At 4K the AC410 delivers ~20 fps and buffers frames; less than this captured stale
     # patterns (coverage 0.61 vs 0.88 with these values, same space).
@@ -88,7 +92,8 @@ def create_app(
     show.sound["delay"] = settings.sound_delay()
     projects = ProjectStore(data_path, latest, show)
     job = ScanJob(  # one scan at a time; other work on the working scan holds it with job.exclusive()
-        session=session, settings=settings, latest=latest, show=show, make_uvc=make_uvc, data_dir=data_path,
+        session=session, settings=settings, latest=latest, show=show, make_uvc=make_uvc,
+        make_still=still_factory or open_gphoto2_camera, data_dir=data_path,
         settle_seconds=scan_settle_seconds, drop_frames=scan_drop_frames,
         frames_per_pattern=scan_frames_per_pattern, ack_timeout=ack_timeout,
     )
@@ -121,6 +126,7 @@ def create_app(
             playlist.cancel()
             scheduled.cancel()
             osc.stop()
+            close_still_cameras()
             session.close()
 
     app = FastAPI(title="auto-mapper engine", lifespan=lifespan)
@@ -168,12 +174,41 @@ def create_app(
             raise HTTPException(409, "No camera selected")
         if job.busy:
             raise HTTPException(409, "Camera is busy scanning")
-        frame = await asyncio.to_thread(session.read, hub.hardware.cameras, selected)
+        if is_still(selected):
+            frame = await still_preview(selected)
+        else:
+            frame = await asyncio.to_thread(session.read, hub.hardware.cameras, selected)
         if frame.shape[1] > PREVIEW_WIDTH:  # 4K frames are slow to encode and to send
             scale = PREVIEW_WIDTH / frame.shape[1]
             frame = cv2.resize(frame, (PREVIEW_WIDTH, round(frame.shape[0] * scale)), interpolation=cv2.INTER_AREA)
         ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
         return Response(jpg.tobytes(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    # A still camera takes a photo per preview (1.5-4 s): the Editor polls twice a second, so a recent
+    # photo is reused, and only one is taken at a time.
+    still_photo: dict = {"at": 0.0, "frame": None, "failed_at": 0.0, "error": ""}
+    still_lock = asyncio.Lock()
+
+    async def still_preview(selected: str):
+        if time.monotonic() - still_photo["failed_at"] < 10:  # don't queue up retries of a stuck camera
+            raise HTTPException(409, still_photo["error"])
+        async with still_lock:
+            if still_photo["frame"] is None or time.monotonic() - still_photo["at"] > STILL_PREVIEW_SECONDS:
+                def take():
+                    cam = (still_factory or open_gphoto2_camera)(selected)
+                    try:
+                        app.state.hub.still_battery = cam.battery()
+                        cam.prepare(aperture=_aperture(settings.scan_settings(selected)))
+                        return cam.read()
+                    finally:
+                        cam.close()
+                try:
+                    still_photo["frame"] = await asyncio.to_thread(take)
+                except CaptureFailed as e:
+                    still_photo["failed_at"], still_photo["error"] = time.monotonic(), str(e)
+                    raise HTTPException(409, str(e))
+                still_photo["at"] = time.monotonic()
+            return still_photo["frame"]
 
     @app.post("/api/camera/release")
     async def release_camera():
@@ -206,20 +241,30 @@ def create_app(
         cameras = hub.hardware.cameras
         selected = settings.selected(cameras)
         address = usb_address(selected) if selected else None
-        if address is None:
-            raise HTTPException(409, "Calibration needs a USB webcam with UVC controls")
+        if address is None and not is_still(selected):
+            raise HTTPException(409, "Calibration needs a USB webcam with UVC controls, or a still camera over USB")
         if not await hub.send_to_output({"type": "show_test_frame", "kind": "white"}):
             raise HTTPException(409, "Output window is not connected")
         await asyncio.sleep(settle_seconds)
 
         def run() -> dict:
+            if is_still(selected):  # focused on the white frame first, as a scan does
+                still = (still_factory or open_gphoto2_camera)(selected)
+                try:
+                    app.state.hub.still_battery = still.battery()
+                    with still.scan_profile(aperture=_aperture(settings.scan_settings(selected))):
+                        still.focus_and_lock()
+                        with locked_camera(still, data_path):
+                            return calibrate_exposure(still, still.read)
+                finally:
+                    still.close()
             uvc = make_uvc(address)
             with locked_camera(uvc, data_path):
                 return calibrate_exposure(uvc, lambda: session.read(cameras, selected))
 
         try:
             result = await asyncio.to_thread(run)
-        except CalibrationError as e:
+        except (CalibrationError, CaptureFailed) as e:
             raise HTTPException(422, str(e))
         settings.save_calibration(selected, result)
         await hub.broadcast_status()
@@ -232,8 +277,8 @@ def create_app(
             raise HTTPException(409, "Rig is not ready to scan")
         selected = settings.selected(hub.hardware.cameras)
         address = usb_address(selected)
-        if address is None:
-            raise HTTPException(409, "Scanning needs a USB webcam with UVC controls")
+        if address is None and not is_still(selected):
+            raise HTTPException(409, "Scanning needs a USB webcam with UVC controls, or a still camera over USB")
         try:
             job.start(hub, hub.hardware.cameras, selected, address)
         except ScanBusy:

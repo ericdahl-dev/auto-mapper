@@ -12,6 +12,8 @@ export interface StatusView {
   output: string;
   calibration: string;
   project: string;
+  /** "Battery 64%" for a still camera that has reported it, else null. */
+  battery: string | null;
 }
 
 export interface CameraOption {
@@ -19,6 +21,9 @@ export interface CameraOption {
   label: string;
   selected: boolean;
 }
+
+const LOW_BATTERY = 20;
+const FLAT_BATTERY = 10;
 
 const ISSUE_TEXT: Record<HardwareIssue, string> = {
   no_projector: "No projector detected. Connect it as an extended display, then refresh hardware.",
@@ -39,6 +44,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
       output: "Unknown",
       calibration: "Unknown",
       project: "Unknown",
+      battery: null,
     };
   }
 
@@ -48,6 +54,14 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   const notes: string[] = [];
   if (status.hardware.projector_missing && projector) {
     notes.push(`${status.hardware.projector_missing} (your chosen projector) is not connected. Using ${projector.name} for now.`);
+  }
+
+  // Mirrors engine/still_camera.py: LOW_BATTERY warns, FLAT_BATTERY stops a scan.
+  const battery = status.camera.battery ?? null;
+  if (battery !== null && battery <= FLAT_BATTERY) {
+    banners.push(`Camera battery is at ${battery}%: charge or swap it before scanning.`);
+  } else if (battery !== null && battery <= LOW_BATTERY) {
+    notes.push(`Camera battery is at ${battery}%: charge or swap it soon.`);
   }
 
   if (status.output_sound_output_error) banners.push(status.output_sound_output_error);
@@ -69,6 +83,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
     calibration: describeCalibration(status.camera.calibration),
     project: status.project?.name ?? "Unsaved",
+    battery: battery === null ? null : `Battery ${battery}%`,
   };
 }
 
@@ -99,7 +114,7 @@ function describeCalibration(c: Calibration | null): string {
 // USB webcams have uniqueIDs like 0x2110000f1311306 (location + vendor + product).
 const isUsb = (uniqueId: string) => /^0x[0-9a-f]{9,}$/i.test(uniqueId);
 const KIND_LABEL: Record<CameraInfo["device_type"], string> = {
-  builtin: "built-in", external: "external", continuity: "phone", other: "other",
+  builtin: "built-in", external: "external", continuity: "phone", other: "other", still: "photos over USB",
 };
 
 export function projectorOptions(status: StatusMessage | null): CameraOption[] {
