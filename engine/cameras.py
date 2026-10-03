@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from engine.files import write_text_atomic
+from engine.scan_settings import ScanSettings
 
 _USB_ID = re.compile(r"^0x([0-9a-f]+)([0-9a-f]{4})([0-9a-f]{4})$", re.IGNORECASE)
 
@@ -120,16 +121,15 @@ class CameraSettings:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         write_text_atomic(self.path, json.dumps(data, indent=2))
 
-    def scan_settings(self, unique_id: str | None) -> dict:
-        """A camera's scan settings (#66), kept with its calibration: hole fill (px), HDR exposures
-        per pattern (1 = off), and a mask of the camera image to scan (None = all of it)."""
+    def scan_settings(self, unique_id: str | None) -> ScanSettings:
+        """A camera's scan settings (engine/scan_settings.py), kept with its calibration."""
         saved = self._load().get("scan_settings", {}).get(unique_id, {}) if unique_id else {}
-        return {"hole_fill": 9, "hdr": 1, "mask": None, "aperture": "8", **saved}
+        return ScanSettings.from_saved(saved)
 
-    def save_scan_settings(self, unique_id: str, changes: dict) -> dict:
+    def save_scan_settings(self, unique_id: str, changes: dict) -> ScanSettings:
         data = self._load()
-        merged = {**self.scan_settings(unique_id), **changes}
-        data.setdefault("scan_settings", {})[unique_id] = merged
+        merged = self.scan_settings(unique_id).changed(changes)
+        data.setdefault("scan_settings", {})[unique_id] = merged.to_dict()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         write_text_atomic(self.path, json.dumps(data, indent=2))
         return merged
