@@ -14,6 +14,7 @@ interface MediaTexture {
   ready: Promise<void>; // settles on load or on error
   start: number; // videos: seconds to start from and loop back to
   lead: HTMLVideoElement | null; // sound early: a hidden copy playing the sound ahead of the muted picture
+  plan: VideoPlan | null; // the last playback plan applied
 }
 
 export class MediaLibrary {
@@ -48,6 +49,7 @@ export class MediaLibrary {
       const v = m.video;
       const p = plan.get(src);
       if (!v || !p) continue;
+      m.plan = p;
       v.playbackRate = p.rate;
       const audible = p.volume !== null;
       const early = audible && leadSeconds > 0;
@@ -126,6 +128,14 @@ export class MediaLibrary {
     }
   }
 
+  /** Each element playing video sound, with the sound channel its surface chose (audio/channels.ts). */
+  audibleRoutes(): { element: HTMLVideoElement; channel: string; pan: number }[] {
+    return [...this.items.values()].flatMap((m) => {
+      const element = m.lead ?? m.video;
+      return element && !element.muted ? [{ element, channel: m.plan?.channel ?? "all", pan: m.plan?.pan ?? 0 }] : [];
+    });
+  }
+
   /** The elements currently playing video sound (for reacting to it, and the sound delay). */
   audibleVideos(): HTMLVideoElement[] {
     return this.sound().filter((v) => !v.muted);
@@ -172,7 +182,7 @@ export class MediaLibrary {
     if (src.startsWith(TEXT_KEY)) {
       // Text: drawn now, no loading.
       const canvas = drawText(src);
-      const m: MediaTexture = { texture, size: [canvas.width, canvas.height], video: null, uploadedFrame: -1, ready: Promise.resolve(), start: 0, lead: null };
+      const m: MediaTexture = { texture, size: [canvas.width, canvas.height], video: null, uploadedFrame: -1, ready: Promise.resolve(), start: 0, lead: null, plan: null };
       gl.activeTexture(gl.TEXTURE0 + this.uploadUnit);
       this.upload(m, canvas);
       return m;
@@ -180,7 +190,7 @@ export class MediaLibrary {
     const el = createMediaElement(src);
     const video = el instanceof HTMLVideoElement ? el : null;
     if (video && this.sinkId) void video.setSinkId(this.sinkId).catch(() => {});
-    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0, lead: null };
+    const m: MediaTexture = { texture, size: [0, 0], video, uploadedFrame: -1, ready: Promise.resolve(), start: 0, lead: null, plan: null };
     m.ready = new Promise<void>((settle) => {
       el.addEventListener("error", () => settle(), { once: true });
       if (video) {

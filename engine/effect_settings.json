@@ -263,6 +263,30 @@
       "default": 1,
       "min": 0,
       "max": 1
+    },
+    "channel": {
+      "type": "choice",
+      "default": "all",
+      "options": [
+        "all",
+        "left",
+        "right",
+        "pan",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8"
+      ]
+    },
+    "pan": {
+      "type": "number",
+      "default": 0,
+      "min": -1,
+      "max": 1
     }
   },
   "text": {

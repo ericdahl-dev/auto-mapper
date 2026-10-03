@@ -39,12 +39,26 @@ export const media: Effect = {
       { value: "on", label: "On" },
     ] },
     { name: "volume", label: "Volume", type: "number", default: 1, min: 0, max: 1, step: 0.01 },
+    // Where the sound plays: every speaker, one side, a pan, or one channel of a multichannel interface.
+    { name: "channel", label: "Sound channel", type: "choice", default: "all", options: [
+      { value: "all", label: "All" },
+      { value: "left", label: "Left" },
+      { value: "right", label: "Right" },
+      { value: "pan", label: "Pan" },
+      ...Array.from({ length: 8 }, (_, i) => ({ value: String(i + 1), label: `Channel ${i + 1}` })),
+    ] },
+    { name: "pan", label: "Pan (left/right)", type: "number", default: 0, min: -1, max: 1, step: 0.05 },
   ],
   framing: { zoom: "zoom", panX: "panX", panY: "panY" },
   // Playback reads the same clamped values the shader would get (see effects/types.ts uniformsFor).
   playback: (params) => {
     const u = uniformsFor(media, params);
-    return { rate: u.u_speed as number, start: u.u_start as number, sound: u.u_sound === 1, volume: u.u_volume as number };
+    const channel = media.params.find((p) => p.name === "channel");
+    const choice = channel?.type === "choice" ? channel.options[u.u_channel as number].value : "all";
+    return {
+      rate: u.u_speed as number, start: u.u_start as number, sound: u.u_sound === 1, volume: u.u_volume as number,
+      channel: choice, pan: u.u_pan as number,
+    };
   },
   fragment: `
 // Zoom, pan and rotate a point p centered on 0 (-0.5..0.5 across the space), in a space of the given

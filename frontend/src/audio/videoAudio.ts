@@ -4,6 +4,8 @@
 // routed when something needs it (a sound delay, or reacting to video sound); otherwise they play
 // straight from the element.
 
+import { type ChannelChoice, routeToChannel } from "./channels";
+
 // Chrome 110+ lets an AudioContext pick its output device; TypeScript's DOM types don't have it yet.
 type SinkAudioContext = AudioContext & { setSinkId(id: string): Promise<void> };
 
@@ -12,7 +14,16 @@ let ctx: SinkAudioContext | null = null;
 let delay: DelayNode | null = null;
 let delaySeconds = 0;
 let sink = ""; // output device; "" = the system default
-const taps = new WeakMap<HTMLVideoElement, MediaElementAudioSourceNode>();
+// Each routed video: its Web Audio source, the node it feeds (its channel router), and that choice.
+const taps = new WeakMap<HTMLVideoElement, { tap: MediaElementAudioSourceNode; input: AudioNode; key: string }>();
+const ALL: ChannelChoice = { channel: "all", pan: 0, channels: 2 };
+
+/** One routed video's sound, and where it should play. */
+export interface SoundRoute {
+  element: HTMLVideoElement;
+  channel: string;
+  pan: number;
+}
 
 export function videoAudioContext(): SinkAudioContext {
   if (!ctx) {
@@ -30,16 +41,38 @@ export function videoSoundOut(): AudioNode {
   return delay!;
 }
 
-/** The video's sound as a Web Audio node (routing it for good the first time), already playing
- *  through the sound delay to the speakers. Connect it elsewhere too to listen to it. */
-export function routeVideo(video: HTMLVideoElement): MediaElementAudioSourceNode {
-  let tap = taps.get(video);
-  if (!tap) {
-    tap = videoAudioContext().createMediaElementSource(video);
-    tap.connect(videoSoundOut());
-    taps.set(video, tap);
+/** The video's sound as a Web Audio node (routing it for good the first time), playing through its
+ *  channel and the sound delay to the speakers. Connect it elsewhere too to listen to it. */
+export function routeVideo(video: HTMLVideoElement, choice: ChannelChoice = ALL): MediaElementAudioSourceNode {
+  const ctx = videoAudioContext();
+  let routed = taps.get(video);
+  const key = choice.channel === "pan" ? `pan:${choice.pan}` : `${choice.channel}:${choice.channels}`;
+  if (!routed) {
+    routed = { tap: ctx.createMediaElementSource(video), input: videoSoundOut(), key: "" };
+    taps.set(video, routed);
+  } else if (routed.key !== key) {
+    routed.tap.disconnect(routed.input); // only its way to the speakers: listeners stay connected
   }
-  return tap;
+  if (routed.key !== key) {
+    if (Number(choice.channel) > 2) useAllChannels(ctx);
+    routed.input = routeToChannel(ctx, routed.tap, videoSoundOut(), choice);
+    routed.key = key;
+  }
+  return routed.tap;
+}
+
+/** How many channels the sound output has (2 for most; more for a multichannel interface). */
+export function outputChannels(): number {
+  return videoAudioContext().destination.maxChannelCount;
+}
+
+/** Sends channels to the device as they are (channel k to output k) instead of mixing for speakers. */
+function useAllChannels(ctx: AudioContext): void {
+  const d = ctx.destination;
+  if (d.channelCount === d.maxChannelCount && d.channelInterpretation === "discrete") return;
+  d.channelCount = d.maxChannelCount;
+  d.channelCountMode = "explicit";
+  d.channelInterpretation = "discrete";
 }
 
 export function isRouted(video: HTMLVideoElement): boolean {
@@ -67,11 +100,21 @@ export async function setVideoSoundOutput(id: string | null): Promise<string | n
   }
 }
 
-/** The output's sound delay: set it, and route the videos playing with sound through it. With no
- *  delay nothing new is routed, so video sound keeps playing straight from the elements. */
-export function applySoundDelay(ms: number, audible: HTMLVideoElement[]): void {
+/** Applies the sound delay and each video's channel. A video is routed through Web Audio only when
+ *  something needs it (a delay, or a channel other than All); otherwise it keeps playing straight
+ *  from its element. Once routed, it stays routed (browsers allow no way back), set to All. */
+export function applyVideoSound(ms: number, routes: SoundRoute[]): void {
   setSoundDelay(ms);
-  if (ms > 0) audible.forEach(routeVideo);
+  for (const r of routes) {
+    if (ms > 0 || r.channel !== "all" || isRouted(r.element)) {
+      routeVideo(r.element, { channel: r.channel, pan: r.pan, channels: outputChannels() });
+    }
+  }
+}
+
+/** The sound delay alone, for videos playing on all channels. */
+export function applySoundDelay(ms: number, audible: HTMLVideoElement[]): void {
+  applyVideoSound(ms, audible.map((element) => ({ element, channel: "all", pan: 0 })));
 }
 
 /** True when routed video sound is held back until a click (the browser suspended the context). */

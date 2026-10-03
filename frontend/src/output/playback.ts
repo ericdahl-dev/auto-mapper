@@ -1,5 +1,5 @@
 // Video playback rules. One video element per file is shared by every surface showing it, so:
-// the first surface's speed and start win; sound is on if any surface showing the file turns it on,
+// the first surface's speed, start and sound channel win; sound is on if any surface showing the file turns it on,
 // at the loudest of their volumes, and only in Play mode without blackout.
 
 export interface VideoWant {
@@ -8,12 +8,16 @@ export interface VideoWant {
   start: number;
   sound: boolean;
   volume: number;
+  channel?: string; // where its sound plays (audio/channels.ts); "all" if not given
+  pan?: number;
 }
 
 export interface VideoPlan {
   rate: number;
   start: number;
   volume: number | null; // null = muted
+  channel: string;
+  pan: number;
 }
 
 export function playbackPlan(
@@ -23,7 +27,7 @@ export function playbackPlan(
   const audible = presentation.mode === "play" && !presentation.blackout;
   const plan = new Map<string, VideoPlan>();
   for (const w of wants) {
-    const p = plan.get(w.src) ?? { rate: w.rate, start: w.start, volume: null };
+    const p = plan.get(w.src) ?? { rate: w.rate, start: w.start, volume: null, channel: w.channel ?? "all", pan: w.pan ?? 0 };
     if (audible && w.sound) p.volume = Math.max(p.volume ?? 0, w.volume);
     plan.set(w.src, p);
   }

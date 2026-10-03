@@ -3,7 +3,7 @@ import { connect } from "../shared/connection";
 import type { ShowMessage } from "../shared/messages";
 import { bindPresentationKeys } from "../shared/presentation";
 import { SoundInput, setVideoSoundOutput } from "../audio/mic";
-import { applySoundDelay, resumeVideoAudio, videoAudioSuspended } from "../audio/videoAudio";
+import { applyVideoSound, resumeVideoAudio, videoAudioSuspended } from "../audio/videoAudio";
 import { ShowRenderer } from "./showRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
@@ -55,7 +55,7 @@ function applyShow(msg: ShowMessage) {
   showRenderer.setShow(msg);
   // Sound later (a late projector): through Web Audio. Sound earlier (late speakers): the renderer's
   // media library plays it from copies running ahead (soundLead.ts).
-  applySoundDelay(Math.max(0, msg.sound?.delay ?? 0), showRenderer.media.audibleVideos());
+  applyVideoSound(Math.max(0, msg.sound?.delay ?? 0), showRenderer.media.audibleRoutes()); // and each video's channel
   void sound.set(msg.sound ?? { enabled: false, device: null }).then(() => sound.setVideos(showRenderer.media.audibleVideos()));
   const output = msg.sound?.output ?? null;
   if (output !== soundOutput) {
