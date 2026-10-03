@@ -99,7 +99,7 @@ function describeCalibration(c: Calibration | null): string {
 // USB webcams have uniqueIDs like 0x2110000f1311306 (location + vendor + product).
 const isUsb = (uniqueId: string) => /^0x[0-9a-f]{9,}$/i.test(uniqueId);
 const KIND_LABEL: Record<CameraInfo["device_type"], string> = {
-  builtin: "built-in", external: "external", continuity: "phone", other: "other",
+  builtin: "built-in", external: "external", continuity: "phone", other: "other", still: "photos over USB",
 };
 
 export function projectorOptions(status: StatusMessage | null): CameraOption[] {

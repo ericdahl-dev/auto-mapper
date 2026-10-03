@@ -76,7 +76,8 @@ class FakeHardware:
 
 
 class MacHardware:
-    """Displays from system_profiler (about 1.5 s); cameras from AVFoundation metadata.
+    """Displays from system_profiler (about 1.5 s); cameras from AVFoundation metadata, plus still
+    cameras on USB from gphoto2 (#136).
 
     Listing AVFoundation devices reads metadata only; it never turns a camera on.
     """
@@ -87,7 +88,9 @@ class MacHardware:
             capture_output=True, text=True, timeout=15, check=True,
         ).stdout
         snapshot = parse_system_profiler(json.loads(out))
-        snapshot.cameras = list_avfoundation_cameras()
+        from engine.still_camera import list_still_cameras
+
+        snapshot.cameras = list_avfoundation_cameras() + list_still_cameras()
         return snapshot
 
 

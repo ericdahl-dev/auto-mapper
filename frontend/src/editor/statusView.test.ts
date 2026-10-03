@@ -69,6 +69,13 @@ describe("describeStatus", () => {
 });
 
 describe("cameraOptions", () => {
+  it("labels a still camera over USB", () => {
+    const a6600: CameraInfo = { name: "Sony Alpha-A6600", unique_id: "gphoto2:Sony Alpha-A6600 (PC Control)", device_type: "still" };
+    const s = status();
+    s.hardware.cameras = [a6600];
+    expect(cameraOptions(s)[0].label).toBe("Sony Alpha-A6600 (photos over USB)");
+  });
+
   it("lists cameras, marks the selected one and flags non-USB cameras", () => {
     expect(cameraOptions(status())).toEqual([
       { value: "3F45E80A", label: "FaceTime HD Camera (built-in)", selected: false },
