@@ -29,7 +29,11 @@ export interface Effect {
   /** For effects that draw text: which settings choose the font and alignment of their text settings. */
   textStyle?: { font: string; align: string };
   /** For effects that play video: what the surface's settings mean for playback (see output/playback.ts). */
-  playback?: (params: Record<string, unknown>) => { rate: number; start: number; sound: boolean; volume: number };
+  playback?: (params: Record<string, unknown>) => {
+    rate: number; start: number; sound: boolean; volume: number;
+    channel?: string; // "all", "left", "right", "pan", or "1".."8" (audio/channels.ts)
+    pan?: number;
+  };
   /** Fragment shader body. The shared preamble (see compile.ts) is prepended. null = draw nothing. */
   fragment: string | null;
 }
