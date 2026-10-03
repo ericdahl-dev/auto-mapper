@@ -8,6 +8,7 @@ focusing per pattern fails on dark or striped frames.
 """
 
 import math
+from contextlib import contextmanager
 import re
 import shutil
 import subprocess
@@ -15,7 +16,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 import numpy as np
 
@@ -63,6 +64,15 @@ def _nearest(target: float, options: dict[str, float]) -> str:
     return min(options, key=lambda k: abs(math.log(options[k] / target)))
 
 
+@contextmanager
+def _answering():
+    """A camera that stops answering (a hung or failed gphoto2 call) is a clear error, not a crash."""
+    try:
+        yield
+    except DriverError as e:
+        raise CaptureFailed(f"The camera isn't answering ({e}). Turn it off and on, and check it's in PC Remote.") from e
+
+
 class StillCamera:
     def __init__(self, driver: StillDriver, retries: int = 2):
         self.driver = driver
@@ -73,12 +83,21 @@ class StillCamera:
 
     def prepare(self) -> None:
         """Photos sized for scanning, kept off the memory card (faster, no card wear)."""
-        self.driver.set_config("imagequality", "Fine")
-        self.driver.set_config("imagesize", "Medium")
-        self.driver.set_config("capturetarget", "sdram")
+        with _answering():
+            self.driver.set_config("imagequality", "Fine")
+            self.driver.set_config("imagesize", "Medium")
+            self.driver.set_config("capturetarget", "sdram")
 
     # The webcam controls (engine/camera_lock.Uvc)
     def get(self, name: str) -> str:
+        with _answering():
+            return self._get(name)
+
+    def set(self, name: str, value: str) -> None:
+        with _answering():
+            self._set(name, value)
+
+    def _get(self, name: str) -> str:
         if name == "exposure-time-abs":
             if self._exposure is None:
                 seconds = _seconds(self.driver.get_config("shutterspeed")) or 0.01
@@ -90,7 +109,7 @@ class StillCamera:
             return "1" if self.driver.get_config("expprogram") == "M" else "8"
         return self._other.get(name, "0")
 
-    def set(self, name: str, value: str) -> None:
+    def _set(self, name: str, value: str) -> None:
         if name == "exposure-time-abs":
             shutters = {s: v for s in self.driver.choices("shutterspeed") if (v := _seconds(s))}
             choice = _nearest(int(value) / 10000, shutters)
@@ -108,17 +127,18 @@ class StillCamera:
 
     def focus_and_lock(self, timeout: float = 5.0) -> None:
         """Autofocuses once (on whatever is projected: use a white frame), then holds that focus."""
-        self.driver.set_config("focusmode", "Automatic")
-        self.driver.set_config("autofocus", "1")
-        end = time.monotonic() + timeout
-        try:
-            while self.driver.get_config("focusindication") != "Focus Locked":
-                if time.monotonic() > end:
-                    raise CaptureFailed("The camera couldn't focus. Check the lens cap and that it sees the white frame.")
-                time.sleep(0.1)
-        finally:
-            self.driver.set_config("autofocus", "0")
-        self.driver.set_config("focusmode", "Manual")  # holds the focus it just found
+        with _answering():
+            self.driver.set_config("focusmode", "Automatic")
+            self.driver.set_config("autofocus", "1")
+            end = time.monotonic() + timeout
+            try:
+                while self.driver.get_config("focusindication") != "Focus Locked":
+                    if time.monotonic() > end:
+                        raise CaptureFailed("The camera couldn't focus. Check the lens cap and that it sees the white frame.")
+                    time.sleep(0.1)
+            finally:
+                self.driver.set_config("autofocus", "0")
+            self.driver.set_config("focusmode", "Manual")  # holds the focus it just found
 
     def read(self) -> np.ndarray:
         """Takes a photo and returns it (BGR), retrying a failed or hung capture."""
@@ -131,9 +151,7 @@ class StillCamera:
         raise CaptureFailed("The camera didn't take a photo. Check it's on, in PC Remote, and not showing a menu.")
 
     def close(self) -> None:
-        close = getattr(self.driver, "close", None)
-        if close:
-            close()
+        pass  # the connection is the app's (SharedStill), kept open between scans and previews
 
 
 class FakeStillDriver:
@@ -176,17 +194,6 @@ class FakeStillDriver:
 
 # The real camera, through the gphoto2 command line.
 
-def parse_config(text: str) -> tuple[str, list[str]]:
-    """`gphoto2 --get-config` output -> (current value, choices)."""
-    current, choices = "", []
-    for line in text.splitlines():
-        if line.startswith("Current: "):
-            current = line[len("Current: "):].strip()
-        elif line.startswith("Choice: "):
-            choices.append(line[len("Choice: "):].split(" ", 1)[1].strip())
-    return current, choices
-
-
 def parse_auto_detect(text: str) -> list[dict]:
     """`gphoto2 --auto-detect` output -> camera entries for Hardware (device_type "still")."""
     cameras = []
@@ -198,72 +205,9 @@ def parse_auto_detect(text: str) -> list[dict]:
     return cameras
 
 
-class _KeepMacOsOff:
-    """macOS's camera service (ptpcamerad) grabs PTP cameras and respawns when stopped, so it's
-    stopped over and over while the camera is in use. By exact process name only."""
-
-    def __init__(self):
-        self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, daemon=True)
-        self._thread.start()
-
-    def _run(self) -> None:
-        while not self._stop.wait(0.1):
-            for name in ("ptpcamerad", "mscamerad-xpc"):
-                subprocess.run(["pkill", "-9", "-x", name], capture_output=True)
-
-    def stop(self) -> None:
-        self._stop.set()
-
-
-class GPhoto2Driver:
-    """One camera over USB, through the gphoto2 command line (each call opens and closes it)."""
-
-    def __init__(self, timeout: float = 20.0):
-        self.timeout = timeout
-        self._guard = _KeepMacOsOff()
-        self._choices: dict[str, list[str]] = {}
-        self._dir = Path(tempfile.mkdtemp(prefix="auto-mapper-still-"))
-
-    def _run(self, *args: str, timeout: float | None = None) -> str:
-        try:
-            r = subprocess.run(["gphoto2", *args], capture_output=True, text=True, timeout=timeout or self.timeout)
-        except FileNotFoundError:
-            raise DriverError("gphoto2 isn't installed: brew install gphoto2")
-        except subprocess.TimeoutExpired:
-            raise DriverError(f"gphoto2 {args[0]} timed out")
-        if r.returncode != 0 or "*** Error" in r.stdout + r.stderr:
-            raise DriverError((r.stderr or r.stdout).strip().splitlines()[-1] if (r.stderr or r.stdout).strip() else "gphoto2 failed")
-        return r.stdout
-
-    def set_config(self, name: str, value: str) -> None:
-        self._run("--set-config-value", f"{name}={value}")
-
-    def get_config(self, name: str) -> str:
-        current, choices = parse_config(self._run("--get-config", name))
-        self._choices.setdefault(name, choices)
-        return current
-
-    def choices(self, name: str) -> list[str]:
-        if name not in self._choices:
-            self.get_config(name)
-        return self._choices[name]
-
-    def capture(self) -> np.ndarray:
-        import cv2
-
-        for old in self._dir.glob("shot.*"):
-            old.unlink()
-        self._run("--capture-image-and-download", "--filename", str(self._dir / "shot.%C"), "--force-overwrite")
-        shots = list(self._dir.glob("shot.*"))
-        frame = cv2.imread(str(shots[0])) if shots else None
-        if frame is None:
-            raise DriverError("The camera sent no photo (set File Format to JPEG)")
-        return frame
-
-    def close(self) -> None:
-        self._guard.stop()
-        shutil.rmtree(self._dir, ignore_errors=True)
+def _stop_macos_camera_service() -> None:
+    for name in ("ptpcamerad", "mscamerad-xpc"):
+        subprocess.run(["pkill", "-9", "-x", name], capture_output=True)
 
 
 def list_still_cameras() -> list[dict]:
@@ -275,5 +219,190 @@ def list_still_cameras() -> list[dict]:
     return parse_auto_detect(r.stdout)
 
 
+def _as_numbers(value: str) -> list:
+    out = []
+    for kind in (int, float):
+        try:
+            out.append(kind(value))
+        except ValueError:
+            pass
+    return out
+
+
+class GPhoto2Session:
+    """The camera over USB through libgphoto2 (python-gphoto2), connected once and held: reconnecting
+    for every command gave macOS's camera service a gap to grab it ("Could not claim the USB device").
+    One command at a time; a dropped connection is reopened once and the command retried."""
+
+    def __init__(self, camera: Callable[[], object] | None = None, stop_macos: Callable[[], None] = _stop_macos_camera_service,
+                 connect_seconds: float = 6.0, call_seconds: float = 30.0):
+        self._new = camera or self._gphoto2_camera
+        self._stop_macos = stop_macos
+        self._connect_seconds = connect_seconds
+        self._call_seconds = call_seconds
+        self._lock = threading.RLock()
+        self._cam = None
+
+    @staticmethod
+    def _gphoto2_camera():
+        import gphoto2 as gp  # macOS rig only; tests pass a fake
+
+        return gp.Camera()
+
+    def _open(self):
+        """Connects, if not already. macOS's camera service grabs PTP cameras and respawns within
+        milliseconds of being stopped, so it's kept off in the background while connecting, and
+        connecting is retried until the camera is ours (then macOS can't take it)."""
+        if self._cam is not None:
+            return self._cam
+        done = threading.Event()
+
+        def keep_off():
+            while not done.wait(0.05):
+                self._stop_macos()
+
+        guard = threading.Thread(target=keep_off, daemon=True)
+        guard.start()
+        end = time.monotonic() + self._connect_seconds
+        try:
+            while True:
+                self._stop_macos()
+                cam = self._new()
+                try:
+                    cam.init()
+                    self._cam = cam
+                    return cam
+                except Exception as e:
+                    if time.monotonic() > end:
+                        raise DriverError(f"couldn't connect: {e}") from e
+                    time.sleep(0.1)
+        finally:
+            done.set()
+
+    def _timed(self, what: str, fn):
+        """Runs one camera call with a time limit: a call stuck inside libgphoto2 (a camera that
+        stopped answering) mustn't freeze the engine. The stuck connection is abandoned; the next
+        call reconnects."""
+        result: dict = {}
+
+        def run():
+            try:
+                result["value"] = fn(self._open())
+            except BaseException as e:
+                result["error"] = e
+
+        worker = threading.Thread(target=run, daemon=True)
+        worker.start()
+        worker.join(self._call_seconds)
+        if worker.is_alive():
+            self._cam = None  # abandoned: exit() could hang too
+            raise DriverError(f"{what}: the camera didn't answer within {self._call_seconds:.0f} s")
+        if "error" in result:
+            raise result["error"]
+        return result["value"]
+
+    def _do(self, what: str, fn, retry: bool = True):
+        with self._lock:
+            try:
+                return self._timed(what, fn)
+            except DriverError:
+                raise
+            except Exception as e:  # gphoto2.GPhoto2Error and friends
+                self._drop()
+                if not retry:
+                    raise DriverError(f"{what}: {e}") from e
+                try:
+                    return self._timed(what, fn)
+                except Exception as e2:
+                    self._drop()
+                    raise DriverError(f"{what}: {e2}") from e2
+
+    def _drop(self) -> None:
+        if self._cam is not None:
+            try:
+                self._cam.exit()
+            except Exception:
+                pass
+            self._cam = None
+
+    def get_config(self, name: str) -> str:
+        return self._do(f"reading {name}", lambda cam: str(cam.get_config().get_child_by_name(name).get_value()))
+
+    def choices(self, name: str) -> list[str]:
+        return self._do(f"reading {name}", lambda cam: [str(c) for c in cam.get_config().get_child_by_name(name).get_choices()])
+
+    def set_config(self, name: str, value: str) -> None:
+        def apply(cam):
+            tree = cam.get_config()
+            widget = tree.get_child_by_name(name)
+            # Menus and text take the label; toggles (autofocus) and ranges (manualfocus) want numbers.
+            for v in (value, *_as_numbers(value)):
+                try:
+                    widget.set_value(v)
+                    break
+                except TypeError:
+                    continue
+                except ValueError as e:
+                    raise DriverError(f"{name} can't be {value!r}") from e
+            else:
+                raise DriverError(f"{name} can't be {value!r}")
+            cam.set_config(tree)
+
+        self._do(f"setting {name}", apply)
+
+    def capture(self) -> np.ndarray:
+        import cv2
+
+        def shoot(cam):
+            path = cam.capture(0)  # GP_CAPTURE_IMAGE
+            data = cam.file_get(path.folder, path.name, 1).get_data_and_size()  # GP_FILE_TYPE_NORMAL
+            frame = cv2.imdecode(np.frombuffer(memoryview(data), np.uint8), cv2.IMREAD_COLOR)
+            if frame is None:
+                raise DriverError("the camera sent no photo (set File Format to JPEG)")
+            return frame
+
+        return self._do("taking a photo", shoot)
+
+    def close(self) -> None:
+        if self._lock.acquire(timeout=2):  # a call stuck in libgphoto2 mustn't hold up shutdown
+            try:
+                self._drop()
+            finally:
+                self._lock.release()
+        else:
+            self._cam = None
+
+
+class SharedStill:
+    """The app's one connection per still camera, shared by preview, calibration and scans."""
+
+    def __init__(self, open_driver: Callable[[str], object] = lambda uid: GPhoto2Session()):
+        self._open_driver = open_driver
+        self._uid: str | None = None
+        self._driver = None
+        self._lock = threading.Lock()
+
+    def camera(self, unique_id: str) -> StillCamera:
+        with self._lock:
+            if self._uid != unique_id:
+                self.close()
+                self._driver, self._uid = self._open_driver(unique_id), unique_id
+            return StillCamera(self._driver)
+
+    def close(self) -> None:
+        if self._driver is not None and hasattr(self._driver, "close"):
+            self._driver.close()
+        self._driver, self._uid = None, None
+
+
+_shared = SharedStill()
+
+
 def open_gphoto2_camera(unique_id: str) -> StillCamera:
-    return StillCamera(GPhoto2Driver())
+    """The shared, held connection to a still camera (see SharedStill)."""
+    return _shared.camera(unique_id)
+
+
+def close_still_cameras() -> None:
+    """Releases the held still camera (engine shutdown)."""
+    _shared.close()
