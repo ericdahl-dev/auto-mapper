@@ -59,7 +59,7 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     calibrate: () => post("/api/camera/calibrate"),
     // The selected camera's scan settings (#66): applied by the next scan
     scanSettings: () => get("/api/camera/scan-settings"),
-    setScanSettings: (body: { hole_fill?: number; mask?: number[][][]; clear_mask?: boolean; hdr?: number }) =>
+    setScanSettings: (body: { hole_fill?: number; mask?: number[][][]; clear_mask?: boolean; hdr?: number; aperture?: string }) =>
       post("/api/camera/scan-settings", body),
     releaseCamera: () => post("/api/camera/release"),
     selectCamera: (uniqueId: string) => post("/api/camera", { unique_id: uniqueId }),

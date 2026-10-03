@@ -74,3 +74,46 @@ def test_preview_and_calibration_work_with_a_still_camera(rig, tmp_path):
         cal = client.post("/api/camera/calibrate")
         assert cal.status_code == 200, cal.text
         assert client.get("/api/status").json()["camera"]["calibration"]["exposure"] > 0
+
+
+def test_a_scan_sets_the_cameras_aperture_and_calibrates_for_it(rig, tmp_path):
+    scene, driver, hw, shown = rig
+    driver._choices["f-number"] = ["f/3.5", "f/5.6", "f/8", "f/11"]
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        assert client.get("/api/camera/scan-settings").json()["aperture"] == "8"  # default for scanning
+        assert client.post("/api/camera/scan-settings", json={"aperture": "11"}).json()["aperture"] == "11"
+        assert client.post("/api/camera/scan-settings", json={"aperture": "f8"}).status_code == 422
+        client.post("/api/scan")
+        play_output(out, scene)
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+    assert msg["type"] == "scan_result", msg
+    assert driver.config["f-number"] == "f/11"
+
+
+
+def test_an_hdr_scan_with_a_still_camera_takes_each_pattern_at_two_shutter_speeds(rig, tmp_path):
+    scene, driver, hw, shown = rig
+
+    def scan(client, ed, out):
+        before = sum(c == ("capture",) for c in driver.calls)
+        mark = len(driver.calls)
+        client.post("/api/scan")
+        play_output(out, scene)
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+        assert msg["type"] == "scan_result", msg
+        calls = driver.calls[mark:]
+        photos = sum(c == ("capture",) for c in driver.calls) - before
+        return photos, {c[2] for c in calls if c[:2] == ("set", "shutterspeed")}, msg
+
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        scan(client, ed, out)  # HDR off; this one also calibrates
+        plain, plain_shutters, _ = scan(client, ed, out)  # calibrated: just the patterns
+        client.post("/api/camera/scan-settings", json={"hdr": 2})
+        hdr, hdr_shutters, msg = scan(client, ed, out)
+    assert hdr == 2 * plain  # every pattern twice
+    assert len(hdr_shutters) == 2 and len(plain_shutters) <= 1  # two shutter speeds, alternating
+    assert msg["coverage"] > 0.9

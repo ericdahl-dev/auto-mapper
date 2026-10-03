@@ -905,10 +905,12 @@ let cameraMask: number[][][] | null = null; // 0..1 camera coordinates
 async function loadScanSettings() {
   const r = await engine.scanSettings();
   if (!r.ok) return;
-  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null; hdr: number };
+  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null; hdr: number; aperture?: string };
   cameraMask = s.mask;
   renderMask();
   if (document.activeElement !== hdrSelect) hdrSelect.value = String(s.hdr);
+  renderApertureRow();
+  if (document.activeElement !== apertureSelect && s.aperture) apertureSelect.value = s.aperture;
   if (document.activeElement === holeFill) return;
   holeFill.value = String(s.hole_fill);
   holeFillReadout.textContent = `${s.hole_fill} px`;
@@ -966,6 +968,14 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") maskStep({ type: "finish" });
   if (ev.key === "Escape") maskStep({ type: "cancel" });
 });
+const apertureRow = $("aperture-row");
+/** Aperture: still cameras only (a webcam's lens has none to set). */
+function renderApertureRow() {
+  const sel = status?.hardware.cameras.find((c) => c.unique_id === status?.camera.selected);
+  apertureRow.hidden = sel?.device_type !== "still";
+}
+const apertureSelect = $<HTMLSelectElement>("aperture");
+apertureSelect.addEventListener("change", () => void engine.setScanSettings({ aperture: apertureSelect.value }));
 const hdrSelect = $<HTMLSelectElement>("hdr");
 hdrSelect.addEventListener("change", () => void engine.setScanSettings({ hdr: Number(hdrSelect.value) }));
 holeFill.addEventListener("input", () => { holeFillReadout.textContent = `${holeFill.value} px`; });
@@ -1274,6 +1284,7 @@ connect({
       render();
       renderSound();
       applyFolds(); // a problem opens its section
+      renderApertureRow();
       renderScan();
     } else if (msg.type === "show") {
       session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below

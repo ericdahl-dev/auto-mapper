@@ -109,3 +109,30 @@ def test_a_camera_that_stops_answering_is_a_clear_error_not_a_crash():
         cam.prepare()
     with pytest.raises(CaptureFailed):
         cam.set("exposure-time-abs", "100")
+
+
+APERTURES = ["f/3.5", "f/4", "f/5.6", "f/8", "f/11", "f/16"]
+
+
+def test_the_aperture_is_set_to_the_nearest_stop_the_lens_has_in_manual_mode():
+    cam, driver = camera()
+    driver._choices["f-number"] = APERTURES
+    cam.prepare(aperture="8")
+    assert driver.config["f-number"] == "f/8"
+    assert driver.config["expprogram"] == "M"  # aperture is only the app's to set in M
+    cam.prepare(aperture="7")  # between stops: nearest on a log scale
+    assert driver.config["f-number"] == "f/8"
+
+
+def test_no_aperture_leaves_the_lens_as_it_is():
+    cam, driver = camera()
+    driver._choices["f-number"] = APERTURES
+    driver.config["f-number"] = "f/3.5"
+    cam.prepare()
+    assert driver.config["f-number"] == "f/3.5"
+
+
+def test_a_still_camera_may_expose_for_seconds():
+    """At f/8 a dim room needs long exposures: still cameras on a tripod can take them."""
+    cam, driver = camera()
+    assert max(cam.longer_exposures) >= 20000  # 2 s, in 100 us units
