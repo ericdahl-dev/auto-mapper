@@ -21,7 +21,7 @@
     <title>auto-mapper</title>
     <style>
       :root { color-scheme: dark; --bg: #111; --panel: #1b1b1b; --line: #2c2c2c; --text: #ddd; --muted: #888; --ok: #4ade80; --bad: #f87171; --warn: #fbbf24; }
-      /* Fixed to the window: the side panel scrolls on its own, so opening it never
+      /* Wide windows: fixed to the window (narrow ones scroll the page, see the end). The side panel scrolls on its own, so opening it never
          shifts the scan view under the cursor (which broke double-clicks). */
       html { height: 100%; scrollbar-gutter: stable; }
       body { margin: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
@@ -72,7 +72,7 @@
       #surfaces circle.handle { fill: #fff; cursor: move; }
       /* Handles look ~14 px but grab from 24 px (#124): an invisible stroke widens the target; the dark
          edge that keeps them readable on light scans is a shadow. */
-      #surfaces .handle { stroke: transparent; stroke-width: 10px; vector-effect: non-scaling-stroke; filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000); }
+      #surfaces .handle { stroke: transparent; stroke-width: 10px; vector-effect: non-scaling-stroke; filter: url(#handle-edge); }
       /* Text, number and time fields all look alike (#124). */
       input[type=text], input[type=number], input[type=time] { background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; font: inherit; min-height: 24px; box-sizing: border-box; }
       #surface-name { width: 100%; }
@@ -333,12 +333,18 @@
         </details>
       </aside>
     </main>
-    <!-- The hatch on None (dark) surfaces, outside #surfaces, which is redrawn often. -->
+    <!-- The hatch on None (dark) surfaces and the dark edge on handles, outside #surfaces, which is redrawn often. -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <pattern id="no-effect-hatch" patternUnits="userSpaceOnUse" width="24" height="24" patternTransform="rotate(45)">
         <rect width="24" height="24" fill="rgba(0, 0, 0, 0.25)" />
         <line x1="0" y1="0" x2="0" y2="24" stroke="rgba(255, 255, 255, 0.45)" stroke-width="6" />
       </pattern>
+      <filter id="handle-edge" x="-50%" y="-50%" width="200%" height="200%">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="1.5" result="grown" />
+        <feFlood flood-color="#111" />
+        <feComposite in2="grown" operator="in" />
+        <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
     </svg>
     <script type="module" src="/src/editor/main.ts"></script>
   </body>

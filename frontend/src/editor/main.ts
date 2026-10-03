@@ -125,6 +125,7 @@ const scanImage = $<HTMLImageElement>("scan-image");
 const scanView = $("scan-view");
 const surfacesSvg = document.getElementById("surfaces") as unknown as SVGSVGElement;
 const SVG_NS = "http://www.w3.org/2000/svg";
+const handleEdge = document.querySelector("#handle-edge feMorphology")!;
 const stageEmpty = $("stage-empty");
 const scanText = $("scan-label");
 
@@ -331,6 +332,7 @@ function renderSurfaces() {
   // Handle size in projector pixels that looks ~7 screen px whatever the editor's scale (CSS widens
   // what you can grab to 24 px).
   const r = (7 * width) / Math.max(1, surfacesSvg.getBoundingClientRect().width);
+  handleEdge.setAttribute("radius", String((r * 1.5) / 7)); // their dark edge: 1.5 screen px at any zoom
   surfacesSvg.replaceChildren(
     ...surfaces.flatMap((s) => {
       const { bezier, polygon } = s; // the session's view already includes edits in progress
@@ -694,7 +696,7 @@ function renderScenes() {
     li.classList.toggle("open", sc.id === show?.scene);
     li.addEventListener("click", () => { if (sc.id !== show?.scene) void engine.openScene(sc.id); });
     const name = Object.assign(document.createElement("input"), { type: "text", value: sc.name, title: "Scene name" });
-    name.setAttribute("aria-label", "Scene name");
+    name.setAttribute("aria-label", `Name of ${sc.name}`);
     name.addEventListener("change", () => void engine.updateScene(sc.id, { name: name.value }));
     const secs = Object.assign(document.createElement("input"), {
       type: "number", min: "0.5", max: "3600", step: "0.5", value: String(sc.duration), title: "Seconds in the playlist",
@@ -1024,9 +1026,13 @@ function renderPanel() {
         }
         const input = Object.assign(document.createElement("input"), { type: c.kind, value: String(c.value) });
         if (c.kind === "range") Object.assign(input, { min: c.min, max: c.max, step: c.step });
+        // The readout is for the eye; a screen reader gets the value with its unit, and a name that stays put.
         const readout = Object.assign(document.createElement("span"), { className: "muted", textContent: readoutText(c, c.value) });
+        readout.setAttribute("aria-hidden", "true");
+        if (c.kind === "range") input.setAttribute("aria-valuetext", readoutText(c, c.value));
         input.addEventListener("input", () => {
           readout.textContent = readoutText(c, input.value);
+          if (c.kind === "range") input.setAttribute("aria-valuetext", readout.textContent);
           patchSurface(surface.id, { params: { [c.name]: parseControlValue(c.kind, input.value) } });
         });
         row.append(Object.assign(document.createElement("span"), { textContent: c.label }), readout, input);
