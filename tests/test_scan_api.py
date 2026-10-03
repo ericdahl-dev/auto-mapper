@@ -261,7 +261,7 @@ def test_an_hdr_scan_captures_each_pattern_at_more_exposures(rig, tmp_path):
         plain = scan(client, ed, out)
         assert client.post("/api/camera/scan-settings", json={"hdr": 4}).status_code == 422
         assert client.post("/api/camera/scan-settings", json={"hdr": 2}).json()["hdr"] == 2
-        calibrated = client.get("/api/status").json()["camera"]["calibration"]["exposure"]
+        cal = client.get("/api/status").json()["camera"]["calibration"]
         hdr = scan(client, ed, out)
-        assert {str(calibrated), str(min(1000, calibrated * 4))} <= set(exposures)
+        assert {str(cal["exposure"]), str(min(cal["max_exposure"], cal["exposure"] * 4))} <= set(exposures)
         assert hdr["coverage"] >= plain["coverage"] - 0.01
