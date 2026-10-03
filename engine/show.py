@@ -234,6 +234,17 @@ class CurrentShow:
         self._save()
         self._changed()
 
+    def delete_many(self, ids: list[int]) -> None:
+        """Deletes several surfaces as one undo step; nothing changes if any id is unknown."""
+        doomed = [self._surface(i) for i in ids]
+        self._record("Delete")
+        for surface in doomed:
+            self.data["surfaces"].remove(surface)
+        if self.selected in ids:
+            self.selected = None
+        self._save()
+        self._changed()
+
     def merge(self, ids: list[int]) -> int:
         """Replaces the surfaces with one covering all of them; keeps the first one's id and effect."""
         surfaces = [self._surface(i) for i in ids]

@@ -42,6 +42,7 @@ export function createEngineClient(fetchFn: Fetch = (url, init) => fetch(url, in
     select: (id: number | null) => post("/api/show/select", { id }),
     addSurface: (polygon: number[][]) => post("/api/show/surfaces", { polygon }),
     deleteSurface: (id: number) => fetchFn(`/api/show/surfaces/${id}`, { method: "DELETE" }),
+    deleteSurfaces: (ids: number[]) => post("/api/show/delete", { ids }), // one undo step
     merge: (ids: number[]) => post("/api/show/merge", { ids }),
     applyEffect: (from: number, to?: number[]) => post("/api/show/apply", { from, ...(to ? { to } : {}) }),
     redetect: () => post("/api/show/redetect"),

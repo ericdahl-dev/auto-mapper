@@ -20,6 +20,7 @@ describe("engine client", () => {
     await client.select(null);
     await client.addSurface([[0, 0], [1, 0], [0, 1]]);
     await client.deleteSurface(3);
+    await client.deleteSurfaces([3, 5]);
     await client.merge([1, 2]);
     await client.applyEffect(1, [2, 3]);
     await client.applyEffect(1);
@@ -52,6 +53,7 @@ describe("engine client", () => {
       { url: "/api/show/select", method: "POST", body: { id: null } },
       { url: "/api/show/surfaces", method: "POST", body: { polygon: [[0, 0], [1, 0], [0, 1]] } },
       { url: "/api/show/surfaces/3", method: "DELETE", body: undefined },
+      { url: "/api/show/delete", method: "POST", body: { ids: [3, 5] } },
       { url: "/api/show/merge", method: "POST", body: { ids: [1, 2] } },
       { url: "/api/show/apply", method: "POST", body: { from: 1, to: [2, 3] } },
       { url: "/api/show/apply", method: "POST", body: { from: 1 } },
