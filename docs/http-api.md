@@ -103,3 +103,21 @@ The first message from a client must be a hello; otherwise the engine closes the
 **Engine to output:** `show`, `show_test_frame` (`kind`), `show_pattern` (`seq`, `pattern`).
 
 **Output to engine:** `pattern_shown` (`seq`, the ack for `show_pattern`), `output_stats` (`fps`, and `sound` {`level`, `error`}; every 2 seconds, or 4 times a second while listening; relayed to editors as `output_sound` in status; plus `video_sound_blocked` and `sound_output_error`, relayed as `output_video_sound_blocked` and `output_sound_output_error`), `effect_error` (forwarded to editors), and `hello` on resize.
+
+## OSC
+
+Off by default. Turn it on with `POST /api/osc` `{"enabled": true, "port": 9000}` (saved in settings.json; `GET /api/osc` says which port is listening). Then send OSC over UDP to that port, for example from QLab, TouchOSC or Bitfocus Companion (Stream Deck). Unknown addresses and bad values are ignored, so a controller can never stop the show.
+
+| Address | Arguments | Does |
+|---|---|---|
+| `/play` | | Play mode |
+| `/edit` | | Edit mode |
+| `/blackout` | `1` or `0`, or none to toggle | Blackout on or off |
+| `/scene/next`, `/scene/previous` | | Steps through the playlist (wraps only if it loops) |
+| `/scene/open` | scene id or name | Opens a scene |
+| `/project/open` | project name or slug | Opens a saved project, in Play |
+| `/surface/<id>/effect` | effect id, e.g. `media` | Changes a surface's effect (its settings reset) |
+| `/surface/<id>/param/<name>` | a number, string or color | Sets one setting of the surface's effect. Numbers are clamped to the setting's range and choices must be one of its options, as in the Editor (ranges come from `engine/effect_settings.json`, recorded from the frontend's effects) |
+
+Stream Deck: Bitfocus Companion's generic OSC module can send any of these, or its HTTP module can call the routes above; nothing Stream Deck-specific is needed.
+

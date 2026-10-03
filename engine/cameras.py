@@ -80,6 +80,16 @@ class CameraSettings:
         """Daily on/off times for unattended displays (engine/schedule.py); off until set."""
         return self._load().get("schedule") or {"enabled": False, "on": "17:30", "off": "23:00", "days": {}}
 
+    def osc(self) -> dict:
+        """OSC control (engine/osc.py): off until turned on; 9000 is a common OSC port."""
+        return {"enabled": False, "port": 9000, **self._load().get("osc", {})}
+
+    def set_osc(self, enabled: bool, port: int | None) -> None:
+        data = self._load()
+        data["osc"] = {"enabled": enabled, "port": self.osc()["port"] if port is None else port}
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_text_atomic(self.path, json.dumps(data, indent=2))
+
     def autostart(self) -> bool:
         """Start the engine straight into Play with the last show (unattended displays)."""
         return bool(self._load().get("autostart"))

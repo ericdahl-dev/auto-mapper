@@ -74,6 +74,11 @@ class ScheduleRequest(BaseModel):
     days: dict[Literal["0", "1", "2", "3", "4", "5", "6"], DayTimes | None] = {}
 
 
+class OscRequest(BaseModel):
+    enabled: bool
+    port: Annotated[int, Field(ge=0, le=65535)] | None = None  # 0: any free port (tests)
+
+
 class AutostartRequest(BaseModel):
     enabled: bool
 
