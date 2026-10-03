@@ -102,3 +102,16 @@ def test_opening_a_project_clears_the_history(rig, scanned):
         client.patch("/api/show/surfaces/2", json={"effect": "fill"})
         assert client.post("/api/projects/porch/open").status_code == 200
         assert history(client) == {"undo": None, "redo": None}
+
+
+def test_several_surfaces_delete_at_once_as_one_undo_step(rig, scanned):
+    with engine(rig, data_dir=scanned) as client:
+        before = surfaces(client)
+        client.post("/api/show/select", json={"id": 2})
+        assert client.post("/api/show/delete", json={"ids": [2, 3]}).status_code == 200
+        assert [s["id"] for s in surfaces(client)] == [1]
+        assert client.get("/api/show").json()["selected"] is None
+        assert history(client)["undo"] == "Delete"
+        assert client.post("/api/show/undo").json()["surfaces"] == before  # both back with one undo
+        assert client.post("/api/show/delete", json={"ids": [2, 99]}).status_code == 404
+        assert [s["id"] for s in surfaces(client)] == [1, 2, 3]  # nothing deleted when one is unknown

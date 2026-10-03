@@ -29,6 +29,7 @@ from engine.messages import (
     ApplyEffectRequest,
     AutostartRequest,
     CameraSelectRequest,
+    DeleteRequest,
     EditorHello,
     EffectErrorReport,
     Hello,
@@ -294,6 +295,14 @@ def create_app(
     async def delete_surface(surface_id: int):
         try:
             show.delete(surface_id)
+        except UnknownSurface:
+            raise HTTPException(404, "Unknown surface")
+        return show.public()
+
+    @app.post("/api/show/delete")
+    async def delete_surfaces(req: DeleteRequest):
+        try:
+            show.delete_many(list(dict.fromkeys(req.ids)))
         except UnknownSurface:
             raise HTTPException(404, "Unknown surface")
         return show.public()

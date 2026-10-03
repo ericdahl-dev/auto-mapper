@@ -17,6 +17,7 @@ import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
 import { trackPointer } from "./gesture";
 import { movePin, pinHandles } from "./pin";
 import { MidiRouter, parseMidi, settingValue, type MidiAction, type MidiTarget } from "./midi";
+import { deleteKeyTargets } from "./deleteKey";
 import { moveScene } from "./sceneList";
 import { nextChangeText } from "./scheduleView";
 import { bindUndoKeys } from "./undoKeys";
@@ -838,8 +839,23 @@ surfacesSvg.addEventListener("click", () => select(null));
 surfaceName.addEventListener("change", () => {
   if (show?.selected != null) void engine.patchSurface(show.selected, { name: surfaceName.value });
 });
+function deleteSelected(ids: number[]) {
+  multi.clear();
+  void engine.deleteSurfaces(ids); // one undo step for all of them
+}
 deleteButton.addEventListener("click", () => {
-  if (show?.selected != null) void engine.deleteSurface(show.selected);
+  const ids = deleteKeyTargets({ key: "Delete", target: "BODY", metaKey: false, ctrlKey: false, altKey: false }, show?.selected ?? null, multi);
+  if (ids) deleteSelected(ids);
+});
+// Delete or Backspace: the selected surface and any shift-clicked ones (not while typing or drawing).
+window.addEventListener("keydown", (ev) => {
+  if (draw.active || session.busy) return;
+  const el = ev.target as HTMLElement;
+  const target = el.isContentEditable ? "TEXTAREA" : el.tagName;
+  const ids = deleteKeyTargets({ key: ev.key, target, metaKey: ev.metaKey, ctrlKey: ev.ctrlKey, altKey: ev.altKey }, show?.selected ?? null, multi);
+  if (!ids) return;
+  ev.preventDefault();
+  deleteSelected(ids);
 });
 mergeButton.addEventListener("click", () => {
   const ids = [...multi];

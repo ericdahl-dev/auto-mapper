@@ -114,6 +114,10 @@ class SceneOrder(BaseModel):
     ids: Annotated[list[int], Field(min_length=1)]
 
 
+class DeleteRequest(BaseModel):
+    ids: Annotated[list[int], Field(min_length=1)]
+
+
 class MergeRequest(BaseModel):
     ids: Annotated[list[int], Field(min_length=2)]
 

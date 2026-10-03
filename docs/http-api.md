@@ -43,6 +43,7 @@ Most write routes respond with the updated show, and the show is broadcast over 
 | DELETE | `/api/show/surfaces/{id}` | | Removes a surface |
 | POST | `/api/show/surfaces` | `{"polygon": [[x, y], ...], "name"?: "..."}` | Adds a hand-drawn surface and selects it |
 | POST | `/api/show/select` | `{"id": 3}` or `{"id": null}` | Selects or deselects a surface |
+| POST | `/api/show/delete` | `{"ids": [2, 5]}` | Deletes several surfaces as one undo step; 404 (and nothing deleted) if any id is unknown |
 | POST | `/api/show/merge` | `{"ids": [3, 5, ...]}` (2 or more) | Merges surfaces into the first one |
 | POST | `/api/show/apply` | `{"from": 3, "to"?: [5, 6]}` | Copies a surface's effect and params to the listed surfaces, or to all of them if `to` is omitted |
 | POST | `/api/show/redetect` | | Reruns detection on the saved scan, keeping drawn and edited surfaces. 404 before a scan, 409 while scanning |
