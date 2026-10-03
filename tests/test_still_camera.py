@@ -178,3 +178,11 @@ def test_settings_a_camera_doesnt_have_are_skipped():
     cam = StillCamera(driver)
     with cam.scan_profile():
         assert driver.config["capturemode"] == "Single Shot"
+
+
+def test_battery_level_reads_as_a_percentage():
+    cam, driver = camera()
+    driver.config["batterylevel"] = "98%"
+    assert cam.battery() == 98
+    driver.config["batterylevel"] = ""  # a camera that doesn't report it
+    assert cam.battery() is None

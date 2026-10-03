@@ -31,6 +31,10 @@ def is_still(unique_id: str | None) -> bool:
     return bool(unique_id) and unique_id.startswith(STILL_PREFIX)
 
 
+LOW_BATTERY = 20  # percent: warn
+FLAT_BATTERY = 10  # percent: don't start a scan (a camera dying mid-scan wastes it, and can stick)
+
+
 class CaptureFailed(Exception):
     pass
 
@@ -205,6 +209,13 @@ class StillCamera:
                 if attempt == self.retries:
                     break
         raise CaptureFailed("The camera didn't take a photo. Check it's on, in PC Remote, and not showing a menu.")
+
+    def battery(self) -> int | None:
+        """Battery level in percent, or None if the camera doesn't report it."""
+        with _answering():
+            text = self.driver.get_config("batterylevel")
+        digits = text.strip().rstrip("%")
+        return int(digits) if digits.isdigit() else None
 
     def close(self) -> None:
         pass  # the connection is the app's (SharedStill), kept open between scans and previews
