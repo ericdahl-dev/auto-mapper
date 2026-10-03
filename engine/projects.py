@@ -15,6 +15,10 @@ class UnknownProject(LookupError):
     pass
 
 
+def _fingerprint(data: dict | None) -> str | None:
+    return None if data is None else json.dumps(data, sort_keys=True)
+
+
 def slugify(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
     return slug or "project"
@@ -26,6 +30,11 @@ class ProjectStore:
         self.folder = folder  # the working scan (scans/latest)
         self.show = show
         self._active_file = Path(data_dir) / "active-project.json"
+        # The show as last saved or opened: anything else is unsaved. At start, the open project's
+        # saved copy (the working show may have changed since).
+        active = self.active()
+        saved = self.root / active["slug"] if active else None
+        self._saved = _fingerprint(CurrentShow(ScanFolder(saved)).data) if saved and saved.is_dir() else None
 
     def active(self) -> dict | None:
         try:
@@ -57,6 +66,7 @@ class ProjectStore:
         }
         write_text_atomic(folder / "project.json", json.dumps(info, indent=2))
         self._set_active(info)
+        self._saved = _fingerprint(self.show.data)
         return info
 
     def new(self) -> None:
@@ -64,6 +74,12 @@ class ProjectStore:
         self.folder.clear()
         self.show.clear()
         self._set_active(None)
+        self._saved = None
+
+    def unsaved(self) -> bool:
+        """True when there's a show that differs from what was last saved or opened (selection,
+        Play/Blackout and sound aren't part of it)."""
+        return self.show.data is not None and _fingerprint(self.show.data) != self._saved
 
     def list(self) -> list[dict]:
         if not self.root.exists():
@@ -80,5 +96,6 @@ class ProjectStore:
         self.show.present(mode="play", blackout=False)  # an opened project is ready to show
         info = json.loads((folder / "project.json").read_text())
         self._set_active(info)
+        self._saved = _fingerprint(self.show.data)
         return info
 

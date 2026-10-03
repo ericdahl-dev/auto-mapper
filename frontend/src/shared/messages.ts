@@ -48,6 +48,7 @@ export interface StatusMessage {
   camera: { selected: string | null; calibration: Calibration | null };
   project: { name: string; slug: string } | null;
   can_scan: boolean;
+  unsaved?: boolean; // the show differs from what was last saved or opened
 }
 
 export interface ShowTestFrameMessage {

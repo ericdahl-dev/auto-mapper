@@ -71,6 +71,7 @@ class Hub:
             "output_sound_channels": self.output_sound_channels,
             "camera": self._camera_status(),
             "project": self.projects.active() if self.projects else None,
+            "unsaved": self.projects.unsaved() if self.projects else False,
             "can_scan": self._output_fills_projector()
             and not self.hardware.issues
             and self.settings.selected(self.hardware.cameras) is not None,
@@ -162,6 +163,7 @@ class Hub:
             show = {"type": "show_cleared"}  # e.g. a new project: drop the old show everywhere
         await self.send_to_output(show)
         await self.broadcast(show)
+        await self.broadcast_status()  # "unsaved changes" follows every edit
 
     async def broadcast(self, msg: dict) -> None:
         for ws in list(self.editors):
