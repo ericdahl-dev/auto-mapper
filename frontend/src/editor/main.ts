@@ -67,6 +67,25 @@ newProject.addEventListener("click", async () => {
   if (!r.ok) notice(r.status === 409 ? "Wait for the scan to finish, or cancel it." : "Couldn't start a new project.");
 });
 
+// Open replaces the working show and goes to Play: with unsaved changes, a second click confirms.
+function openButton(slug: string): HTMLButtonElement {
+  const b = Object.assign(document.createElement("button"), { textContent: "Open" });
+  let armed: ReturnType<typeof setTimeout> | null = null;
+  b.addEventListener("click", async () => {
+    if (status?.unsaved && !armed) {
+      b.textContent = "Replace unsaved show?";
+      b.classList.add("on");
+      armed = setTimeout(() => { armed = null; b.textContent = "Open"; b.classList.remove("on"); }, 4000);
+      return;
+    }
+    if (armed) clearTimeout(armed);
+    armed = null;
+    const r = await engine.openProject(slug);
+    if (!r.ok) notice(`Cannot open: ${(await r.json()).detail}`);
+  });
+  return b;
+}
+
 async function refreshProjects() {
   const res = await engine.projects();
   if (!res.ok) return;
@@ -78,13 +97,7 @@ async function refreshProjects() {
       const when = new Date(p.saved_at * 1000).toLocaleString();
       li.append(
         Object.assign(document.createElement("span"), { textContent: p.name, title: `${p.surfaces} surfaces, saved ${when}` }),
-        Object.assign(document.createElement("button"), {
-          textContent: "Open",
-          onclick: async () => {
-            const r = await engine.openProject(p.slug);
-            if (!r.ok) notice(`Cannot open: ${(await r.json()).detail}`);
-          },
-        }),
+        openButton(p.slug),
       );
       return li;
     }),
@@ -1007,7 +1020,8 @@ function render() {
   output.className = status?.output_connected ? "ok" : "bad";
   scan.disabled = !view.scanEnabled;
   $("fps").textContent = status?.output_fps ? `${status.output_fps} fps` : "–";
-  projectName.textContent = `· ${view.project}`;
+  projectName.textContent = `· ${view.project}${status?.unsaved && status.project ? " •" : ""}`;
+  projectName.title = status?.unsaved ? "Unsaved changes: Save to keep them" : "";
   if (status?.project && document.activeElement !== projectSaveName && !projectSaveName.value) {
     projectSaveName.value = status.project.name;
   }

@@ -115,3 +115,23 @@ def test_a_new_project_starts_from_nothing_and_keeps_saved_projects(rig, scanned
         assert client.get("/api/show").status_code == 404
         assert client.post("/api/projects/porch/open").status_code == 200  # and the saved one comes back
         assert client.get("/api/show").json()["surfaces"][1]["effect"] == "fill"
+
+
+def test_status_says_when_the_show_has_unsaved_changes(rig, scanned):
+    unsaved = lambda c: c.get("/api/status").json()["unsaved"]  # noqa: E731
+    with engine(rig, data_dir=scanned) as client:
+        assert unsaved(client) is True  # a scan that was never saved as a project
+        client.post("/api/projects", json={"name": "Porch"})
+        assert unsaved(client) is False
+        client.patch("/api/show/surfaces/2", json={"effect": "fill"})
+        assert unsaved(client) is True
+        client.post("/api/show/undo")
+        assert unsaved(client) is False  # back to what was saved
+        client.post("/api/show/select", json={"id": 2})
+        client.post("/api/presentation", json={"mode": "play"})
+        assert unsaved(client) is False  # selection and Play aren't part of the project
+        client.patch("/api/show/surfaces/2", json={"effect": "fill"})
+        client.post("/api/projects/porch/open")
+        assert unsaved(client) is False  # just opened
+        client.post("/api/projects/new")
+        assert unsaved(client) is False  # nothing to lose

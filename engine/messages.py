@@ -215,6 +215,7 @@ class StatusOut(_Out):
     output_sound_channels: int | None
     camera: dict
     project: dict | None
+    unsaved: bool  # the show differs from what was last saved or opened
     can_scan: bool
 
 
