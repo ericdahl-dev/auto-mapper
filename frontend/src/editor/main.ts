@@ -37,6 +37,8 @@ const banners = $("banners");
 const projectorSelect = $<HTMLSelectElement>("projector-select");
 const output = $("output");
 const scan = $<HTMLButtonElement>("scan");
+const scanReason = $("scan-reason");
+const hardwareNotes = $("hardware-notes");
 const cameraSelect = $<HTMLSelectElement>("camera-select");
 const calibration = $("calibration");
 const preview = $<HTMLImageElement>("preview");
@@ -1105,24 +1107,34 @@ function renderScan() {
   }
   renderSurfaces();
 
-  // While scanning, the Scan button cancels.
-  scan.textContent = scanState.running ? "Cancel scan" : "Scan";
-  if (scanState.running) scan.disabled = false;
+  renderScanButton();
   scanWarnings.replaceChildren(
     ...scanState.warnings.map((w) => Object.assign(document.createElement("div"), { className: "banner", textContent: w })),
   );
   renderMissed();
 }
 
+/** Scan, or Cancel scan while one runs; when it can't run, why (in its tooltip and beside it). */
+function renderScanButton() {
+  const reason = scanState.running ? null : describeStatus(status).scanReason;
+  scan.textContent = scanState.running ? "Cancel scan" : "Scan";
+  scan.disabled = reason !== null;
+  scan.title = reason ?? (scanState.running ? "Stop the scan" : "Project the scan patterns and find the surfaces");
+  scanReason.textContent = reason ?? "";
+  scanReason.hidden = !reason;
+}
+
 function render() {
   const view = describeStatus(status);
+  // Banners only for what stops the work; lasting notes (another projector in use) go in Hardware.
   banners.replaceChildren(
     ...view.banners.map((text) => Object.assign(document.createElement("div"), { className: "banner", textContent: text })),
   );
+  hardwareNotes.replaceChildren(...view.notes.map((text) => Object.assign(document.createElement("p"), { className: "note", textContent: text })));
   syncOptions(projectorSelect, projectorOptions(status)); // only when they change: an open menu stays open
   output.textContent = view.output;
   output.className = status?.output_connected ? "ok" : "bad";
-  scan.disabled = !view.scanEnabled;
+  renderScanButton();
   $("fps").textContent = status?.output_fps ? `${status.output_fps} fps` : "–";
   projectName.textContent = `· ${view.project}${status?.unsaved && status.project ? " •" : ""}`;
   projectName.title = status?.unsaved ? "Unsaved changes: Save to keep them" : "";

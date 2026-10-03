@@ -1,8 +1,13 @@
 import type { Calibration, CameraInfo, HardwareIssue, StatusMessage } from "../shared/messages";
 
 export interface StatusView {
+  /** Problems that stop the work: full-width banners. */
   banners: string[];
+  /** Lasting information that doesn't stop the work: shown in the Hardware section. */
+  notes: string[];
   scanEnabled: boolean;
+  /** Why Scan is disabled, for its tooltip and beside it; null when it can run. */
+  scanReason: string | null;
   projector: string;
   output: string;
   calibration: string;
@@ -27,7 +32,9 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   if (status === null) {
     return {
       banners: ["Engine not reachable. Is `make dev` running?"],
+      notes: [],
       scanEnabled: false,
+      scanReason: "The engine isn't running: start it with make dev",
       projector: "Unknown",
       output: "Unknown",
       calibration: "Unknown",
@@ -38,8 +45,9 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   const { projector, issues } = status.hardware;
   const out = status.output_resolution;
   const banners = issues.map((i) => ISSUE_TEXT[i]);
+  const notes: string[] = [];
   if (status.hardware.projector_missing && projector) {
-    banners.push(`${status.hardware.projector_missing} (your chosen projector) is not connected. Using ${projector.name} for now.`);
+    notes.push(`${status.hardware.projector_missing} (your chosen projector) is not connected. Using ${projector.name} for now.`);
   }
 
   if (status.output_sound_output_error) banners.push(status.output_sound_output_error);
@@ -54,12 +62,28 @@ export function describeStatus(status: StatusMessage | null): StatusView {
 
   return {
     banners,
+    notes,
     scanEnabled: status.can_scan,
+    scanReason: status.can_scan ? null : scanBlocker(status),
     projector: projector ? `${projector.name} (${size(projector)})` : "None",
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
     calibration: describeCalibration(status.camera.calibration),
     project: status.project?.name ?? "Unsaved",
   };
+}
+
+/** The first thing that stops a scan, in the order the engine checks them (engine/hub.py, can_scan). */
+function scanBlocker(status: StatusMessage): string {
+  const { projector, issues } = status.hardware;
+  const out = status.output_resolution;
+  if (issues.includes("no_projector") || !projector) return "No projector: connect it as an extended display";
+  if (issues.includes("no_camera")) return "No camera: plug in the webcam";
+  if (!status.output_connected || !out) return "Open the output window (Hardware) and make it fullscreen on the projector";
+  if (out.width !== projector.width || out.height !== projector.height) {
+    return `Output window must be ${size(projector)}: make it fullscreen on the projector`;
+  }
+  if (!status.camera.selected) return "Choose the camera that scans (Hardware)";
+  return "The rig isn't ready to scan";
 }
 
 // Mirrors engine/calibrate.py: longest allowed exposure (100 ms), and the AC410's gain range.
