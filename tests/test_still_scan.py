@@ -157,3 +157,21 @@ def test_status_shows_the_camera_battery_and_a_nearly_flat_one_stops_a_scan(rig,
         assert msg["type"] == "scan_failed" and "battery" in msg["error"].lower() and "8%" in msg["error"]
         assert client.get("/api/status").json()["camera"]["battery"] == 8
         assert driver.calls.count(("capture",)) == photos  # stopped before any photo
+
+
+
+@pytest.mark.parametrize("level, state, can_scan", [("64%", "ok", True), ("18%", "low", True), ("8%", "flat", False)])
+def test_status_says_how_the_camera_battery_stands_and_a_flat_one_disables_scan(rig, tmp_path, level, state, can_scan):
+    """The engine decides readiness, battery included: Scan is disabled with a reason instead of
+    failing as it starts, and the editor keeps no copy of the thresholds (#142)."""
+    scene, driver, hw, shown = rig
+    driver.config["batterylevel"] = level
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            output(client, W, H):
+        client.get("/api/camera/preview.jpg")  # reads the battery
+        s = client.get("/api/status").json()
+    assert s["camera"]["battery_state"] == state
+    assert s["can_scan"] is can_scan
+    assert (s["scan_blocker"] is None) is can_scan
+    if not can_scan:
+        assert "battery" in s["scan_blocker"].lower() and "8%" in s["scan_blocker"]

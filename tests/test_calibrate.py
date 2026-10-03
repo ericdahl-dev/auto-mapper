@@ -146,3 +146,24 @@ def test_a_camera_that_refuses_long_exposures_keeps_the_100_ms_limit(rig, tmp_pa
         result = client.post("/api/camera/calibrate").json()
 
     assert result["exposure"] == 1000 and result["gain"] > 0 and result["max_exposure"] == 1000
+
+
+def test_calibration_says_when_the_camera_is_at_its_light_limit():
+    """The engine decides "at its light limit" (longest exposure and most gain, still too dim), so the
+    editor doesn't keep its own copy of each camera's limits (#142)."""
+    import numpy as np
+
+    from engine.calibrate import calibrate_exposure
+
+    def run(per_exposure):
+        uvc = FakeUvc(DEFAULTS, limits={"exposure-time-abs": (1, 1000)})
+
+        def read():
+            level = int(uvc.values["exposure-time-abs"]) * per_exposure * (1 + int(uvc.values["gain"]) * 0.05)
+            return np.full((4, 4), min(255, int(level)), np.uint8)
+
+        return calibrate_exposure(uvc, read)
+
+    assert run(0.05)["at_light_limit"] is True  # 50 at 100 ms, ~87 with all the gain: too dim
+    assert run(0.12)["at_light_limit"] is False  # reaches the target with some gain
+    assert run(1.0)["at_light_limit"] is False  # bright: a shorter exposure, no gain

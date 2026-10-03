@@ -26,6 +26,8 @@ export interface Calibration {
   exposure: number;
   gain: number;
   p99: number;
+  max_exposure?: number | null;
+  at_light_limit?: boolean | null;
 }
 
 export interface StatusMessage {
@@ -45,8 +47,17 @@ export interface StatusMessage {
   output_video_sound_blocked?: boolean;
   output_sound_output_error?: string | null;
   output_sound_channels?: number | null;
-  /** battery: a still camera's last reading in percent, taken when the app uses it (null before). */
-  camera: { selected: string | null; calibration: Calibration | null; battery?: number | null };
+  /** The engine's verdicts (#142): the editor shows them and keeps no limits of its own.
+   * battery: a still camera's last reading in percent, taken when the app uses it (null before). */
+  camera: {
+    selected: string | null;
+    calibration: Calibration | null;
+    at_light_limit: boolean;
+    battery: number | null;
+    battery_state: "ok" | "low" | "flat" | null;
+  };
+  /** Why Scan is disabled, in the editor's words; null when it can run. */
+  scan_blocker: string | null;
   project: { name: string; slug: string } | null;
   can_scan: boolean;
   unsaved?: boolean; // the show differs from what was last saved or opened
