@@ -175,7 +175,7 @@ def create_app(
         if display is None:
             raise HTTPException(404, "Unknown display")
         settings.select_projector(display)
-        hub.hardware = hub.hardware  # re-apply the saved choice
+        hub.apply_projector_choice()
         await hub.broadcast_status()
         return hub.status()
 
@@ -641,20 +641,7 @@ def create_app(
                 if isinstance(msg, PatternShown):
                     hub.pattern_shown(msg.seq)
                 elif isinstance(msg, OutputStats):
-                    if msg.fps is not None:
-                        hub.output_fps = round(msg.fps, 1)
-                    if "sound_output_error" in msg.model_fields_set:
-                        hub.output_sound_output_error = (msg.sound_output_error or "")[:200] or None
-                    if msg.sound_channels is not None:
-                        hub.output_sound_channels = msg.sound_channels
-                    if msg.video_sound_blocked is not None:
-                        hub.output_video_sound_blocked = msg.video_sound_blocked
-                    if msg.sound is not None:
-                        hub.output_sound = {
-                            "level": round(min(1.0, max(0.0, msg.sound.level)), 3),
-                            "error": (msg.sound.error or "")[:200] or None,
-                        }
-                    await hub.broadcast_status()
+                    await hub.output_stats(msg)
                 elif isinstance(msg, EffectErrorReport):
                     await hub.broadcast(msg.model_dump())
                 else:  # the output window re-sends hello when resized (e.g. going fullscreen)
