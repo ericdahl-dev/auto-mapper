@@ -194,3 +194,4 @@ def test_exact_reads_stay_exact_next_to_an_objects_edge():
     t = Scene(box_albedo=0.05, wall_albedo=0.9, ambient=110, room_light=True)
     err = np.abs(r.proj_x - t.true_x)[r.valid]
     assert (err > 1).sum() < 50  # was about 1,500
+
