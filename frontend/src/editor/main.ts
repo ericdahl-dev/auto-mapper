@@ -21,6 +21,7 @@ import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
 import { labelPoint } from "./labelPoint";
 import { modePill } from "./modePill";
+import { previewStep } from "./preview";
 import { moveScene } from "./sceneList";
 import { syncOptions } from "./selectOptions";
 import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
@@ -1344,18 +1345,30 @@ cameraSelect.addEventListener("change", async () => {
 });
 
 // Preview is opt-in: polling keeps the camera running, so it only runs while shown.
-let previewTimer: number | undefined;
+let previewTimer: number | undefined; // set while the preview runs (the next update's timeout)
+let previewUrl: string | null = null;
+async function previewLoop() {
+  // One request at a time; the next waits for this one (a still camera takes seconds per photo).
+  const update = await previewStep(() => fetch(`/api/camera/preview.jpg?t=${Date.now()}`));
+  if (previewTimer === undefined) return; // hidden meanwhile
+  if (update.photo) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(update.photo);
+    preview.src = previewUrl;
+  }
+  $("preview-note").textContent = update.note;
+  previewTimer = window.setTimeout(() => void previewLoop(), 500);
+}
 previewToggle.addEventListener("click", () => {
   const on = previewTimer === undefined;
   $("preview-box").hidden = !on;
   previewToggle.textContent = on ? "Hide preview" : "Show preview";
   if (on) {
-    const refresh = () => (preview.src = `/api/camera/preview.jpg?t=${Date.now()}`);
-    refresh();
-    previewTimer = window.setInterval(refresh, 500);
+    previewTimer = window.setTimeout(() => void previewLoop(), 0);
   } else {
-    window.clearInterval(previewTimer);
+    window.clearTimeout(previewTimer);
     previewTimer = undefined;
+    $("preview-note").textContent = "";
     void engine.releaseCamera();
   }
 });
