@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { media } from "../effects/media";
-import { MidiRouter, parseMidi, settingValue, type MidiBinding } from "./midi";
+import { MidiRouter, parseMidi, settingValue, targetKey, targetMenu, type MidiBinding } from "./midi";
 
 const zoom = media.params.find((p) => p.name === "zoom")!; // 0.1 .. 10
 const fit = media.params.find((p) => p.name === "fit")!;
@@ -53,5 +53,26 @@ describe("routing MIDI to bindings", () => {
     expect(r.receive(parseMidi([0xb0, 7, 10])!, [fader])).toBeNull();
     expect(r.receive(parseMidi([0xb0, 7, 90])!, [fader])).toEqual({ action: "next" });
     expect(r.receive(parseMidi([0xb0, 22, 90])!, [knob])).toBeNull(); // not bound
+  });
+});
+
+describe("the MIDI target menu", () => {
+  const box = { id: 4, name: "Box", effect: media };
+
+  it("lists the selected surface's knob-able settings, then the actions, each with a stable key", () => {
+    const items = targetMenu(box);
+    expect(items[0]).toEqual({ key: "surface:4:fit", label: "Box: Fit", target: { surface: 4, param: "fit" } });
+    expect(items.some((i) => i.key === "surface:4:zoom")).toBe(true);
+    expect(items.some((i) => i.key.startsWith("surface:4:src"))).toBe(false); // a file can't be on a knob
+    expect(items.slice(-5).map((i) => i.key)).toEqual(["action:play", "action:edit", "action:blackout", "action:next", "action:previous"]);
+  });
+
+  it("with no surface selected, offers the actions only", () => {
+    expect(targetMenu(null).map((i) => i.key)).toEqual(["action:play", "action:edit", "action:blackout", "action:next", "action:previous"]);
+  });
+
+  it("gives a binding's target the same key as its menu item", () => {
+    expect(targetKey({ surface: 4, param: "zoom" })).toBe("surface:4:zoom");
+    expect(targetKey({ action: "next" })).toBe("action:next");
   });
 });
