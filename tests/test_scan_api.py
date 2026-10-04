@@ -200,7 +200,7 @@ def test_scan_settings_are_kept_per_camera_and_hole_fill_changes_the_scan(rig, t
 
     with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
             editor(client) as ed, output(client, W, H) as out:
-        assert client.get("/api/camera/scan-settings").json() == {"hole_fill": 9, "hdr": 1, "mask": None}
+        assert client.get("/api/camera/scan-settings").json() == {"hole_fill": 9, "hdr": 1, "mask": None, "aperture": "8"}
         assert client.post("/api/camera/scan-settings", json={"hole_fill": 0}).json()["hole_fill"] == 0
         assert client.post("/api/camera/scan-settings", json={"hole_fill": 99}).status_code == 422
         tight = scan_covered(client, ed, out)
@@ -261,7 +261,7 @@ def test_an_hdr_scan_captures_each_pattern_at_more_exposures(rig, tmp_path):
         plain = scan(client, ed, out)
         assert client.post("/api/camera/scan-settings", json={"hdr": 4}).status_code == 422
         assert client.post("/api/camera/scan-settings", json={"hdr": 2}).json()["hdr"] == 2
-        calibrated = client.get("/api/status").json()["camera"]["calibration"]["exposure"]
+        cal = client.get("/api/status").json()["camera"]["calibration"]
         hdr = scan(client, ed, out)
-        assert {str(calibrated), str(min(1000, calibrated * 4))} <= set(exposures)
+        assert {str(cal["exposure"]), str(min(cal["max_exposure"], cal["exposure"] * 4))} <= set(exposures)
         assert hdr["coverage"] >= plain["coverage"] - 0.01

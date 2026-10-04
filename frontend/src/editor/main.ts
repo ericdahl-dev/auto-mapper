@@ -21,6 +21,7 @@ import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
 import { labelPoint } from "./labelPoint";
 import { modePill } from "./modePill";
+import { previewStep } from "./preview";
 import { moveScene } from "./sceneList";
 import { syncOptions } from "./selectOptions";
 import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
@@ -43,6 +44,8 @@ const scanReason = $("scan-reason");
 const hardwareNotes = $("hardware-notes");
 const cameraSelect = $<HTMLSelectElement>("camera-select");
 const calibration = $("calibration");
+const batteryLabel = $("battery-label");
+const battery = $("battery");
 const preview = $<HTMLImageElement>("preview");
 const previewToggle = $<HTMLButtonElement>("preview-toggle");
 const calibrate = $<HTMLButtonElement>("calibrate");
@@ -904,10 +907,12 @@ let cameraMask: number[][][] | null = null; // 0..1 camera coordinates
 async function loadScanSettings() {
   const r = await engine.scanSettings();
   if (!r.ok) return;
-  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null; hdr: number };
+  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null; hdr: number; aperture?: string };
   cameraMask = s.mask;
   renderMask();
   if (document.activeElement !== hdrSelect) hdrSelect.value = String(s.hdr);
+  renderApertureRow();
+  if (document.activeElement !== apertureSelect && s.aperture) apertureSelect.value = s.aperture;
   if (document.activeElement === holeFill) return;
   holeFill.value = String(s.hole_fill);
   holeFillReadout.textContent = `${s.hole_fill} px`;
@@ -965,6 +970,14 @@ window.addEventListener("keydown", (ev) => {
   if (ev.key === "Enter") maskStep({ type: "finish" });
   if (ev.key === "Escape") maskStep({ type: "cancel" });
 });
+const apertureRow = $("aperture-row");
+/** Aperture: still cameras only (a webcam's lens has none to set). */
+function renderApertureRow() {
+  const sel = status?.hardware.cameras.find((c) => c.unique_id === status?.camera.selected);
+  apertureRow.hidden = sel?.device_type !== "still";
+}
+const apertureSelect = $<HTMLSelectElement>("aperture");
+apertureSelect.addEventListener("change", () => void engine.setScanSettings({ aperture: apertureSelect.value }));
 const hdrSelect = $<HTMLSelectElement>("hdr");
 hdrSelect.addEventListener("change", () => void engine.setScanSettings({ hdr: Number(hdrSelect.value) }));
 holeFill.addEventListener("input", () => { holeFillReadout.textContent = `${holeFill.value} px`; });
@@ -1183,6 +1196,8 @@ function render() {
     projectSaveName.value = status.project.name;
   }
   calibration.textContent = view.calibration;
+  battery.textContent = view.battery?.replace("Battery ", "") ?? "";
+  battery.hidden = batteryLabel.hidden = view.battery === null;
   syncOptions(cameraSelect, cameraOptions(status));
   calibrate.disabled = !status?.output_connected || !status.camera.selected;
 }
@@ -1273,6 +1288,7 @@ connect({
       render();
       renderSound();
       applyFolds(); // a problem opens its section
+      renderApertureRow();
       renderScan();
     } else if (msg.type === "show") {
       session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below
@@ -1344,18 +1360,30 @@ cameraSelect.addEventListener("change", async () => {
 });
 
 // Preview is opt-in: polling keeps the camera running, so it only runs while shown.
-let previewTimer: number | undefined;
+let previewTimer: number | undefined; // set while the preview runs (the next update's timeout)
+let previewUrl: string | null = null;
+async function previewLoop() {
+  // One request at a time; the next waits for this one (a still camera takes seconds per photo).
+  const update = await previewStep(() => fetch(`/api/camera/preview.jpg?t=${Date.now()}`));
+  if (previewTimer === undefined) return; // hidden meanwhile
+  if (update.photo) {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(update.photo);
+    preview.src = previewUrl;
+  }
+  $("preview-note").textContent = update.note;
+  previewTimer = window.setTimeout(() => void previewLoop(), 500);
+}
 previewToggle.addEventListener("click", () => {
   const on = previewTimer === undefined;
   $("preview-box").hidden = !on;
   previewToggle.textContent = on ? "Hide preview" : "Show preview";
   if (on) {
-    const refresh = () => (preview.src = `/api/camera/preview.jpg?t=${Date.now()}`);
-    refresh();
-    previewTimer = window.setInterval(refresh, 500);
+    previewTimer = window.setTimeout(() => void previewLoop(), 0);
   } else {
-    window.clearInterval(previewTimer);
+    window.clearTimeout(previewTimer);
     previewTimer = undefined;
+    $("preview-note").textContent = "";
     void engine.releaseCamera();
   }
 });
