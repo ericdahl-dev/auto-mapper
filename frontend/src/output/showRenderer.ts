@@ -47,6 +47,9 @@ void main() { color = u_color; }`;
 
 const ERROR_RGBA = [1, 0.15, 0.15, 1];
 
+/** A prepared surface, the show data it was made from (as a key), and the GPU objects it owns. */
+interface Prepared { key: string; surface: PreparedSurface; buffers: WebGLBuffer[]; vaos: WebGLVertexArrayObject[] }
+
 /** Draws a show: each surface polygon filled with its effect, in projector pixels. */
 export class ShowRenderer {
   private programs = new Map<string, CompileResult>();
@@ -67,6 +70,7 @@ export class ShowRenderer {
   private fadeLayer: FadeLayer | null = null;
   private audio: AudioValues = SILENT;
   private edges: ScanEdges | null = null; // made on first use by an effect with scanEdges
+  private prepared = new Map<number, Prepared>(); // by surface id: kept while it's unchanged (#161)
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -99,50 +103,41 @@ export class ShowRenderer {
     const { gl } = this;
     const seconds = show.playlist?.crossfade ?? 0;
     const newScene = this.show !== null && show.scene !== undefined && this.show.scene !== show.scene;
-    if (newScene && show.presentation?.mode === "play" && seconds > 0) {
+    const fading = newScene && show.presentation?.mode === "play" && seconds > 0;
+    if (fading) {
       // Keep the scene being left (and its GPU objects) to fade out over the new one.
       this.endFade();
       this.fade = { surfaces: this.surfaces, buffers: this.buffers, vaos: this.vaos, seconds, start: null };
-    } else {
-      // Show updates arrive on every slider move and drag frame: free the previous one's GPU objects.
-      this.buffers.forEach((b) => gl.deleteBuffer(b));
-      this.vaos.forEach((v) => gl.deleteVertexArray(v));
     }
+    // Show updates arrive on every slider move and drag frame (#161): a surface whose outline, edge,
+    // effect and settings are unchanged keeps what was prepared for it; only the others are rebuilt.
+    const reusable = fading ? new Map<number, Prepared>() : this.prepared;
+    const next = new Map<number, Prepared>();
     this.buffers = [];
     this.vaos = [];
     this.show = show;
     this.surfaces = show.surfaces.map((s) => {
-      // The lit area: the outline grown or shrunk by the surface's edge setting. Effects still use the
-      // real outline (u_poly, corner pins), so their geometry doesn't shift.
-      const flat = offsetPolygon(s.polygon, s.edge ?? 0).flat();
-      const tris = earcut(flat);
-      const fillVerts = new Float32Array(tris.flatMap((i) => [flat[2 * i], flat[2 * i + 1]]));
-      // Lines are rasterized through pixel centers; nudge inward so edges land on the polygon.
-      const lineVerts = new Float32Array(s.polygon.flatMap(([x, y]) => [x + 0.5, y + 0.5]));
-      const outline = resampleOutline(s.polygon, MAX_POLY);
-      const poly = new Float32Array(MAX_POLY * 2);
-      poly.set(outline.flat());
-      const effect = this.effects.find((e) => e.id === s.effect) ?? this.effects[0];
-      const perimeter = outline.reduce((sum, [x, y], i) => {
-        const [nx, ny] = outline[(i + 1) % outline.length];
-        return sum + Math.hypot(nx - x, ny - y);
-      }, 0);
-      return {
-        poly,
-        polyCount: outline.length,
-        perimeter,
-        id: s.id,
-        effect,
-        params: s.params,
-        bounds: boundingBox(s.polygon),
-        fill: this.vao(fillVerts),
-        fillCount: fillVerts.length / 2,
-        outline: this.vao(lineVerts),
-        outlineCount: lineVerts.length / 2,
-        media: [...Object.entries(mediaSources(effect, s.params)), ...Object.entries(textSources(effect, s.params))],
-        uniforms: uniformsFor(effect, s.params, outline), // once per show update, not per frame
-      };
+      const key = JSON.stringify([s.polygon, s.edge ?? 0, s.effect, s.params]);
+      const kept = reusable.get(s.id);
+      if (kept && kept.key === key) {
+        next.set(s.id, kept);
+        this.buffers.push(...kept.buffers);
+        this.vaos.push(...kept.vaos);
+        return kept.surface;
+      }
+      const [b0, v0] = [this.buffers.length, this.vaos.length];
+      const surface = this.prepare(s);
+      next.set(s.id, { key, surface, buffers: this.buffers.slice(b0), vaos: this.vaos.slice(v0) });
+      return surface;
     });
+    if (!fading) {
+      for (const [id, old] of this.prepared) {
+        if (next.get(id) === old) continue;
+        old.buffers.forEach((b) => gl.deleteBuffer(b));
+        old.vaos.forEach((v) => gl.deleteVertexArray(v));
+      }
+    }
+    this.prepared = next;
     const showing = [...this.surfaces, ...(this.fade?.surfaces ?? [])];
     this.media.sync(new Set(showing.flatMap((s) => s.media.map(([, src]) => src))));
     const wants = this.surfaces.flatMap((s) => {
@@ -151,6 +146,41 @@ export class ShowRenderer {
     });
     // A negative sound delay plays video sound early instead (soundLead.ts); positive is videoAudio.ts.
     this.media.apply(playbackPlan(wants, show.presentation), Math.max(0, -(show.sound?.delay ?? 0)) / 1000);
+  }
+
+  /** Everything drawing a surface needs that doesn't change between frames (its GPU geometry is
+   *  added to this.buffers / this.vaos). */
+  private prepare(s: ShowMessage["surfaces"][number]): PreparedSurface {
+    // The lit area: the outline grown or shrunk by the surface's edge setting. Effects still use the
+    // real outline (u_poly, corner pins), so their geometry doesn't shift.
+    const flat = offsetPolygon(s.polygon, s.edge ?? 0).flat();
+    const tris = earcut(flat);
+    const fillVerts = new Float32Array(tris.flatMap((i) => [flat[2 * i], flat[2 * i + 1]]));
+    // Lines are rasterized through pixel centers; nudge inward so edges land on the polygon.
+    const lineVerts = new Float32Array(s.polygon.flatMap(([x, y]) => [x + 0.5, y + 0.5]));
+    const outline = resampleOutline(s.polygon, MAX_POLY);
+    const poly = new Float32Array(MAX_POLY * 2);
+    poly.set(outline.flat());
+    const effect = this.effects.find((e) => e.id === s.effect) ?? this.effects[0];
+    const perimeter = outline.reduce((sum, [x, y], i) => {
+      const [nx, ny] = outline[(i + 1) % outline.length];
+      return sum + Math.hypot(nx - x, ny - y);
+    }, 0);
+    return {
+      poly,
+      polyCount: outline.length,
+      perimeter,
+      id: s.id,
+      effect,
+      params: s.params,
+      bounds: boundingBox(s.polygon),
+      fill: this.vao(fillVerts),
+      fillCount: fillVerts.length / 2,
+      outline: this.vao(lineVerts),
+      outlineCount: lineVerts.length / 2,
+      media: [...Object.entries(mediaSources(effect, s.params)), ...Object.entries(textSources(effect, s.params))],
+      uniforms: uniformsFor(effect, s.params, outline), // once per show update, not per frame
+    };
   }
 
   /** Drops the show (a new project): nothing is drawn until the next one. */
@@ -162,6 +192,7 @@ export class ShowRenderer {
     this.buffers = [];
     this.vaos = [];
     this.surfaces = [];
+    this.prepared = new Map();
     this.show = null;
     this.media.sync(new Set());
   }
