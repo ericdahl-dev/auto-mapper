@@ -14,41 +14,6 @@ def camera(**kw):
     return StillCamera(driver, retries=2), driver
 
 
-def test_exposure_is_set_with_iso_at_the_shutter_speed_on_the_dial_which_is_never_changed():
-    """On the rig (EXIF-checked, 2026-10-03) the a6600 ignores shutter changes over USB, and each
-    attempt quietly puts ISO back to Auto. So exposure is ISO at the owner's shutter speed."""
-    cam, driver = camera()
-    driver.config["shutterspeed"] = "1/4"  # on the dial: 2500 in 100 us units
-    cam.set("gain", "0")
-    cam.set("exposure-time-abs", "2500")
-    assert driver.config["iso"] == "100"
-    cam.set("exposure-time-abs", "10000")  # 4x the light
-    assert driver.config["iso"] == "400"
-    assert cam.get("exposure-time-abs") == "10000"
-    assert not any(c[:2] == ("set", "shutterspeed") for c in driver.calls)
-
-
-def test_more_exposure_than_the_highest_iso_gives_is_refused_like_a_webcam_at_its_limit():
-    cam, driver = camera()
-    driver.config["shutterspeed"] = "1/4"
-    cam.set("gain", "0")
-    with pytest.raises(RuntimeError):
-        cam.set("exposure-time-abs", str(2500 * 32))  # ISO 3200: past this camera's 1600
-    assert driver.config["iso"] == "1600"  # as far as it goes, like UvcUtil's clamp
-    cam.set("exposure-time-abs", "1")  # less than its lowest ISO gives: the lowest
-    assert driver.config["iso"] == "100"
-
-
-def test_gain_maps_to_iso_and_manual_exposure_turns_off_auto():
-    cam, driver = camera()
-    cam.set("auto-exposure-mode", "1")  # the webcam's "manual": the camera's M mode
-    assert driver.config["expprogram"] == "M"
-    cam.set("gain", "0")
-    assert driver.config["iso"] == "100"
-    cam.set("gain", "15")  # 15 is about 3x, as on the AC410: ISO 300 -> nearest 400
-    assert driver.config["iso"] == "400"
-
-
 def test_focus_once_then_hold_it():
     cam, driver = camera()
     cam.focus_and_lock()
@@ -124,7 +89,7 @@ def test_a_camera_that_stops_answering_is_a_clear_error_not_a_crash():
     with pytest.raises(CaptureFailed, match="camera"):
         cam.prepare()
     with pytest.raises(CaptureFailed):
-        cam.set("exposure-time-abs", "100")
+        cam.set("auto-exposure-mode", "1")
 
 
 APERTURES = ["f/3.5", "f/4", "f/5.6", "f/8", "f/11", "f/16"]
@@ -148,12 +113,6 @@ def test_no_aperture_leaves_the_lens_as_it_is():
     assert driver.config["f-number"] == "f/3.5"
 
 
-def test_the_longest_exposures_follow_the_shutter_on_the_dial_and_the_highest_iso():
-    cam, driver = camera()
-    driver.config["shutterspeed"] = "1/4"
-    assert max(cam.longer_exposures) == 2500 * 16  # ISO 1600 at 1/4 s
-
-
 def test_a_scan_takes_full_control_and_gives_the_camera_back_as_it_was():
     """Every pattern photo must be made the same way: single shots (no bursts), fixed white balance,
     no DRO or flash, M mode, the scan's aperture; the owner's own settings come back afterwards."""
@@ -169,9 +128,7 @@ def test_a_scan_takes_full_control_and_gives_the_camera_back_as_it_was():
         assert (c["capturemode"], c["whitebalance"], c["dro"], c["flashmode"]) == ("Single Shot", "Daylight", "Off", "Flash off")
         assert (c["exposurecompensation"], c["expprogram"], c["focusarea"], c["f-number"]) == ("0", "M", "Wide", "f/8")
         assert (c["imagequality"], c["imagesize"], c["capturetarget"]) == ("Fine", "Medium", "sdram")
-        cam.set("exposure-time-abs", "1000")  # the scan changes exposure, ISO and focus as it goes
-        cam.set("gain", "15")
-        cam.focus_and_lock()
+        cam.focus_and_lock()  # the scan changes focus; exposure is the owner's, never written
     for name, value in mine.items():
         assert driver.config[name] == value, name
 

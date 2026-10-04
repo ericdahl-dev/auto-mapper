@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import pytest
 
-from engine.still_camera import DriverError, GPhoto2Session, SharedStill
+from engine.still_camera import GP_EVENT_FILE_ADDED, GP_EVENT_TIMEOUT, DriverError, GPhoto2Session, SharedStill
 
 
 class Widget:
@@ -69,6 +69,10 @@ class FakeGpCamera:
             self.fail_captures -= 1
             raise IOError("[-7] I/O problem")
         return Path()
+
+    def wait_for_event(self, timeout_ms):
+
+        return GP_EVENT_TIMEOUT, None  # nothing pending
 
     def file_get(self, folder, name, kind):
         class File:
@@ -291,3 +295,79 @@ def test_a_photo_sent_wrapped_by_the_camera_is_unwrapped_to_the_full_size_image(
 
     s = GPhoto2Session(camera=lambda: Wrapping(), stop_macos=lambda: None, settle_seconds=0)
     assert s.capture().shape == (240, 424, 3)  # the main photo, not the thumbnail or the preview
+
+
+def test_one_press_in_bracketing_collects_every_photo_it_takes():
+    """On the rig, one capture in 'Bracketing C ... 3 Pictures' gave three photos: the first from the
+    capture, the other two announced as new files within half a second."""
+    import cv2
+
+    shades = [40, 120, 220]
+
+    class Bracketing(FakeGpCamera):
+        def __init__(self):
+            super().__init__()
+            self.pending = []
+
+        def capture(self, kind):
+            self.pending = [("/", "b.JPG"), ("/", "c.JPG")]
+            p = Path(); p.name = "a.JPG"
+            return p
+
+        def wait_for_event(self, timeout_ms):
+
+            if self.pending:
+                folder, name = self.pending.pop(0)
+                p = Path(); p.folder, p.name = folder, name
+                return GP_EVENT_FILE_ADDED, p
+            return GP_EVENT_TIMEOUT, None
+
+        def file_get(self, folder, name, kind):
+            shade = shades["abc".index(name[0])]
+
+            class F:
+                def get_data_and_size(self_):
+                    return cv2.imencode(".jpg", np.full((12, 16, 3), shade, np.uint8))[1].tobytes()
+            return F()
+
+    s = GPhoto2Session(camera=lambda: Bracketing(), stop_macos=lambda: None, settle_seconds=0)
+    photos = s.capture_burst(3)
+    assert [int(np.median(p)) for p in photos] == [40, 120, 220]
+
+
+def test_extra_photos_from_one_press_never_become_the_next_photo():
+    """In a bracketing drive mode a single capture also takes two more photos, announced as new
+    files. libgphoto2 picks up the next 'new file' as a capture's result, so a leftover from the last
+    press came back as the next photo (rig, 2026-10-03: the framing check's black frame was white)."""
+    import cv2
+
+    class Bracketing(FakeGpCamera):
+        def __init__(self):
+            super().__init__()
+            self.pending, self.presses = [], 0
+
+        def capture(self, kind):
+            self.presses += 1
+            leftover = self.pending.pop(0) if self.pending else None  # what libgphoto2 does with a queued file
+            self.pending += [f"{self.presses}b", f"{self.presses}c"]
+            p = Path(); p.name = leftover or f"{self.presses}a"
+            return p
+
+        def wait_for_event(self, timeout_ms):
+
+            if self.pending:
+                p = Path(); p.name = self.pending.pop(0)
+                return GP_EVENT_FILE_ADDED, p
+            return GP_EVENT_TIMEOUT, None
+
+        def file_get(self, folder, name, kind):
+            shade = 200 if name.startswith("1") else 20  # press 1: white on the projector; press 2: black
+
+            class F:
+                def get_data_and_size(self_):
+                    return cv2.imencode(".jpg", np.full((12, 16, 3), shade, np.uint8))[1].tobytes()
+            return F()
+
+    s = GPhoto2Session(camera=lambda: Bracketing(), stop_macos=lambda: None, settle_seconds=0)
+    assert int(np.median(s.capture())) == 200
+    assert int(np.median(s.capture())) == 20  # the second press's own photo, not press 1's leftover

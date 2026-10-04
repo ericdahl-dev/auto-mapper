@@ -6,7 +6,7 @@ from typing import Callable
 
 import numpy as np
 
-from engine.calibrate import MAX_EXPOSURE, MAX_GAIN, MIN_RESPONSE, calibrate_exposure
+from engine.calibrate import MAX_EXPOSURE, MAX_GAIN, MIN_RESPONSE
 from engine.scan import DecodeResult, HdrDecoder, pattern_sequence
 from engine.scan_camera import ScanCamera
 
@@ -54,18 +54,25 @@ def capture_scan(
     hdr: int = 1,  # exposures per pattern (#66): 1 = off
 ) -> tuple[DecodeResult, dict]:
     seq = pattern_sequence(width, height)
+    hdr = min(hdr, camera.max_hdr)
     uvc, read_frame = camera.controls, camera.read
     drop_frames, frames_per_pattern = camera.drop_frames, camera.frames_per_pattern
     if calibration is None:
         show({"kind": "white"})
-        calibration = calibrate_exposure(uvc, read_frame, camera.longer_exposures)
+        calibration = camera.calibrate()
     # Calibration leaves the camera at whatever it probed last; set the chosen values.
     uvc.set("gain", str(calibration["gain"]))
     uvc.set("exposure-time-abs", str(calibration["exposure"]))
     captures = hdr_captures(calibration, hdr)
     # Roughly how much brighter each capture is (see HdrDecoder: it needn't be exact).
     e0, _ = captures[0]
-    decoder = HdrDecoder(width, height, [e / e0 * 3 ** ((g - captures[0][1]) / GAIN_TRIPLES) for e, g in captures])
+    gains = [e / e0 * 3 ** ((g - captures[0][1]) / GAIN_TRIPLES) for e, g in captures]
+    bracket = camera.bracket if hdr > 1 else None  # a still camera brackets itself: one press a pattern
+    if bracket:
+        camera.start_bracketing()
+        gains = list(bracket)
+    decoder = HdrDecoder(width, height, gains)
+    base = len(gains) // 2 if bracket else 0  # the capture at the calibrated exposure
 
     for i, pattern in enumerate(seq, 1):
         if canceled():
@@ -74,8 +81,8 @@ def capture_scan(
         time.sleep(settle_seconds)  # projector input lag beyond the browser's frame
         for _ in range(drop_frames):  # frames already buffered before the pattern changed
             read_frame()
-        frames = []
-        for n, (exposure, gain) in enumerate(captures):
+        frames = [f.astype(np.float32) for f in camera.read_bracket()] if bracket else []
+        for n, (exposure, gain) in enumerate([] if bracket else captures):
             if len(captures) > 1:  # HDR: the same pattern at each setting in turn
                 uvc.set("exposure-time-abs", str(exposure))
                 uvc.set("gain", str(gain))
@@ -86,12 +93,12 @@ def capture_scan(
             # Averaging several frames of the same pattern cuts sensor noise (~1/sqrt(n)).
             frames.append(np.mean([read_frame().astype(np.float32) for _ in range(frames_per_pattern)], axis=0))
         if pattern["kind"] == "white":
-            first_white = frames[0]
+            first_white = frames[base]
         decoder.add(pattern, frames)
         if pattern["kind"] == "black":
             # Per-pixel difference: lamps or windows saturated in both frames must not
             # mask a projector that is working everywhere else.
-            diff = first_white.astype(np.int16) - frames[0].astype(np.int16)
+            diff = first_white.astype(np.int16) - frames[base].astype(np.int16)
             spread = np.percentile(diff, 99)
             if spread < MIN_RESPONSE:
                 raise ScanError(
