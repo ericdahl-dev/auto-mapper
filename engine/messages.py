@@ -339,6 +339,11 @@ class OutputReplacedOut(_Out):
     type: Literal["output_replaced"]
 
 
+class OutputRestoredOut(_Out):
+    """To an output window: the newer one that had replaced it closed; it owns the projector again (#169)."""
+    type: Literal["output_restored"]
+
+
 class ShowTestFrameOut(_Out):
     type: Literal["show_test_frame"]
     kind: TestFrameKind
@@ -346,6 +351,6 @@ class ShowTestFrameOut(_Out):
 
 EngineMessage = TypeAdapter(Annotated[
     StatusOut | ShowOut | ScanStarted | ScanProgress | ScanResult | ScanFailed | ScanCanceledOut | ScanReload
-    | ShowCleared | EffectErrorOut | ShowPatternOut | ShowTestFrameOut | OutputReplacedOut,
+    | ShowCleared | EffectErrorOut | ShowPatternOut | ShowTestFrameOut | OutputReplacedOut | OutputRestoredOut,
     Field(discriminator="type"),
 ])

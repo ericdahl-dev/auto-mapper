@@ -8,6 +8,9 @@
   "output_replaced": {
     "type": "output_replaced"
   },
+  "output_restored": {
+    "type": "output_restored"
+  },
   "scan_progress": {
     "done": 1,
     "total": 34,

@@ -11,6 +11,9 @@ TEXT_MAX = 200  # an error from the window is cut to this for the editor
 class OutputWindow:
     def __init__(self):
         self.ws: object | None = None  # the window's websocket; a newer window replaces it
+        # Windows replaced by a newer one and still open, newest last, with their sizes: when the
+        # newer one closes, the projector goes back to the latest of these (#169).
+        self.replaced: list[tuple[object, dict]] = []
         self._forget()
 
     def _forget(self) -> None:
@@ -25,6 +28,10 @@ class OutputWindow:
         """A window says hello (again on every resize). True when it's a new window, which should be
         sent the show; a newer window replaces the old one, since only one owns the projector."""
         first = ws is not self.ws
+        if first:
+            self.replaced = [(w, r) for w, r in self.replaced if w is not ws]  # it's back in use
+            if self.ws is not None and self.resolution is not None:
+                self.replaced.append((self.ws, self.resolution))
         self.ws = ws
         self.resolution = {"width": width, "height": height}
         return first
@@ -45,11 +52,15 @@ class OutputWindow:
             }
 
     def gone(self, ws: object) -> bool:
-        """A websocket closed. True if it was this window: everything it reported is forgotten."""
+        """A websocket closed. True if it was this window: everything it reported is forgotten, and a
+        window it had replaced, if still open, gets the projector back (see `ws`)."""
         if ws is not self.ws:
+            self.replaced = [(w, r) for w, r in self.replaced if w is not ws]
             return False
         self.ws = None
         self._forget()
+        if self.replaced:
+            self.ws, self.resolution = self.replaced.pop()
         return True
 
     def fills(self, projector: dict | None) -> bool:

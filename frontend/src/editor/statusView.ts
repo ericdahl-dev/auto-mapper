@@ -65,17 +65,22 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   if (status.output_video_sound_blocked) {
     banners.push("Video sound is waiting: click the output window once to allow it.");
   }
+  const offProjector = !!(status.output_connected && projector && out
+    && (out.width !== projector.width || out.height !== projector.height));
   if (!status.output_connected) {
     banners.push("Output window not connected. Open it and move it fullscreen onto the projector.");
-  } else if (projector && out && (out.width !== projector.width || out.height !== projector.height)) {
-    banners.push(`Output window is ${size(out)} but the projector is ${size(projector)}. Make it fullscreen on the projector.`);
+  } else if (offProjector) {
+    // One explanation, the engine's: it names the display the window seems to be on (#169).
+    banners.push(status.scan_blocker ?? `Output window is ${size(out!)} but the projector is ${size(projector!)}. Make it fullscreen on the projector.`);
   }
 
   return {
     banners,
     notes,
     scanEnabled: status.can_scan,
-    scanReason: status.can_scan ? null : status.scan_blocker ?? "The rig isn't ready to scan",
+    scanReason: status.can_scan ? null
+      : offProjector ? "The output window isn't on the projector: see above" // the banner explains it
+      : status.scan_blocker ?? "The rig isn't ready to scan",
     projector: projector ? `${projector.name} (${size(projector)})` : "None",
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
     calibration: describeCalibration(status.camera.calibration, status.camera.at_light_limit),

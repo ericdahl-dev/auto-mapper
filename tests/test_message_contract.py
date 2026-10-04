@@ -86,13 +86,15 @@ def real_messages() -> dict[str, dict]:
         with output(client, W, H):  # a newer output window takes over (#159)
             while "output_replaced" not in seen:
                 keep(out.receive_json())
+        while "output_restored" not in seen:  # ...and closes: the first takes over again (#169)
+            keep(out.receive_json())
     return seen
 
 
 def test_engine_messages_match_the_shared_examples():
     messages = real_messages()
     for kind in ["status", "show", "show_pattern", "show_test_frame", "scan_started", "scan_progress",
-                 "scan_result", "effect_error", "scan_reload", "show_cleared", "output_replaced"]:
+                 "scan_result", "effect_error", "scan_reload", "show_cleared", "output_replaced", "output_restored"]:
         assert kind in messages, f"no {kind} message was sent"
     if os.environ.get("UPDATE_MESSAGE_FIXTURES"):
         FIXTURE.write_text(json.dumps(messages, indent=2, sort_keys=True) + "\n")

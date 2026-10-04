@@ -8,7 +8,7 @@ import { ShowRenderer } from "./showRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
 import { latestPerFrame } from "./latestPerFrame";
-import { showReplacedNotice } from "./replacedNotice";
+import { hideReplacedNotice, showReplacedNotice } from "./replacedNotice";
 
 const canvas = document.getElementById("stage") as HTMLCanvasElement;
 const hint = document.getElementById("hint")!;
@@ -95,7 +95,16 @@ const conn = connect({
       showUpdates.cancel(); // a show still pending mustn't draw over the notice
       showFrames();
       renderer.showTestFrame("black");
-      showReplacedNotice();
+      showReplacedNotice(() => { // take the projector back: the other window is told it was replaced
+        replaced = false;
+        conn.send({ type: "hello", role: "output", ...size });
+      });
+      return;
+    }
+    if (msg.type === "output_restored") { // the newer window closed: this one has the projector again (#169)
+      replaced = false;
+      hideReplacedNotice(); // the show follows from the engine
+      conn.send({ type: "hello", role: "output", ...size }); // its size may have changed meanwhile
       return;
     }
     if (msg.type === "show") showUpdates.push(msg);

@@ -207,3 +207,13 @@ describe("a still camera's exposure", () => {
       .toBe("Set on the camera (white frame peak 201)");
   });
 });
+
+describe("the output window not on the projector (#169)", () => {
+  it("is explained once, in the engine's words, with Scan's reason pointing at it", () => {
+    const blocker = "The output window seems to be on Color LCD, not AML TV: move it there and make it fullscreen.";
+    const view = describeStatus(status({ output_resolution: { width: 3456, height: 2034 }, can_scan: false, scan_blocker: blocker }));
+    expect(view.banners.filter((b) => /output window/i.test(b))).toEqual([blocker]);
+    expect(view.scanReason).toBe("The output window isn't on the projector: see above");
+  });
+});
+
