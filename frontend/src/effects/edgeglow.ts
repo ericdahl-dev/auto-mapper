@@ -11,17 +11,11 @@ export const edgeglow: Effect = {
     { name: "base", label: "Base light", type: "number", default: 0.1, min: 0, max: 1, step: 0.01 },
     { name: "pulse", label: "Pulse", type: "number", default: 0, min: 0, max: 1, step: 0.01 },
   ],
+  // The Sobel edges of the scan's brightness at "Line width", precomputed once per scan (#158).
+  scanEdges: { spread: "spread" },
   fragment: `
 void main() {
-  float d = u_spread;
-  // Sobel on the scan's brightness.
-  float tl = luminance(scanAt(v_pos + vec2(-d, -d))), t = luminance(scanAt(v_pos + vec2(0, -d)));
-  float tr = luminance(scanAt(v_pos + vec2(d, -d))), l = luminance(scanAt(v_pos + vec2(-d, 0)));
-  float r = luminance(scanAt(v_pos + vec2(d, 0))), bl = luminance(scanAt(v_pos + vec2(-d, d)));
-  float b = luminance(scanAt(v_pos + vec2(0, d))), br = luminance(scanAt(v_pos + vec2(d, d)));
-  float gx = (tr + 2.0 * r + br) - (tl + 2.0 * l + bl);
-  float gy = (bl + 2.0 * b + br) - (tl + 2.0 * t + tr);
-  float edge = smoothstep(u_threshold, u_threshold * 2.0, length(vec2(gx, gy)));
+  float edge = smoothstep(u_threshold, u_threshold * 2.0, scanEdgeAt(v_pos));
   float wave = 1.0 - u_pulse * (0.5 + 0.5 * sin(u_time * 3.0 - v_pos.x * 0.01));
   color = vec4(u_glowColor * edge * wave + u_glowColor * u_base, 1.0);
 }`,

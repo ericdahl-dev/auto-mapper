@@ -310,6 +310,7 @@ An effect is one GLSL ES 3.0 fragment shader plus a parameter schema. The editor
 | `polyEdge(p, out along)` | Distance from `p` to the outline, and how far round the outline the nearest point is |
 | `scanAt(px)`, `u_scan` | The scan image at a projector pixel |
 | `luminance(c)` | Brightness of a color |
+| `scanEdgeAt(px)` | The scan's edge strength at a projector pixel (Sobel of its brightness), precomputed once per scan. Declare `scanEdges: { spread: "<setting>" }` on the effect to name the setting that sets its line width (see Edge glow) |
 | `u_level`, `u_bass`, `u_mid`, `u_treble` | Sound, 0 to 1, smoothed; all 0 when sound is off |
 | `u_beat` | 1 on a beat, decaying to 0 over a fraction of a second |
 

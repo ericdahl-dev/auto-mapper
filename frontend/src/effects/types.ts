@@ -36,6 +36,9 @@ export interface Effect {
     pan?: number;
     group?: string; // sync group ("none", "A".."D"): output/syncGroups.ts
   };
+  /** Effects that read the scan's edges (scanEdgeAt in the preamble): the setting giving their spread
+   *  in pixels. The renderer precomputes the edges once per scan and spread (output/scanEdges.ts). */
+  scanEdges?: { spread: string };
   /** Fragment shader body. The shared preamble (see compile.ts) is prepended. null = draw nothing. */
   fragment: string | null;
 }
@@ -45,7 +48,7 @@ export { hexToRgb, isQuad } from "./settingTypes";
 export type UniformValue = number | [number, number, number] | number[]; // number[] = mat3, column-major
 
 /** Uniform names the preamble already declares (without the u_ prefix). */
-export const RESERVED = ["time", "resolution", "bounds", "scan", "poly", "polyCount", "perimeter", "level", "bass", "mid", "treble", "beat"];
+export const RESERVED = ["time", "resolution", "bounds", "scan", "scanEdges", "poly", "polyCount", "perimeter", "level", "bass", "mid", "treble", "beat"];
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
