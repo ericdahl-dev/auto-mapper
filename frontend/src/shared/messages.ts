@@ -275,7 +275,7 @@ export function parseServerMessage(raw: string): ServerMessage | null {
 export interface ScanSettingsResponse {
   hole_fill: number; // px gap between decoded pixels the scan fills in
   hdr: number; // exposures per pattern: 1 = off
-  mask: number[][][] | null; // areas of the camera image to scan (0..1); null = all of it
+  mask: number[][][] | null; // areas of the camera image to skip (0..1); null = skip nothing
   aperture: string; // still cameras: f-number ("8" = f/8), or "camera"
 }
 

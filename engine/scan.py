@@ -206,19 +206,18 @@ class HdrDecoder:
 
 
 def apply_camera_mask(r: DecodeResult, polygons: list[list[list[float]]] | None) -> DecodeResult:
-    """Keeps only camera pixels inside the mask (#66): polygons in 0..1 camera coordinates, e.g.
-    drawn on the preview to skip a window or a TV. None or [] keeps everything."""
+    """Drops camera pixels inside the skipped areas (#66, #170): polygons in 0..1 camera coordinates,
+    drawn on the preview around a window, a TV or shiny things. None or [] skips nothing."""
     import cv2
 
     if not polygons:
         return r
     h, w = r.valid.shape
-    keep = np.zeros((h, w), np.uint8)
+    skip = np.zeros((h, w), np.uint8)
     for poly in polygons:
         pts = np.round(np.array(poly, np.float64) * [w, h]).astype(np.int32)
-        cv2.fillPoly(keep, [pts], 1)
-    inside = keep.astype(bool)
-    r.valid = r.valid & inside
+        cv2.fillPoly(skip, [pts], 1)
+    r.valid = r.valid & ~skip.astype(bool)
     r.proj_x = np.where(r.valid, r.proj_x, -1)
     r.proj_y = np.where(r.valid, r.proj_y, -1)
     return r

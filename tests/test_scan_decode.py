@@ -122,18 +122,19 @@ def test_hole_fill_closes_more_gaps_the_higher_it_is():
     assert projector_space_image(r)[1].sum() == projector_space_image(r, hole_fill_px=9)[1].sum()  # today's default
 
 
-def test_a_camera_mask_drops_everything_outside_it():
-    """#66: only the masked area of the camera image is scanned; the rest yields nothing."""
+def test_skipped_areas_of_the_camera_image_yield_nothing():
+    """#170: drawn areas are skipped (a window, a TV, shiny things); everything else is scanned.
+    (Before, the drawn area was the only part kept, the opposite of what its button suggested.)"""
     from engine.scan import apply_camera_mask, projector_space_image
     from engine.surfaces import detect_surfaces
 
     scene = Scene()
     full = decode(scene)
-    # Keep the left half of the camera image (0..1 coordinates), so the box (u 190..250) is outside.
-    left = [[[0, 0], [0.5, 0], [0.5, 1], [0, 1]]]
-    masked = apply_camera_mask(decode(scene), left)
-    assert not masked.valid[:, 170:].any()  # nothing decoded right of the mask's edge (160 px)
-    assert masked.valid[:, :150].sum() == full.valid[:, :150].sum()  # inside: untouched
+    # Skip the right half of the camera image (0..1 coordinates), so the box (u 190..250) is in it.
+    right = [[[0.5, 0], [1, 0], [1, 1], [0.5, 1]]]
+    masked = apply_camera_mask(decode(scene), right)
+    assert not masked.valid[:, 170:].any()  # nothing decoded in the skipped area (from 160 px)
+    assert masked.valid[:, :150].sum() == full.valid[:, :150].sum()  # outside it: untouched
     assert (masked.proj_x[~masked.valid] == -1).all()
     surfaces = detect_surfaces(masked, projector_space_image(masked))
     assert len(surfaces) < len(detect_surfaces(full, projector_space_image(full)))  # the box is gone

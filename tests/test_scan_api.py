@@ -211,7 +211,7 @@ def test_scan_settings_are_kept_per_camera_and_hole_fill_changes_the_scan(rig, t
     assert settings["scan_settings"][AC410["unique_id"]]["hole_fill"] == 25  # by camera, like calibration
 
 
-def test_a_camera_mask_limits_what_the_scan_finds(rig, tmp_path):
+def test_skipped_camera_areas_leave_out_what_they_cover(rig, tmp_path):
     scene, uvc, hw, cams = rig
 
     def scan(client, ed, out):
@@ -225,8 +225,8 @@ def test_a_camera_mask_limits_what_the_scan_finds(rig, tmp_path):
     with engine(hw, data_dir=tmp_path, camera_factory=cams, uvc_factory=lambda a: uvc) as client, \
             editor(client) as ed, output(client, W, H) as out:
         full = scan(client, ed, out)
-        left = [[[0, 0], [0.5, 0], [0.5, 1], [0, 1]]]
-        assert client.post("/api/camera/scan-settings", json={"mask": left}).json()["mask"] == left
+        right = [[[0.5, 0], [1, 0], [1, 1], [0.5, 1]]]  # skip the right half, where the box is (#170)
+        assert client.post("/api/camera/scan-settings", json={"mask": right}).json()["mask"] == right
         masked = scan(client, ed, out)
         assert masked["coverage"] < full["coverage"]
         assert len(masked["surfaces"]) < len(full["surfaces"])

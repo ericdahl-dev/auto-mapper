@@ -57,16 +57,23 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
   holeFill.addEventListener("input", () => { holeFillReadout.textContent = `${holeFill.value} px`; });
   holeFill.addEventListener("change", () => void engine.setScanSettings({ hole_fill: Number(holeFill.value) }));
 
-  // ---- Camera mask (#66): click corners on the preview to mark areas to scan; the rest is ignored.
+  // ---- Skipped areas (#66, #170): click corners on the preview around what the scan should leave out
+  // (a window, a TV, shiny things); click a shaded area to stop skipping it.
   const previewBox = $("preview-box");
   const maskOverlay = $("mask-overlay");
   let maskDraw = idleDraw; // in preview pixels, so the double-click echo rule works; saved as 0..1
   function renderMask() {
     const { width, height } = previewBox.getBoundingClientRect();
     const toUnit = (p: number[]) => `${p[0] / Math.max(1, width)},${p[1] / Math.max(1, height)}`;
-    const shapes: SVGElement[] = (cameraMask ?? []).map((poly) => {
+    const shapes: SVGElement[] = (cameraMask ?? []).map((poly, i) => {
       const el = document.createElementNS(SVG_NS, "polygon");
       el.setAttribute("points", poly.map(([x, y]) => `${x},${y}`).join(" "));
+      el.addEventListener("click", (ev) => {
+        if (maskDraw.active) return; // drawing: the click places a corner
+        ev.stopPropagation();
+        const rest = (cameraMask ?? []).filter((_, j) => j !== i);
+        void engine.setScanSettings(rest.length ? { mask: rest } : { clear_mask: true }).then(() => loadScanSettings());
+      });
       return el;
     });
     if (maskDraw.active && maskDraw.points.length) {
@@ -76,9 +83,10 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     }
     maskOverlay.replaceChildren(...shapes);
     previewBox.classList.toggle("drawing", maskDraw.active);
-    $("mask-draw").textContent = maskDraw.active ? "Double-click to finish" : "Mask area";
+    $("mask-draw").textContent = maskDraw.active ? "Double-click to finish" : "Skip an area";
     $("mask-clear").hidden = !cameraMask;
-    $("mask-note").textContent = cameraMask ? `Scanning ${cameraMask.length} area${cameraMask.length > 1 ? "s" : ""} only` : "";
+    $("mask-note").textContent = maskDraw.active ? "Click corners on the preview around what to skip"
+      : cameraMask ? `Skipping ${cameraMask.length} area${cameraMask.length > 1 ? "s" : ""}` : "";
   }
   function maskStep(ev: DrawEvent) {
     maskDraw = drawStep(maskDraw, ev);
@@ -183,6 +191,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     framingNote.classList.toggle("warn", view.warn);
     framingNote.hidden = false;
     document.querySelector("#framing-overlay polygon")!.setAttribute("points", view.points);
+    if (!previewRunning()) togglePreview(); // the outline is drawn on the preview (#170)
   }));
 
   // ---- What status says about the camera.
@@ -206,6 +215,10 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
 
   return {
     update(next, isScanning) {
+      if (next?.camera.selected !== status?.camera.selected) { // another camera: its framing is unknown
+        framingNote.hidden = true;
+        document.querySelector("#framing-overlay polygon")!.setAttribute("points", "");
+      }
       status = next;
       scanning = isScanning;
       render();
