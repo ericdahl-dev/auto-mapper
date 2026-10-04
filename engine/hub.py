@@ -97,6 +97,14 @@ class Hub:
         if out is None:
             return "Open the output window (Hardware) and make it fullscreen on the projector"
         if not self._output_fills_projector():
+            # Its width matching another display: it's probably there (#159), e.g. a second output
+            # window left open on the laptop, which took over from the one on the projector.
+            elsewhere = next((d for d in hw.to_dict()["displays"]
+                              if d["width"] == out["width"] and d["key"] != projector["key"]), None)
+            if elsewhere is not None:
+                return (f"The output window seems to be on {elsewhere['name']}, not {projector['name']}: move it "
+                        f"there and make it fullscreen. If one is already showing on {projector['name']}, another "
+                        "output window took over: close the extra one")
             size = f"{projector['width']}×{projector['height']}"
             return f"Output window must be {size}: make it fullscreen on the projector"
         if self.settings.selected(hw.cameras) is None:
@@ -126,8 +134,12 @@ class Hub:
             await self._send(ws, show)
 
     async def set_output(self, ws: WebSocket, width: int, height: int) -> None:
-        if self.output_window.hello(ws, width, height) and (show := self.show.message()) is not None:
-            await self._send(ws, show)  # a reconnecting output shows the show straight away
+        previous = self.output_window.ws
+        if self.output_window.hello(ws, width, height):
+            if previous is not None:  # the newest owns the projector (ADR-0001); the old one is told (#159)
+                await self._send(previous, {"type": "output_replaced"})
+            if (show := self.show.message()) is not None:
+                await self._send(ws, show)  # a reconnecting output shows the show straight away
         await self.broadcast_status()
 
     async def remove(self, ws: WebSocket) -> None:

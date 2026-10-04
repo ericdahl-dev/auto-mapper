@@ -5,6 +5,9 @@
     "surface": 1,
     "type": "effect_error"
   },
+  "output_replaced": {
+    "type": "output_replaced"
+  },
   "scan_progress": {
     "done": 1,
     "total": 34,

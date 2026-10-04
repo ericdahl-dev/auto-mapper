@@ -334,6 +334,11 @@ class ShowPatternOut(_Out):
     pattern: dict
 
 
+class OutputReplacedOut(_Out):
+    """To an output window: a newer one took over the projector (#159)."""
+    type: Literal["output_replaced"]
+
+
 class ShowTestFrameOut(_Out):
     type: Literal["show_test_frame"]
     kind: TestFrameKind
@@ -341,6 +346,6 @@ class ShowTestFrameOut(_Out):
 
 EngineMessage = TypeAdapter(Annotated[
     StatusOut | ShowOut | ScanStarted | ScanProgress | ScanResult | ScanFailed | ScanCanceledOut | ScanReload
-    | ShowCleared | EffectErrorOut | ShowPatternOut | ShowTestFrameOut,
+    | ShowCleared | EffectErrorOut | ShowPatternOut | ShowTestFrameOut | OutputReplacedOut,
     Field(discriminator="type"),
 ])

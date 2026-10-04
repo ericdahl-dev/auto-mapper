@@ -8,6 +8,7 @@ import { ShowRenderer } from "./showRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
 import { latestPerFrame } from "./latestPerFrame";
+import { showReplacedNotice } from "./replacedNotice";
 
 const canvas = document.getElementById("stage") as HTMLCanvasElement;
 const hint = document.getElementById("hint")!;
@@ -84,10 +85,19 @@ function showFrames() {
 
 // Show updates (every drag step) are applied once per frame, the newest (#161).
 const showUpdates = latestPerFrame<ShowMessage>(applyShow);
+let replaced = false; // a newer output window took over (#159): stay dark and quiet
 
 const conn = connect({
   hello: () => ({ type: "hello", role: "output", ...size }),
   onMessage(msg) {
+    if (msg.type === "output_replaced") { // a newer output window owns the projector now (#159)
+      replaced = true;
+      showUpdates.cancel(); // a show still pending mustn't draw over the notice
+      showFrames();
+      renderer.showTestFrame("black");
+      showReplacedNotice();
+      return;
+    }
     if (msg.type === "show") showUpdates.push(msg);
     if (msg.type === "show_cleared") { // a new project: go dark, stay fullscreen
       showUpdates.cancel();
@@ -112,6 +122,7 @@ const conn = connect({
 
 window.addEventListener("resize", () => {
   size = renderer.resize(mode === "frames");
+  if (replaced) return; // its hello would take the projector back from the newer window
   conn.send({ type: "hello", role: "output", ...size });
   syncHint();
 });
