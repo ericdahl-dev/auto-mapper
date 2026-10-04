@@ -37,6 +37,10 @@ def is_still(unique_id: str | None) -> bool:
 BRACKET_MODE = "Bracketing C 2.0 Steps 3 Pictures"
 BRACKET_GAINS = (1.0, 4.0, 16.0)
 
+# gphoto2's event kinds (wait_for_event), as numbers: the gphoto2 module is macOS-only (tests run anywhere).
+GP_EVENT_TIMEOUT = 1
+GP_EVENT_FILE_ADDED = 2
+
 LOW_BATTERY = 20  # percent: warn
 FLAT_BATTERY = 10  # percent: don't start a scan (a camera dying mid-scan wastes it, and can stick)
 
@@ -287,12 +291,10 @@ def _drain_new_files(cam, quiet_ms: int = 300, most_seconds: float = 3.0) -> Non
     """Reads and drops the camera's pending events, e.g. the other photos of a bracketing drive
     mode's press (announced as new files within ~0.5 s). libgphoto2 takes the next new file as a
     capture's result, so a leftover came back as the next photo."""
-    import gphoto2 as gp
-
     end = time.monotonic() + most_seconds
     while time.monotonic() < end:
         kind, _ = cam.wait_for_event(quiet_ms)
-        if kind == gp.GP_EVENT_TIMEOUT:
+        if kind == GP_EVENT_TIMEOUT:
             return
 
 
@@ -530,15 +532,13 @@ class GPhoto2Session:
     def capture_burst(self, count: int, wait_seconds: float = 10.0) -> list[np.ndarray]:
         """One press that takes several photos (the camera's bracketing): the first comes from the
         capture, the rest are announced as new files; each is downloaded and decoded, in order."""
-        import gphoto2 as gp
-
         def shoot(cam):
             first = cam.capture(0)  # GP_CAPTURE_IMAGE
             paths = [(first.folder, first.name)]
             end = time.monotonic() + wait_seconds
             while len(paths) < count and time.monotonic() < end:
                 kind, data = cam.wait_for_event(500)
-                if kind == gp.GP_EVENT_FILE_ADDED:
+                if kind == GP_EVENT_FILE_ADDED:
                     paths.append((data.folder, data.name))
             if len(paths) < count:
                 raise DriverError(f"the camera sent {len(paths)} of {count} bracketed photos: "

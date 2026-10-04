@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import pytest
 
-from engine.still_camera import DriverError, GPhoto2Session, SharedStill
+from engine.still_camera import GP_EVENT_FILE_ADDED, GP_EVENT_TIMEOUT, DriverError, GPhoto2Session, SharedStill
 
 
 class Widget:
@@ -71,9 +71,8 @@ class FakeGpCamera:
         return Path()
 
     def wait_for_event(self, timeout_ms):
-        import gphoto2 as gp
 
-        return gp.GP_EVENT_TIMEOUT, None  # nothing pending
+        return GP_EVENT_TIMEOUT, None  # nothing pending
 
     def file_get(self, folder, name, kind):
         class File:
@@ -316,13 +315,12 @@ def test_one_press_in_bracketing_collects_every_photo_it_takes():
             return p
 
         def wait_for_event(self, timeout_ms):
-            import gphoto2 as gp
 
             if self.pending:
                 folder, name = self.pending.pop(0)
                 p = Path(); p.folder, p.name = folder, name
-                return gp.GP_EVENT_FILE_ADDED, p
-            return gp.GP_EVENT_TIMEOUT, None
+                return GP_EVENT_FILE_ADDED, p
+            return GP_EVENT_TIMEOUT, None
 
         def file_get(self, folder, name, kind):
             shade = shades["abc".index(name[0])]
@@ -356,12 +354,11 @@ def test_extra_photos_from_one_press_never_become_the_next_photo():
             return p
 
         def wait_for_event(self, timeout_ms):
-            import gphoto2 as gp
 
             if self.pending:
                 p = Path(); p.name = self.pending.pop(0)
-                return gp.GP_EVENT_FILE_ADDED, p
-            return gp.GP_EVENT_TIMEOUT, None
+                return GP_EVENT_FILE_ADDED, p
+            return GP_EVENT_TIMEOUT, None
 
         def file_get(self, folder, name, kind):
             shade = 200 if name.startswith("1") else 20  # press 1: white on the projector; press 2: black
