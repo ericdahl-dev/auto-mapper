@@ -21,7 +21,6 @@ import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
 import { labelPoint } from "./labelPoint";
 import { modePill } from "./modePill";
-import { previewStep } from "./preview";
 import { moveScene } from "./sceneList";
 import { syncOptions } from "./selectOptions";
 import { DESELECT_DELAY_MS, surfaceClick } from "./surfaceClick";
@@ -34,7 +33,7 @@ import { placeOutput } from "./screens";
 import { channelNote, describeSound, soundOffSettings } from "./soundView";
 import { soundOffNote } from "./soundOffNote";
 import { cameraOptions, describeStatus, projectorOptions } from "./statusView";
-import { describeFraming, type FramingResult } from "./framingView";
+import { mountCameraPanel } from "./cameraPanel";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const banners = $("banners");
@@ -44,12 +43,6 @@ const scan = $<HTMLButtonElement>("scan");
 const scanReason = $("scan-reason");
 const hardwareNotes = $("hardware-notes");
 const cameraSelect = $<HTMLSelectElement>("camera-select");
-const calibration = $("calibration");
-const batteryLabel = $("battery-label");
-const battery = $("battery");
-const preview = $<HTMLImageElement>("preview");
-const previewToggle = $<HTMLButtonElement>("preview-toggle");
-const calibrate = $<HTMLButtonElement>("calibrate");
 
 let status: StatusMessage | null = null;
 const projectName = $("project-name");
@@ -145,6 +138,10 @@ effectSelect.replaceChildren(...EFFECTS.map((e) => Object.assign(document.create
 // The engine, and this Editor's view of the current show (see editSession.ts): edits show at once and
 // save at most once per frame; show updates that arrive during a drag wait until it ends.
 const engine = createEngineClient();
+// The Camera section: preview, calibration, framing check and the camera's scan settings.
+const cameraPanel = mountCameraPanel({ engine, notice });
+void cameraPanel.loadScanSettings();
+
 const session = new EditSession({ patch: (id, body, gesture) => void engine.patchSurface(id, body, gesture) });
 /** Edits the shape or settings of a surface (shown at once, saved throttled). */
 const patchSurface = (id: number, body: SurfaceEdit) => session.edit(id, body);
@@ -901,90 +898,6 @@ for (const d of folds) {
 }
 applyFolds();
 
-// Scan settings for the selected camera (#66): hole fill now; saved per camera, used by the next scan.
-const holeFill = $<HTMLInputElement>("hole-fill");
-const holeFillReadout = $("hole-fill-readout");
-let cameraMask: number[][][] | null = null; // 0..1 camera coordinates
-async function loadScanSettings() {
-  const r = await engine.scanSettings();
-  if (!r.ok) return;
-  const s = (await r.json()) as { hole_fill: number; mask: number[][][] | null; hdr: number; aperture?: string };
-  cameraMask = s.mask;
-  renderMask();
-  if (document.activeElement !== hdrSelect) hdrSelect.value = String(s.hdr);
-  renderApertureRow();
-  if (document.activeElement !== apertureSelect && s.aperture) apertureSelect.value = s.aperture;
-  if (document.activeElement === holeFill) return;
-  holeFill.value = String(s.hole_fill);
-  holeFillReadout.textContent = `${s.hole_fill} px`;
-}
-
-// Camera mask (#66): click corners on the preview to mark areas to scan; the rest is ignored.
-const previewBox = $("preview-box");
-const maskOverlay = $("mask-overlay");
-let maskDraw = idleDraw; // in preview pixels, so the double-click echo rule works; saved as 0..1
-function renderMask() {
-  const { width, height } = previewBox.getBoundingClientRect();
-  const toUnit = (p: number[]) => `${p[0] / Math.max(1, width)},${p[1] / Math.max(1, height)}`;
-  const shapes = (cameraMask ?? []).map((poly) => {
-    const el = document.createElementNS(SVG_NS, "polygon");
-    el.setAttribute("points", poly.map(([x, y]) => `${x},${y}`).join(" "));
-    return el;
-  });
-  if (maskDraw.active && maskDraw.points.length) {
-    const draft = document.createElementNS(SVG_NS, "polyline");
-    draft.setAttribute("points", maskDraw.points.map(toUnit).join(" "));
-    shapes.push(draft);
-  }
-  maskOverlay.replaceChildren(...shapes);
-  previewBox.classList.toggle("drawing", maskDraw.active);
-  $("mask-draw").textContent = maskDraw.active ? "Double-click to finish" : "Mask area";
-  $("mask-clear").hidden = !cameraMask;
-  $("mask-note").textContent = cameraMask ? `Scanning ${cameraMask.length} area${cameraMask.length > 1 ? "s" : ""} only` : "";
-}
-function maskStep(ev: DrawEvent) {
-  maskDraw = drawStep(maskDraw, ev);
-  if (maskDraw.finished) {
-    const { width, height } = previewBox.getBoundingClientRect();
-    const unit = maskDraw.finished.map(([x, y]) => [
-      Math.min(1, Math.max(0, x / width)), Math.min(1, Math.max(0, y / height)),
-    ]);
-    maskDraw = idleDraw;
-    void engine.setScanSettings({ mask: [...(cameraMask ?? []), unit] }).then(() => loadScanSettings());
-  }
-  renderMask();
-}
-const previewPoint = (ev: MouseEvent) => {
-  const r = previewBox.getBoundingClientRect();
-  return [ev.clientX - r.left, ev.clientY - r.top];
-};
-$("mask-draw").addEventListener("click", () => {
-  if (maskDraw.active) return maskStep({ type: "finish" });
-  if (previewTimer === undefined) previewToggle.click(); // you draw on what the camera sees
-  maskStep({ type: "start" });
-});
-$("mask-clear").addEventListener("click", () => void engine.setScanSettings({ clear_mask: true }).then(() => loadScanSettings()));
-previewBox.addEventListener("click", (ev) => { if (maskDraw.active) maskStep({ type: "point", point: previewPoint(ev) }); });
-previewBox.addEventListener("dblclick", () => { if (maskDraw.active) maskStep({ type: "finish" }); });
-window.addEventListener("keydown", (ev) => {
-  if (!maskDraw.active) return;
-  if (ev.key === "Enter") maskStep({ type: "finish" });
-  if (ev.key === "Escape") maskStep({ type: "cancel" });
-});
-const apertureRow = $("aperture-row");
-/** Aperture: still cameras only (a webcam's lens has none to set). */
-function renderApertureRow() {
-  const sel = status?.hardware.cameras.find((c) => c.unique_id === status?.camera.selected);
-  apertureRow.hidden = sel?.device_type !== "still";
-}
-const apertureSelect = $<HTMLSelectElement>("aperture");
-apertureSelect.addEventListener("change", () => void engine.setScanSettings({ aperture: apertureSelect.value }));
-const hdrSelect = $<HTMLSelectElement>("hdr");
-hdrSelect.addEventListener("change", () => void engine.setScanSettings({ hdr: Number(hdrSelect.value) }));
-holeFill.addEventListener("input", () => { holeFillReadout.textContent = `${holeFill.value} px`; });
-holeFill.addEventListener("change", () => void engine.setScanSettings({ hole_fill: Number(holeFill.value) }));
-void loadScanSettings();
-
 const playButton = $<HTMLButtonElement>("play");
 const blackoutButton = $<HTMLButtonElement>("blackout");
 playButton.addEventListener("click", () => void setMode(show?.presentation.mode === "play" ? "edit" : "play"));
@@ -1196,12 +1109,8 @@ function render() {
   if (status?.project && document.activeElement !== projectSaveName && !projectSaveName.value) {
     projectSaveName.value = status.project.name;
   }
-  calibration.textContent = view.calibration;
-  battery.textContent = view.battery?.replace("Battery ", "") ?? "";
-  battery.hidden = batteryLabel.hidden = view.battery === null;
   syncOptions(cameraSelect, cameraOptions(status));
-  calibrate.disabled = !status?.output_connected || !status.camera.selected;
-  checkFraming.disabled = calibrate.disabled || scanState.running;
+  cameraPanel.update(status, scanState.running);
 }
 
 // Sound: the output window listens; the editor switches it and shows its meter.
@@ -1290,7 +1199,6 @@ connect({
       render();
       renderSound();
       applyFolds(); // a problem opens its section
-      renderApertureRow();
       renderScan();
     } else if (msg.type === "show") {
       session.receive(msg); // applied now, or when the current drag ends: see session.subscribe below
@@ -1333,7 +1241,7 @@ scan.addEventListener("click", async () => {
     void engine.cancelScan();
     return;
   }
-  if (previewTimer !== undefined) previewToggle.click(); // the scan needs the camera to itself
+  cameraPanel.stopPreview(); // the scan needs the camera to itself
   const res = await engine.startScan();
   if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`);
 });
@@ -1358,73 +1266,7 @@ projectorSelect.addEventListener("change", () => {
 
 cameraSelect.addEventListener("change", async () => {
   await engine.selectCamera(cameraSelect.value);
-  void loadScanSettings(); // scan settings belong to the camera
+  void cameraPanel.loadScanSettings(); // scan settings belong to the camera
 });
 
-// Preview is opt-in: polling keeps the camera running, so it only runs while shown.
-let previewTimer: number | undefined; // set while the preview runs (the next update's timeout)
-let previewUrl: string | null = null;
-async function previewLoop() {
-  // One request at a time; the next waits for this one (a still camera takes seconds per photo).
-  const update = await previewStep(() => fetch(`/api/camera/preview.jpg?t=${Date.now()}`));
-  if (previewTimer === undefined) return; // hidden meanwhile
-  if (update.photo) {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    previewUrl = URL.createObjectURL(update.photo);
-    preview.src = previewUrl;
-  }
-  $("preview-note").textContent = update.note;
-  previewTimer = window.setTimeout(() => void previewLoop(), 500);
-}
-previewToggle.addEventListener("click", () => {
-  const on = previewTimer === undefined;
-  $("preview-box").hidden = !on;
-  previewToggle.textContent = on ? "Hide preview" : "Show preview";
-  if (on) {
-    previewTimer = window.setTimeout(() => void previewLoop(), 0);
-  } else {
-    window.clearTimeout(previewTimer);
-    previewTimer = undefined;
-    $("preview-note").textContent = "";
-    void engine.releaseCamera();
-  }
-});
-
-const checkFraming = $<HTMLButtonElement>("check-framing");
-const framingNote = $("framing-note");
-checkFraming.addEventListener("click", async () => {
-  checkFraming.disabled = true;
-  checkFraming.textContent = "Checking…";
-  try {
-    const res = await engine.checkFraming();
-    const body = await res.json();
-    if (!res.ok) {
-      notice(`Framing check failed: ${body.detail}`);
-      return;
-    }
-    const view = describeFraming(body as FramingResult);
-    framingNote.textContent = view.text;
-    framingNote.classList.toggle("warn", view.warn);
-    framingNote.hidden = false;
-    document.querySelector("#framing-overlay polygon")!.setAttribute("points", view.points);
-  } finally {
-    if (previewTimer === undefined) void engine.releaseCamera();
-    checkFraming.textContent = "Check framing";
-    render();
-  }
-});
-
-calibrate.addEventListener("click", async () => {
-  calibrate.disabled = true;
-  calibrate.textContent = "Calibrating…";
-  try {
-    const res = await engine.calibrate();
-    const body = await res.json();
-    notice(res.ok ? `Calibrated: exposure ${body.exposure}, white peak ${Math.round(body.p99)}` : `Calibration failed: ${body.detail}`);
-  } finally {
-    if (previewTimer === undefined) void engine.releaseCamera();
-    calibrate.textContent = "Calibrate exposure";
-    render();
-  }
-});
 render();
