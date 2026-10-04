@@ -3,6 +3,7 @@
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from engine.scan_settings import APERTURE_PATTERN, HDR_MAX, HOLE_FILL_MAX, MASK_MAX_AREAS, MASK_MAX_POINTS
 
 TestFrameKind = Literal["white", "black", "grid"]
 
@@ -105,13 +106,13 @@ UnitPoint = Annotated[list[Annotated[float, Field(ge=0, le=1)]], Field(min_lengt
 
 
 class ScanSettingsRequest(BaseModel):
-    hole_fill: Annotated[int, Field(ge=0, le=31)] | None = None  # px gap filled between decoded pixels
-    # Areas of the camera image to scan (0..1 camera coordinates); the rest is ignored.
-    mask: Annotated[list[Annotated[list[UnitPoint], Field(min_length=3, max_length=200)]], Field(min_length=1, max_length=16)] | None = None
+    # What each means, its default and bounds: engine/scan_settings.py.
+    hole_fill: Annotated[int, Field(ge=0, le=HOLE_FILL_MAX)] | None = None
+    mask: Annotated[list[Annotated[list[UnitPoint], Field(min_length=3, max_length=MASK_MAX_POINTS)]],
+                    Field(min_length=1, max_length=MASK_MAX_AREAS)] | None = None
     clear_mask: bool = False  # back to scanning the whole camera image
-    hdr: Annotated[int, Field(ge=1, le=3)] | None = None  # exposures per pattern: 1 = off
-    # Still cameras: f-number to scan at ("8" = f/8, deep focus), or "camera" to leave the lens as set.
-    aperture: Annotated[str, Field(pattern=r"^(\d{1,2}(\.\d)?|camera)$")] | None = None
+    hdr: Annotated[int, Field(ge=1, le=HDR_MAX)] | None = None
+    aperture: Annotated[str, Field(pattern=APERTURE_PATTERN)] | None = None
 
 
 class AutostartRequest(BaseModel):
