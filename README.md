@@ -2,7 +2,7 @@
 
 ![auto-mapper: automatic projection mapping with a projector and a webcam](frontend/public/social.png)
 
-Automatic projection mapping with a projector, a USB webcam and a Mac.
+Automatic projection mapping with a projector, a camera (a USB webcam or a still camera over USB) and a Mac.
 
 auto-mapper is a [Lightform](https://lightform.com/)-style projection mapper (Lightform, the commercial product it is modeled on, is discontinued). You point a projector and a webcam at a scene and press **Scan**. The app projects structured-light patterns, works out which camera pixel sees which projector pixel, and finds the surfaces in the scene: walls, boxes, cabinet doors, corbels. You give each surface a live shader effect, and the projector plays them back, each one clipped to its surface.
 
@@ -32,13 +32,42 @@ Once the scan is done, everything lives in projector coordinates, so playback an
 |------|-------------|
 | Computer | A Mac. The hardware probe uses `system_profiler` and AVFoundation (through pyobjc), and camera control uses `uvc-util`, so it is macOS-only today. |
 | Projector | Any projector connected as an **extended** display, not mirrored. By default the first non-main display is the projector; with several monitors, pick it in the editor's **Projector** dropdown. |
-| Camera | A **UVC USB webcam** that allows manual exposure, white balance and focus. |
+| Camera | A **UVC USB webcam** that allows manual exposure, white balance and focus, or a **still camera over USB** that gphoto2 can control (the rig uses a Sony a6600). |
 
 **UVC** (USB Video Class) is the standard protocol most USB webcams speak, and it lets software set the camera's exposure, gain, white balance and focus directly.
 
-A scan only works if the camera's picture stays constant between patterns, so auto exposure, auto white balance and autofocus are switched off during a scan and restored afterwards. That is why phone cameras (Continuity Camera) and built-in cameras can't be used for scanning: there's no way to lock their exposure. The app never picks the built-in FaceTime camera, an iPhone or a virtual camera (such as OBS) automatically, and calibration and scanning refuse any camera without a USB address.
+A scan only works if the camera's picture stays constant between patterns, so auto exposure, auto white balance and autofocus are switched off during a scan and restored afterwards. That is why phone cameras (Continuity Camera) and built-in cameras can't be used for scanning: there's no way to lock their exposure. The app never picks the built-in FaceTime camera, an iPhone or a virtual camera (such as OBS) automatically, and calibration and scanning refuse any camera that is neither a USB webcam nor a still camera over USB.
 
-The dev rig is an **AC410 4K webcam** and a roughly $100 **VOPLLS** projector (about 300 to 500 real ANSI lumens), which is fine indoors in a dark room. The camera is opened at 3840x2160 by default; a camera that can't do that falls back to its nearest size.
+The dev rig is an **AC410 4K webcam**, a **Sony a6600**, and a roughly $100 **VOPLLS** projector (about 300 to 500 real ANSI lumens), which is fine indoors in a dark room. The webcam is opened at 3840x2160 by default; a webcam that can't do that falls back to its nearest size.
+
+### Still camera (Sony a6600)
+
+A still camera takes a real photo per pattern, so a scan is slower but sharper and much less noisy than a webcam's. The app talks to it over USB through gphoto2. It shows in the **Camera** dropdown as `(photos over USB)`, and is picked by default only when there is no USB webcam.
+
+**Set these on the camera body.** The app never changes shutter or ISO over USB: the a6600 applies only the first exposure change after it connects, so exposure is yours to set.
+
+| Setting | Value |
+|---------|-------|
+| USB Connection | PC Remote |
+| USB Power Supply (USB charging) | Off. Charging over the cable makes the connection unreliable. |
+| Mode dial | M |
+| ISO | A fixed number, not Auto (e.g. 400) |
+| Shutter | Whatever **Check exposure** asks for. Slow is fine on a tripod. |
+| File Format | JPEG |
+| Creative Style | Standard |
+| Long Exposure NR | Off |
+
+For long sessions, power the camera from a dummy battery and AC adapter (NP-FZ100 type) rather than the battery, since USB charging stays off.
+
+**Connect in this order.**
+
+1. Plug in the USB cable with the camera **off**, and start `make dev`.
+2. Turn the camera on, click **Refresh hardware**, and pick it in the **Camera** dropdown.
+3. Click **Show preview** (or Check exposure, Check framing or Scan). The first of these connects. macOS's camera service (`ptpcamerad`) grabs any camera like this the moment it appears; while connecting, the app stops it and keeps it stopped until the camera is the app's. You don't need to quit anything yourself. The app then holds the connection between scans.
+
+If the camera shows **Connecting** and the app can't reach it, turn the camera off and on.
+
+**Zoom by hand.** The a6600 has no remote zoom over USB. Zoom with the lens lever, and use **Check framing** (step 3 under [Using it](#using-it)) to see how much of the view the projection fills.
 
 **Outdoor use.** Projector brightness is what limits you outside. As a rough guide, plan on about 3,000 to 4,000 real ANSI lumens for a small wall after dark, and 5,000 or more for the front of a house.
 
@@ -49,7 +78,8 @@ The dev rig is an **AC410 4K webcam** and a roughly $100 **VOPLLS** projector (a
 - **macOS**, with the projector connected as an extended display.
 - **[uv](https://docs.astral.sh/uv/)**. The engine needs Python 3.12 (`requires-python = ">=3.12,<3.13"`); uv installs it for you.
 - **Node.js** `^20.19.0` or `>=22.12.0` (Vite 8's minimum) and npm.
-- **[`uvc-util`](https://github.com/jtfrey/uvc-util)** on your `PATH`. The engine runs it to read and set camera controls. Without it, calibration and scanning fail.
+- **[`uvc-util`](https://github.com/jtfrey/uvc-util)** on your `PATH`. The engine runs it to read and set webcam controls. Without it, calibration and scanning with a webcam fail.
+- **gphoto2** on your `PATH` (`brew install gphoto2`), only for a still camera. The engine runs `gphoto2 --auto-detect` to list it; without that, the camera never appears. The Python binding comes with `make install` on macOS.
 - **Playwright's Chromium**, only for the browser tests (see [Development](#development)).
 
 ### Install
@@ -95,9 +125,12 @@ Everything is plain files under `~/.auto-mapper/`:
 ~/.auto-mapper/
 ├── settings.json          selected camera and projector, plus each camera's exposure calibration
 ├── active-project.json    name and slug of the project last saved or opened
-├── camera-restore.json    only while calibration or a scan has the camera locked (or after one
-│                          crashed): the camera's original settings, restored automatically
+├── camera-restore.json    only while calibration or a scan has the webcam locked (or after one
+│                          crashed): the webcam's original settings, restored automatically
 │                          on the next engine start
+├── still-camera-restore.json
+│                          the same for a still camera: your settings while the app has it,
+│                          given back on the next take-over if a scan was killed
 ├── scans/latest/          the working scan, which the editor and output show
 │   ├── scan.png           the space as the projector sees it (projector pixels)
 │   ├── mask.png           which projector pixels were decoded
@@ -116,23 +149,40 @@ Everything is plain files under `~/.auto-mapper/`:
 
 Click **Open output window** in the editor. Drag the new window onto the projector and click inside it to go fullscreen (browsers only allow fullscreen from a click, so the app can't do this for you). The setup hint ("Drag this window onto the projector, then click to go fullscreen.") disappears once the window fills the screen, so it is never projected over the patterns.
 
+Keep only one output window open. The newest one owns the projector: if another opens (say, one left on the laptop), the old one goes dark and says "Another output window took over the projector: close this one." If Scan stays disabled because the output is the wrong size, its reason names the display the output window seems to be on.
+
 The editor's **Hardware** panel shows the projector (a dropdown: with more than one external monitor, pick the one that is the projector; the choice is remembered, and if that display is unplugged the editor says so and falls back to the first non-main display), the camera (a dropdown too: see the next step), whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
 
 The **Test frame** buttons (Grid, White, Black) put a test image on the projector, which helps with aiming and focusing.
 
 ### 2. Pick the camera
 
-The **Camera** dropdown in the Hardware panel lists every camera, labeled `(USB)`, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default; your choice is remembered in `settings.json`.
+The **Camera** dropdown in the Hardware panel lists every camera, labeled `(USB)`, `(photos over USB)` for a still camera, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default, else a still camera; your choice is remembered in `settings.json`.
 
-**Show preview** is off by default. While it's on, the editor polls a camera frame twice a second; turning it off releases the camera. Starting a scan turns the preview off, because the scan needs the camera to itself. Use the preview to check that the camera sees the whole projected area.
+**Show preview**, in the **Camera** section, is off by default. While it's on, the editor polls a camera frame twice a second; turning it off releases the webcam. A still camera takes a photo per preview (a few seconds each) and reuses it for 5 seconds. Starting a scan turns the preview off, because the scan needs the camera to itself. Use the preview to check that the camera sees the whole projected area.
 
-### 3. Calibrate exposure
+### 3. Calibrate exposure and check framing
 
-Click **Calibrate exposure**. The projector shows full white, the camera's auto controls are locked, and the engine searches for the longest exposure (up to 100 ms) at which the white frame is bright but not clipped. Long exposures brighten the image without the noise that gain adds, and scans don't need speed. Only if the longest exposure is still too dark does it raise gain, step by step.
+**With a webcam**, click **Calibrate exposure**. The projector shows full white, the camera's auto controls are locked, and the engine searches for the longest exposure (up to 100 ms) at which the white frame is bright but not clipped. Long exposures brighten the image without the noise that gain adds, and scans don't need speed. Only if the longest exposure is still too dark does it raise gain, step by step.
 
 The result shows as "Exposure N, gain G (white frame peak P)". If it reads **"camera at its light limit"**, the camera is at maximum exposure and maximum gain: the projection is very faint for this camera, so expect poor decoding on dark or distant surfaces.
 
-If you skip this step, Scan calibrates first.
+**With a still camera**, the same button reads **Check exposure**. The app doesn't set the exposure (see [Still camera](#still-camera-sony-a6600)); it photographs the projected white and tells you what to change on the camera:
+
+| Result | Do this on the camera |
+|--------|-----------------------|
+| Exposure is good | Nothing. |
+| Too dark | A slower shutter or a higher ISO. |
+| Clipping | A faster shutter or a lower ISO. |
+| ISO is Auto | Set a number, so every pattern is photographed the same way. |
+
+For each scan (and each check), the app takes the camera over and gives your settings back afterwards. It sets the aperture (**Aperture** menu in the Camera section, default f/8 for deep focus; "as set on the camera" leaves the lens alone), single-shot drive, white balance Daylight, DRO, flash and exposure compensation off, and medium JPEGs kept off the memory card. It focuses once on a white frame, then holds that focus: focusing on stripes fails.
+
+The Camera section shows a still camera's **Battery** once the app has read it. At 20% or less a note says to charge or swap it soon; at 10% or less Scan is disabled.
+
+If you skip this step, Scan calibrates (or checks the exposure) first.
+
+**Check framing** shows white, then black, measures how much of the camera's view the projection fills, and outlines it on the preview. The more of the view it fills, the finer the stripes a scan can decode. It says when it's framed well, and otherwise to zoom in or move the camera closer, or to zoom out or move back when part of the projection is cut off.
 
 ### 4. Scan
 
@@ -154,7 +204,7 @@ Detected surfaces appear as numbered outlines over the scan. In the editor:
 | Move a corner | Drag a handle. On a curved run, the neighboring points follow with a smooth falloff, so the curve bends instead of kinking. |
 | Add a corner | Double-click an edge of the selected surface. |
 | Remove a corner | Alt-click a handle. A surface always keeps at least three corners. |
-| Skip part of the room when scanning | Camera section: **Skip an area**, then click corners on the camera preview around a window, a TV or shiny things, double-click to finish; add more areas as needed. Skipped areas are shaded on the preview and left out of the next scan; click one to stop skipping it, or **Skip nothing** to clear them all. **Hole fill** sets how much small gaps in the scan are filled (more: fuller surfaces; less: truer edges). **HDR** captures each pattern at 2 or 3 exposures and keeps the best-lit reading per pixel, for scenes with dark and bright surfaces (slower). All are kept per camera. |
+| Skip part of the room when scanning | Camera section: **Skip an area**, then click corners on the camera preview around a window, a TV or shiny things, double-click to finish; add more areas as needed. Skipped areas are shaded on the preview and left out of the next scan; click one to stop skipping it, or **Skip nothing** to clear them all. **Hole fill** sets how much small gaps in the scan are filled (more: fuller surfaces; less: truer edges). **HDR** captures each pattern at 2 or 3 exposures and keeps the best-lit reading per pixel, for scenes with dark and bright surfaces (slower). A still camera uses its own bracketing for HDR instead, at either setting: the app switches its drive mode to Bracketing C 2.0 Steps 3 Pictures for the scan, so one press per pattern takes 3 photos 2 stops apart. All are kept per camera. |
 | Zoom in to place points precisely | Pinch on the trackpad (or Cmd/Ctrl + scroll) over the scan to zoom, up to 16×; two-finger scroll moves around. **−**, **+** and **Fit** sit under the scan. Handles and labels keep their size, so you can place points much more precisely. |
 | Less on screen | Click a sidebar heading to fold or open that section; the Editor remembers it. Set-up-once sections (Schedule, MIDI, Hardware, Camera, Test frame) start folded, and a section with a problem (no projector, sound blocked) opens by itself. |
 | Delete surfaces | Click a surface and press **Delete** or **Backspace** (or the panel's Delete). Shift-click more surfaces to delete them all at once; one Undo brings them back. |
@@ -192,12 +242,12 @@ Pick an effect for the selected surface in the surface panel; its controls appea
 | **Outline trace** | A glowing line around the surface's edge, optionally chasing round it | Color, Line width (1 to 40 px), Glow, Chase, Speed (0 to 2 laps/s), Segments (1 to 8), React to sound |
 | **Noise flow** | Slowly drifting cloud-like texture between two colors | Color, Second color, Scale, Speed, Contrast, Brightness, React to sound |
 | **Tint (scan)** | Recolors the real object while keeping its texture (wood grain, fabric) visible | Color, Texture, Scan gain |
-| **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Color, Sensitivity, Line width (1 to 8 px), Base light, Pulse |
+| **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Color, Sensitivity, Line width (1 to 8 px), Smoothing (0 to 2), Base light, Pulse |
 | **Posterize (scan)** | Flattens the real surface into a few bands of color, like a screen print | Bands (2 to 8), Dark color, Light color, Scan gain |
 | **Text** | Your text, as large as fits inside the surface (or corner-pinned to it), several lines allowed | Text, Color, Background, Font (Sans, Serif, Mono), Align, Fit (Fit inside, Map to corners), Motion (None, Scroll, Pulse), Speed, React to sound |
 | **Image / video** | An uploaded image or video, clipped to the surface's outline | Image or video (file); Fit: Cover, Stretch, Map to corners, Contain, Original size, Tile; Zoom, Pan, Rotate, Flip, Background; Video start and speed, Video sound and Volume |
 
-The three "(scan)" effects read the scan image, so they react to what is really on the surface. Image / video accepts PNG, JPEG, WebP, GIF, MP4, M4V, MOV and WebM up to 2 GB; videos loop from their start time, silently unless you turn on **Video sound** (with a Volume). Video sound plays from the output window, through the Mac's selected sound output unless you pick another under **Sound output** in the Sound panel (for example the projector's HDMI audio), so the rest of the Mac's sound can stay where it is. It plays only in Play mode, never during Blackout. If several surfaces show the same video with sound on, it plays once, at the loudest of their volumes. Browsers hold sound back until you click the output window once; the editor tells you when that's needed.
+The three "(scan)" effects read the scan image, so they react to what is really on the surface. Edge glow's **Smoothing** (default 1) ignores stray pixels and fine speckle in the scan; 0 shows every fine edge. Its edges are computed once per scan, not every frame. Image / video accepts PNG, JPEG, WebP, GIF, MP4, M4V, MOV and WebM up to 2 GB; videos loop from their start time, silently unless you turn on **Video sound** (with a Volume). Video sound plays from the output window, through the Mac's selected sound output unless you pick another under **Sound output** in the Sound panel (for example the projector's HDMI audio), so the rest of the Mac's sound can stay where it is. It plays only in Play mode, never during Blackout. If several surfaces show the same video with sound on, it plays once, at the loudest of their volumes. Browsers hold sound back until you click the output window once; the editor tells you when that's needed.
 
 **Framing images and video.**
 
@@ -254,9 +304,9 @@ From real use on the rig:
 
 - **Make the room dark.** Ambient light washes out the stripe patterns. If the black frame is bright, the low-coverage warning tells you to turn off lights or close blinds.
 - **Offset the camera diagonally from the projector lens**, not directly below or beside it. Surface detection finds depth edges from parallax between the camera and projector, and parallax along only one axis hides depth edges that run along that axis.
-- **Make sure the camera sees the whole projection.** Check with **Show preview** before scanning; anything outside the camera's view can't be decoded.
+- **Make sure the camera sees the whole projection, and fill its view.** Use **Check framing** before scanning: anything outside the camera's view can't be decoded, and a projection that fills only a small part of the view decodes coarser stripes.
 - **Expect dark or very distant surfaces to decode poorly.** They return too little light for the finest stripes. Draw those surfaces by hand with **Draw surface**.
-- **Recalibrate after changes.** Calibrate exposure again after moving the projector, camera or objects, or after changing `AUTO_MAPPER_CAPTURE`.
+- **Recalibrate after changes.** Calibrate (or check) exposure again after moving the projector, camera or objects, after changing `AUTO_MAPPER_CAPTURE`, or after changing a still camera's shutter, ISO or aperture.
 
 ## Troubleshooting
 
@@ -264,13 +314,21 @@ From real use on the rig:
 |---------|---------------|
 | "Engine not reachable. Is `make dev` running?" | The editor can't reach the engine on port 8765. Start or restart `make dev`. |
 | "Camera read failed" (in a scan error or a broken preview) | The engine lost the webcam. Restart `make dev`; the camera is reopened on the next preview, calibration or scan. |
-| "Output window not connected..." or "Output window is WxH but the projector is WxH..." | Open the output window, move it onto the projector and click it to go fullscreen. Scanning needs the output to match the projector's resolution exactly. |
+| "Open the output window..." or "Output window must be WxH..." | Open the output window, move it onto the projector and click it to go fullscreen. Scanning needs the output to match the projector's resolution exactly. |
+| "The output window seems to be on *display*..." | The output window is on another screen, or a second output window took over. Close the extra one, and make the one on the projector fullscreen. |
+| "Another output window took over the projector: close this one." (on the output) | Only one output window drives the projector. Close the one showing this. |
 | "The output window stopped responding..." during a scan | A minimized or hidden window stops drawing. Keep it visible and fullscreen on the projector, then scan again. |
 | "White and black frames look the same to the camera..." | The camera can't see the projection, or it is too dim to register. Check the preview, darken the room, move the projector closer, or raise `AUTO_MAPPER_SCAN_SETTLE`. |
 | "Only N% of the projection decoded." | Read the hint that follows it (bright room, faint projection, or camera not seeing the projection), then use **Show missed areas** to see where. |
 | "Camera brightness did not respond to exposure changes..." | The camera being controlled may not be the one being read, or the lens is covered. |
 | "White frame clips even at the shortest exposure..." | The projection is too bright for the camera. Dim the projector or the room. |
-| "Calibration needs a USB webcam with UVC controls" | The selected camera isn't a USB webcam. Pick one marked `(USB)`. |
+| "Calibration needs a USB webcam with UVC controls, or a still camera over USB" | The selected camera can't be controlled. Pick one marked `(USB)` or `(photos over USB)`. |
+| Still camera stuck on **Connecting**, "The camera isn't answering..." or "...hasn't reported its settings" | Turn the camera off and on. Check USB Connection is PC Remote and USB charging is off. |
+| "The camera didn't take a photo..." | Check it's on, in PC Remote, and not showing a menu. |
+| "...the camera sent no photo (set File Format to JPEG)" | Set File Format to JPEG on the camera. |
+| "The camera couldn't focus..." | Check the lens cap and that the camera sees the white frame. |
+| "...sent N of 3 bracketed photos..." | An HDR scan on a still camera: set Drive Mode to Bracketing C, 3 pictures, then scan again. |
+| "The camera battery is at N%..." | Charge or swap the battery, or use a dummy battery. Scan is disabled at 10% or less. |
 | "No projector detected..." | Connect the projector as an extended display (not mirrored), then **Refresh hardware**. |
 
 If the engine was killed mid-scan, the webcam can be left with auto exposure off. The next engine start restores its original settings from `camera-restore.json`.
@@ -279,7 +337,7 @@ If the engine was killed mid-scan, the webcam can be left with auto exposure off
 
 ### Lockstep capture
 
-The browser output window owns the projector at all times, including during a scan. For each pattern, the engine sends `show_pattern` over the WebSocket, the output draws it and acks after two animation frames (one to draw, one to be sure the previous frame was presented), the engine waits the settle time, drops buffered camera frames, then captures and averages three frames. The camera is locked with `uvc-util` for the whole scan and restored in a `finally` block, with a snapshot on disk for crashes.
+The browser output window owns the projector at all times, including during a scan. For each pattern, the engine sends `show_pattern` over the WebSocket, the output draws it and acks after two animation frames (one to draw, one to be sure the previous frame was presented), the engine waits the settle time, drops buffered camera frames, then captures and averages three frames (a still camera takes one fresh photo instead, so nothing is dropped or averaged). The camera is locked with `uvc-util` for the whole scan and restored in a `finally` block, with a snapshot on disk for crashes.
 
 ### Decoding
 
@@ -310,7 +368,7 @@ An effect is one GLSL ES 3.0 fragment shader plus a parameter schema. The editor
 | `polyEdge(p, out along)` | Distance from `p` to the outline, and how far round the outline the nearest point is |
 | `scanAt(px)`, `u_scan` | The scan image at a projector pixel |
 | `luminance(c)` | Brightness of a color |
-| `scanEdgeAt(px)` | The scan's edge strength at a projector pixel (Sobel of its brightness), precomputed once per scan. Declare `scanEdges: { spread: "<setting>" }` on the effect to name the setting that sets its line width (see Edge glow) |
+| `scanEdgeAt(px)` | The scan's edge strength at a projector pixel (Sobel of its brightness), precomputed once per scan. Declare `scanEdges: { spread: "<setting>", smoothing: "<setting>" }` on the effect to name the settings for its line width and, optionally, its smoothing (0 to 2: a median filter before the edges); see Edge glow |
 | `u_level`, `u_bass`, `u_mid`, `u_treble` | Sound, 0 to 1, smoothed; all 0 when sound is off |
 | `u_beat` | 1 on a beat, decaying to 0 over a fraction of a second |
 
@@ -375,7 +433,9 @@ make test
 
 **Message contract.** `tests/test_message_contract.py` records one real example of every message the engine sends (`frontend/src/shared/fixtures/engine-messages.json`) and fails if a message changes shape; the browser's tests parse the same examples. After an intended change to a message, run `UPDATE_MESSAGE_FIXTURES=1 uv run pytest tests/test_message_contract.py` and commit the updated fixture. Messages from the output window are validated by the engine (`engine/messages.py`), and the browser's `ClientMessage` type mirrors them.
 
-**Real-scan fixtures.** `tests/test_real_scan.py` runs regression tests against a real scan of the rig in `fixtures/local/room1/`. That directory is gitignored because it is a scan of a real room; without it those tests are skipped (you'll see them as skipped in the pytest summary).
+**Real-scan fixtures.** `tests/test_real_scan.py` runs regression tests against a real scans of the rig in `fixtures/local/room1/` (the AC410, a kitchen island) and `fixtures/local/room2/` (the a6600, a wall with a TV). `fixtures/local/` is gitignored because these are scans of real rooms; without them those tests are skipped (you'll see them as skipped in the pytest summary).
+
+**Scan check.** With `make dev` running and the rig ready (output window fullscreen on the projector, camera selected), `make scan-check` runs a real scan and prints its coverage, surface count, time, size and any warnings. It exits non-zero if the rig isn't ready or the scan fails or is canceled.
 
 ### CI
 
@@ -451,12 +511,13 @@ Effect ids are stored in each project's `scene.json`, so don't rename an existin
 | `make engine` | Engine only |
 | `make frontend` | Vite only |
 | `make build` | Type-check the frontend and build it into `frontend/dist/` |
+| `make scan-check` | A real scan on the running engine: coverage, surfaces, time, warnings (see above) |
 
 ## Limitations and roadmap
 
-- **macOS only.** Hardware detection and camera control depend on `system_profiler`, AVFoundation and `uvc-util`.
+- **macOS only.** Hardware detection and camera control depend on `system_profiler`, AVFoundation and `uvc-util`; a still camera also needs macOS's camera service kept off while gphoto2 connects.
 - **One projector.** A show maps a single projector.
 - **iPhone LiDAR depth** as an extra source for plane-based surface detection is an open idea ([#22](https://github.com/ericdahl-dev/auto-mapper/issues/22)).
-- **Real-rig validation** of scanning and detection, with a committed scan check and fixture, is in progress ([#15](https://github.com/ericdahl-dev/auto-mapper/issues/15)).
+- **Real-rig validation** ([#15](https://github.com/ericdahl-dev/auto-mapper/issues/15)): `make scan-check` and two real-scan fixtures exist; detection tuning against them continues.
 
 The overall v1 plan is tracked in [#1](https://github.com/ericdahl-dev/auto-mapper/issues/1).
