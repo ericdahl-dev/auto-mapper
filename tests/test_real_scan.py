@@ -83,3 +83,70 @@ def test_left_corbel_keeps_its_curved_scroll_edge(room1):
     corbel = [s for s, c in zip(surfaces, centroids(surfaces)) if 420 <= c[0] <= 560 and 330 <= c[1] <= 470]
     assert len(corbel) == 1
     assert len(corbel[0]["polygon"]) >= 12
+
+
+# room2 (#15): the a6600 scan of a wall, 2026-10-03: a TV (glossy, doesn't decode), a recessed panel,
+# a light switch plate and a bookshelf, with a chair in front. Boxes in projector pixels (1920x1080).
+ROOM2 = Path(__file__).parent.parent / "fixtures" / "local" / "room2"
+TV = (0, 134, 405, 576)
+PANEL = (790, 250, 1030, 525)
+SWITCH = (1045, 815, 1190, 980)
+BOOKSHELF = (1385, 50, 1920, 1080)
+CHAIR = (230, 860, 600, 1080)
+
+
+@pytest.fixture(scope="module")
+def room2():
+    if not ROOM2.exists():
+        pytest.skip("local real-scan fixture room2 not present")
+    m = np.load(ROOM2 / "map.npz")
+    meta = json.loads((ROOM2 / "meta.json").read_text())
+    decoded = DecodeResult(
+        proj_x=m["proj_x"].astype(np.int32), proj_y=m["proj_y"].astype(np.int32), valid=m["valid"],
+        white=None, black=None, bit_reliability={}, width=meta["width"], height=meta["height"],
+    )
+    image, covered = cv2.imread(str(ROOM2 / "scan.png")), m["covered"]
+    return detect_surfaces(decoded, (image, covered)), covered
+
+
+def inside(surfaces, box):
+    """Surfaces whose middle lies in the box."""
+    x0, y0, x1, y1 = box
+    return [s for s, (cx, cy) in zip(surfaces, centroids(surfaces)) if x0 <= cx <= x1 and y0 <= cy <= y1]
+
+
+def fills(surface, box, share):
+    """The surface's bounding box spans at least `share` of the box both ways."""
+    x, y, w, h = cv2.boundingRect(np.int32(np.round(surface["polygon"])))
+    return w >= share * (box[2] - box[0]) and h >= share * (box[3] - box[1])
+
+
+def test_room2_still_decodes_most_of_the_frame(room2):
+    assert block_coverage(room2[1]) > 0.8
+
+
+def test_room2_switch_plate_is_one_surface(room2):
+    found = inside(room2[0], SWITCH)
+    assert len(found) == 1 and fills(found[0], SWITCH, 0.6)
+
+
+def test_room2_recessed_panel_is_one_surface(room2):
+    found = inside(room2[0], PANEL)
+    assert len(found) == 1 and fills(found[0], PANEL, 0.6)
+
+
+@pytest.mark.xfail(strict=True, reason="#15: a large undecoded area enclosed by surfaces (the glossy TV) isn't a surface yet")
+def test_room2_tv_is_a_surface(room2):
+    found = inside(room2[0], TV)
+    assert len(found) == 1 and fills(found[0], TV, 0.7)
+
+
+@pytest.mark.xfail(strict=True, reason="#15: the bookshelf's contents come out as separate surfaces, not one")
+def test_room2_bookshelf_is_one_surface(room2):
+    found = inside(room2[0], BOOKSHELF)
+    assert len(found) == 1 and fills(found[0], BOOKSHELF, 0.8)
+
+
+@pytest.mark.xfail(strict=True, reason="#15: a scrap of the chair in front of the wall becomes a surface")
+def test_room2_no_surface_on_the_chair(room2):
+    assert inside(room2[0], CHAIR) == []
