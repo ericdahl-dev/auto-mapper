@@ -18,8 +18,23 @@ precision highp float;
 uniform sampler2D u_scan;
 uniform vec2 u_resolution;
 uniform float u_spread;
+uniform float u_smooth; // 0: none; n: the median of the 3x3 pixels n apart (drops specks up to ~n px)
 out vec4 color;
-float lum(vec2 px) { return dot(texture(u_scan, px / u_resolution).rgb, vec3(0.299, 0.587, 0.114)); }
+float raw(vec2 px) { return dot(texture(u_scan, px / u_resolution).rgb, vec3(0.299, 0.587, 0.114)); }
+void order(inout float a, inout float b) { float t = min(a, b); b = max(a, b); a = t; }
+float lum(vec2 px) {
+  if (u_smooth < 0.5) return raw(px);
+  float s = u_smooth;
+  float v0 = raw(px + vec2(-s, -s)), v1 = raw(px + vec2(0, -s)), v2 = raw(px + vec2(s, -s));
+  float v3 = raw(px + vec2(-s, 0)), v4 = raw(px), v5 = raw(px + vec2(s, 0));
+  float v6 = raw(px + vec2(-s, s)), v7 = raw(px + vec2(0, s)), v8 = raw(px + vec2(s, s));
+  // Median of 9 (a 19-swap network).
+  order(v1, v2); order(v4, v5); order(v7, v8); order(v0, v1); order(v3, v4); order(v6, v7);
+  order(v1, v2); order(v4, v5); order(v7, v8); order(v0, v3); order(v5, v8); order(v4, v7);
+  order(v3, v6); order(v1, v4); order(v2, v5); order(v4, v7); order(v4, v2); order(v6, v4);
+  order(v4, v2);
+  return v4;
+}
 void main() {
   // Row r of this texture is sampled at v = r / height, as the scan image's row r is: both read
   // top-down in projector pixels, so gl_FragCoord is the projector pixel as it stands.
@@ -39,7 +54,7 @@ export class ScanEdges {
   private program: WebGLProgram;
   private quad: WebGLVertexArrayObject;
   private framebuffer: WebGLFramebuffer;
-  private cache = new Map<string, WebGLTexture>(); // "spread:width:height" -> edge texture
+  private cache = new Map<string, WebGLTexture>(); // "spread:smoothing:width:height" -> edge texture
 
   constructor(private gl: WebGL2RenderingContext) {
     const linked = linkProgram(gl, PASS_VERTEX, SOBEL);
@@ -62,9 +77,10 @@ export class ScanEdges {
     this.cache.clear();
   }
 
-  /** The edge texture for this line width at this size (projector pixels), computed on first use. */
-  texture(scan: WebGLTexture, spread: number, width: number, height: number): WebGLTexture {
-    const key = `${spread}:${width}:${height}`;
+  /** The edge texture for this line width and smoothing at this size (projector pixels), computed on
+   *  first use. */
+  texture(scan: WebGLTexture, spread: number, smoothing: number, width: number, height: number): WebGLTexture {
+    const key = `${spread}:${smoothing}:${width}:${height}`;
     const cached = this.cache.get(key);
     if (cached) return cached;
     const { gl } = this;
@@ -88,6 +104,7 @@ export class ScanEdges {
     gl.uniform1i(gl.getUniformLocation(this.program, "u_scan"), 0);
     gl.uniform2f(gl.getUniformLocation(this.program, "u_resolution"), width, height);
     gl.uniform1f(gl.getUniformLocation(this.program, "u_spread"), spread);
+    gl.uniform1f(gl.getUniformLocation(this.program, "u_smooth"), smoothing);
     gl.bindVertexArray(this.quad);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);
