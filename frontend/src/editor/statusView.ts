@@ -22,9 +22,6 @@ export interface CameraOption {
   selected: boolean;
 }
 
-const LOW_BATTERY = 20;
-const FLAT_BATTERY = 10;
-
 const ISSUE_TEXT: Record<HardwareIssue, string> = {
   no_projector: "No projector detected. Connect it as an extended display, then refresh hardware.",
   no_camera: "No camera detected. Plug in the webcam, then refresh hardware.",
@@ -56,11 +53,11 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     notes.push(`${status.hardware.projector_missing} (your chosen projector) is not connected. Using ${projector.name} for now.`);
   }
 
-  // Mirrors engine/still_camera.py: LOW_BATTERY warns, FLAT_BATTERY stops a scan.
-  const battery = status.camera.battery ?? null;
-  if (battery !== null && battery <= FLAT_BATTERY) {
+  // The engine judges the battery (#142).
+  const battery = status.camera.battery;
+  if (status.camera.battery_state === "flat") {
     banners.push(`Camera battery is at ${battery}%: charge or swap it before scanning.`);
-  } else if (battery !== null && battery <= LOW_BATTERY) {
+  } else if (status.camera.battery_state === "low") {
     notes.push(`Camera battery is at ${battery}%: charge or swap it soon.`);
   }
 
@@ -78,37 +75,19 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     banners,
     notes,
     scanEnabled: status.can_scan,
-    scanReason: status.can_scan ? null : scanBlocker(status),
+    scanReason: status.can_scan ? null : status.scan_blocker ?? "The rig isn't ready to scan",
     projector: projector ? `${projector.name} (${size(projector)})` : "None",
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
-    calibration: describeCalibration(status.camera.calibration),
+    calibration: describeCalibration(status.camera.calibration, status.camera.at_light_limit),
     project: status.project?.name ?? "Unsaved",
     battery: battery === null ? null : `Battery ${battery}%`,
   };
 }
 
-/** The first thing that stops a scan, in the order the engine checks them (engine/hub.py, can_scan). */
-function scanBlocker(status: StatusMessage): string {
-  const { projector, issues } = status.hardware;
-  const out = status.output_resolution;
-  if (issues.includes("no_projector") || !projector) return "No projector: connect it as an extended display";
-  if (issues.includes("no_camera")) return "No camera: plug in the webcam";
-  if (!status.output_connected || !out) return "Open the output window (Hardware) and make it fullscreen on the projector";
-  if (out.width !== projector.width || out.height !== projector.height) {
-    return `Output window must be ${size(projector)}: make it fullscreen on the projector`;
-  }
-  if (!status.camera.selected) return "Choose the camera that scans (Hardware)";
-  return "The rig isn't ready to scan";
-}
-
-// Mirrors engine/calibrate.py: longest allowed exposure (100 ms), and the AC410's gain range.
-const MAX_EXPOSURE = 1000;
-const MAX_GAIN = 15;
-
-function describeCalibration(c: Calibration | null): string {
+function describeCalibration(c: Calibration | null, atLightLimit: boolean): string {
   if (!c) return "Not calibrated";
   const text = `Exposure ${c.exposure}, gain ${c.gain} (white frame peak ${Math.round(c.p99)})`;
-  return c.exposure >= MAX_EXPOSURE && c.gain >= MAX_GAIN ? `${text} - camera at its light limit` : text;
+  return atLightLimit ? `${text} - camera at its light limit` : text;
 }
 
 // USB webcams have uniqueIDs like 0x2110000f1311306 (location + vendor + product).

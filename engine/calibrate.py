@@ -40,7 +40,10 @@ def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray]) -> dict:
     if darkest >= CLIP_LEVEL:
         raise CalibrationError("White frame clips even at the shortest exposure. Dim the projector or the room.")
     if brightest < CLIP_LEVEL:
-        return {**_add_gain(uvc, read_frame, brightest, longest), "max_exposure": longest}
+        found = _add_gain(uvc, read_frame, brightest, longest)
+        # All the exposure and gain this camera has, and still short of the target: the editor says so.
+        at_limit = found["gain"] >= MAX_GAIN and found["p99"] < TARGET_LEVEL
+        return {**found, "max_exposure": longest, "at_light_limit": at_limit}
 
     lo, hi = 1, longest  # brightness(lo) < CLIP_LEVEL <= brightness(hi)
     best = darkest
@@ -51,7 +54,7 @@ def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray]) -> dict:
             lo, best = mid, level
         else:
             hi = mid
-    return {"exposure": lo, "gain": 0, "p99": best, "max_exposure": longest}
+    return {"exposure": lo, "gain": 0, "p99": best, "max_exposure": longest, "at_light_limit": False}
 
 
 def longest_exposure(uvc: Uvc) -> int:
