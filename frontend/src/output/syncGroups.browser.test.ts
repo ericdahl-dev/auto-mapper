@@ -29,7 +29,7 @@ describe("a sync group in the output", () => {
     let worst = 0, previous = 0, knocked = false;
     let heldAtStart = 0, heldAfter = 0; // apart in two samples running: started together; caught up again
     const start = performance.now();
-    while (performance.now() - start < 10_000) {
+    while (performance.now() - start < 14_000) {
       r.draw((performance.now() - start) / 1000);
       await new Promise((ok) => setTimeout(ok, 16));
       const t = performance.now() - start;
@@ -37,7 +37,9 @@ describe("a sync group in the output", () => {
         b.currentTime += 0.09;
         knocked = true;
       }
-      if ((t > 1500 && t < 3000) || t > 6000) {
+      // Judged from 10 s: a nudge of at most 5% closes a 90 ms gap by about half every 1.4 s, so it's
+      // ~20 ms at 6 s (too close to call on a busy CI machine) and a few ms by 10 s.
+      if ((t > 1500 && t < 3000) || t > 10_000) {
         const d = Math.abs(a.currentTime - b.currentTime);
         const apart = Math.min(d, a.duration - d);
         worst = Math.max(worst, apart);
@@ -51,5 +53,5 @@ describe("a sync group in the output", () => {
     // Left alone, the knock stays 25-90 ms (seeks land on frames); corrected, it's back within the lock's 15 ms.
     expect(heldAfter).toBeLessThan(0.02);
     expect(worst).toBeLessThan(0.15); // a blip is at most a frame or so
-  }, 20_000);
+  }, 25_000);
 });
