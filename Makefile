@@ -1,4 +1,4 @@
-.PHONY: dev engine frontend test build install spelling install-autostart uninstall-autostart
+.PHONY: dev engine frontend test build install spelling scan-check install-autostart uninstall-autostart
 
 install:
 	uv sync
@@ -38,3 +38,8 @@ install-autostart:
 uninstall-autostart:
 	launchctl bootout gui/$$(id -u) $(AGENT) 2>/dev/null || true
 	rm -f $(AGENT)
+
+# A real scan on the rig (make dev running, output window fullscreen on the projector): coverage and
+# surface count (#15).
+scan-check:
+	uv run python scripts/scan_check.py
