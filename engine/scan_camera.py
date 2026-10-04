@@ -26,7 +26,7 @@ from engine.camera_device import CameraSession
 from engine.camera_lock import Uvc, locked_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
 from engine.scan_settings import ScanSettings
-from engine.still_camera import FLAT_BATTERY, CaptureFailed, StillCamera, _seconds, is_still
+from engine.still_camera import BRACKET_GAINS, FLAT_BATTERY, CaptureFailed, StillCamera, _seconds, is_still
 
 STILL_PREVIEW_SECONDS = 5.0  # how long a still camera's preview photo is reused
 STILL_RETRY_SECONDS = 10.0  # after a failed preview photo, don't queue up retries of a stuck camera
@@ -43,6 +43,10 @@ class ScanCamera(Protocol):
     controls: Uvc  # exposure and gain, set by calibration and HDR
     longer_exposures: tuple[int, ...]  # exposures (100 us units) calibration tries first, longest first
     max_hdr: int  # exposures per pattern it can take (1: no HDR)
+    bracket: tuple[float, ...] | None  # takes its HDR exposures itself, one press: how bright each is
+
+    def start_bracketing(self) -> None: ...
+    def read_bracket(self) -> list[np.ndarray]: ...  # one press: its photos, darkest first
 
     def calibrate(self) -> dict: ...  # with white on screen and the camera taken over
     def preview(self) -> np.ndarray: ...
@@ -58,6 +62,13 @@ class _Webcam:
         self.drop_frames, self.frames_per_pattern = drop_frames, frames_per_pattern
         self.longer_exposures = LONGER_EXPOSURES
         self.max_hdr = 3
+        self.bracket = None  # HDR by setting each exposure (calibrate.py's controls)
+
+    def start_bracketing(self) -> None:
+        raise NotImplementedError
+
+    def read_bracket(self) -> list[np.ndarray]:
+        raise NotImplementedError
 
     def calibrate(self) -> dict:
         return calibrate_exposure(self.controls, self.read, self.longer_exposures)
@@ -109,7 +120,8 @@ DARK_LEVEL = 120  # a still camera's white frame below this: too dark to separat
 class _Still:
     drop_frames = 0  # each frame is a fresh photo
     frames_per_pattern = 1
-    max_hdr = 1  # HDR on a still camera: its own bracketing (to come)
+    max_hdr = 3  # HDR: the camera's own bracketing, three photos per press
+    bracket = BRACKET_GAINS
     longer_exposures = ()
 
     def __init__(self, still: StillCamera, aperture: str | None, data_dir: Path,
@@ -150,6 +162,12 @@ class _Still:
 
     def read(self) -> np.ndarray:
         return self._still.read()
+
+    def start_bracketing(self) -> None:
+        self._still.start_bracketing()  # the give-back puts the owner's drive mode back
+
+    def read_bracket(self) -> list[np.ndarray]:
+        return self._still.read_bracket()
 
     def calibrate(self) -> dict:
         """Checks the owner's exposure on the white frame and says what to change on the camera."""

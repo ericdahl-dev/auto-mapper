@@ -3,7 +3,7 @@
 import pytest
 
 from engine.hardware import FakeHardware
-from engine.still_camera import FakeStillDriver, StillCamera, _seconds
+from engine.still_camera import BRACKET_MODE, FakeStillDriver, StillCamera, _seconds
 from tests.helpers import LAPTOP, editor, engine, output, play_output
 from tests.synthetic import Scene
 
@@ -22,7 +22,7 @@ def rig():
     def photo():
         # Brightness follows shutter x ISO, like a real camera (the scan sets ISO; the shutter is the dial's).
         iso = float(driver.config["iso"]) if driver.config["iso"].isdigit() else 100
-        scene.exposure_gain = (_seconds(driver.config["shutterspeed"]) or 0.01) * iso / 100 * 10000 / 200
+        scene.exposure_gain = (_seconds(driver.config["shutterspeed"]) or 0.01) * iso / 100 * 10000 / 200 * driver.exposure_scale
         return scene.frame()
 
     driver = FakeStillDriver(shutters=SHUTTERS, isos=ISOS, frame=photo)
@@ -195,7 +195,6 @@ def test_a_still_camera_scans_at_its_own_exposure_one_photo_per_pattern(rig, tmp
     scene, driver, hw, shown = rig
     with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
             editor(client) as ed, output(client, W, H) as out:
-        client.post("/api/camera/scan-settings", json={"hdr": 2})  # HDR on a still camera: its bracketing, later
         client.post("/api/scan")
         patterns = play_output(out, scene)
         while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
@@ -203,4 +202,25 @@ def test_a_still_camera_scans_at_its_own_exposure_one_photo_per_pattern(rig, tmp
     assert msg["type"] == "scan_result", msg
     photos = sum(c == ("capture",) for c in driver.calls)
     assert photos == len(patterns) - 1  # one per pattern; the white it focuses on isn't photographed
+    assert not any(c[0] == "set" and c[1] in EXPOSURE_WRITES for c in driver.calls)
+
+
+def test_hdr_with_a_still_camera_uses_its_own_bracketing_one_press_per_pattern(rig, tmp_path):
+    """The a6600 brackets by itself (rig, 2026-10-03: one press, three photos 2 stops apart), which
+    is the exposure change it can't take over USB."""
+    scene, driver, hw, shown = rig
+    driver.config["capturemode"] = "Continuous Med Speed"  # the owner's
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        client.post("/api/camera/scan-settings", json={"hdr": 2})
+        client.post("/api/scan")
+        patterns = play_output(out, scene)
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+    assert msg["type"] == "scan_result", msg
+    assert msg["coverage"] > 0.9
+    presses = driver.calls.count(("capture_burst", 3))
+    assert presses == len(patterns) - 2  # every pattern; not the focus or exposure-check whites
+    assert ("set", "capturemode", BRACKET_MODE) in driver.calls
+    assert driver.config["capturemode"] == "Continuous Med Speed"  # given back
     assert not any(c[0] == "set" and c[1] in EXPOSURE_WRITES for c in driver.calls)

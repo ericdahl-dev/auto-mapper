@@ -32,6 +32,11 @@ def is_still(unique_id: str | None) -> bool:
     return bool(unique_id) and unique_id.startswith(STILL_PREFIX)
 
 
+# HDR on a still camera: its own bracketing, the exposure change it can't take over USB. One press,
+# three photos 2 stops apart (rig, 2026-10-03); each is this much brighter than the darkest.
+BRACKET_MODE = "Bracketing C 2.0 Steps 3 Pictures"
+BRACKET_GAINS = (1.0, 4.0, 16.0)
+
 LOW_BATTERY = 20  # percent: warn
 FLAT_BATTERY = 10  # percent: don't start a scan (a camera dying mid-scan wastes it, and can stick)
 
@@ -51,6 +56,7 @@ class StillDriver(Protocol):
     def get_config(self, name: str) -> str: ...
     def choices(self, name: str) -> list[str]: ...
     def capture(self) -> np.ndarray: ...
+    def capture_burst(self, count: int) -> list[np.ndarray]: ...
 
 
 def _seconds(shutter: str) -> float | None:
@@ -200,6 +206,21 @@ class StillCamera:
                     break
         raise CaptureFailed("The camera didn't take a photo. Check it's on, in PC Remote, and not showing a menu.")
 
+    def start_bracketing(self) -> None:
+        with _answering():
+            self.driver.set_config("capturemode", BRACKET_MODE)
+
+    def read_bracket(self) -> list[np.ndarray]:
+        """One press in bracketing: its photos, darkest first."""
+        for attempt in range(self.retries + 1):
+            try:
+                photos = self.driver.capture_burst(len(BRACKET_GAINS))
+                return sorted(photos, key=lambda p: float(np.median(p)))
+            except DriverError:
+                if attempt == self.retries:
+                    break
+        raise CaptureFailed("The camera didn't take its bracketed photos. Check it's on, in PC Remote, and not showing a menu.")
+
     def battery(self) -> int | None:
         """Battery level in percent, or None if the camera doesn't report it."""
         with _answering():
@@ -224,6 +245,7 @@ class FakeStillDriver:
         self.fail_next = fail_next
         self.captures = 0
         self.frame = frame  # optional: a function returning the photo (e.g. a synthetic scene)
+        self.exposure_scale = 1.0  # while bracketing: this photo's exposure relative to the owner's
 
     def set_config(self, name: str, value: str) -> None:
         self.calls.append(("set", name, value))
@@ -247,6 +269,16 @@ class FakeStillDriver:
         if self.frame:
             return self.frame()
         return np.full((24, 32, 3), 128, np.uint8)
+
+    def capture_burst(self, count: int) -> list[np.ndarray]:
+        """In a bracketing drive mode: one press, `count` photos 2 stops apart (-2, 0, +2)."""
+        self.calls.append(("capture_burst", count))
+        photos = []
+        for scale in (0.25, 1.0, 4.0)[:count]:
+            self.exposure_scale = scale
+            photos.append(self.frame() if self.frame else np.full((24, 32, 3), min(255, int(128 * scale)), np.uint8))
+        self.exposure_scale = 1.0
+        return photos
 
 
 # The real camera, through the gphoto2 command line.
@@ -480,6 +512,32 @@ class GPhoto2Session:
             return frame
 
         return self._do("taking a photo", shoot)
+
+    def capture_burst(self, count: int, wait_seconds: float = 10.0) -> list[np.ndarray]:
+        """One press that takes several photos (the camera's bracketing): the first comes from the
+        capture, the rest are announced as new files; each is downloaded and decoded, in order."""
+        import gphoto2 as gp
+
+        def shoot(cam):
+            first = cam.capture(0)  # GP_CAPTURE_IMAGE
+            paths = [(first.folder, first.name)]
+            end = time.monotonic() + wait_seconds
+            while len(paths) < count and time.monotonic() < end:
+                kind, data = cam.wait_for_event(500)
+                if kind == gp.GP_EVENT_FILE_ADDED:
+                    paths.append((data.folder, data.name))
+            if len(paths) < count:
+                raise DriverError(f"the camera sent {len(paths)} of {count} bracketed photos: "
+                                  "set Drive Mode to Bracketing C, 3 pictures")
+            photos = []
+            for folder, name in paths:
+                frame = decode_photo(bytes(memoryview(cam.file_get(folder, name, 1).get_data_and_size())))
+                if frame is None:
+                    raise DriverError("the camera sent no photo (set File Format to JPEG)")
+                photos.append(frame)
+            return photos
+
+        return self._do("taking bracketed photos", shoot)
 
     def close(self) -> None:
         if self._lock.acquire(timeout=2):  # a call stuck in libgphoto2 mustn't hold up shutdown

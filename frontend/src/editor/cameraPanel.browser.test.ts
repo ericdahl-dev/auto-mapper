@@ -127,15 +127,14 @@ describe("the Camera section", () => {
     expect(calls).toContain('setScanSettings {"hdr":3}');
   });
 
-  it("for a still camera, checks the exposure set on it rather than calibrating, and has no HDR", () => {
+  it("for a still camera, checks the exposure set on it rather than calibrating", () => {
     const { engine } = fakeEngine();
     const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(A6600), false);
     expect($("calibrate").textContent).toBe("Check exposure");
-    expect($("hdr-row").hidden).toBe(true);
+    expect($("hdr-row").hidden).toBe(false); // HDR: the camera's own bracketing
     panel.update(status(AC410), false);
     expect($("calibrate").textContent).toBe("Calibrate exposure");
-    expect($("hdr-row").hidden).toBe(false);
   });
 
   it("says what to change on a still camera when its exposure isn't right", async () => {
