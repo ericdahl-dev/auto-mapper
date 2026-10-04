@@ -149,7 +149,7 @@ Everything is plain files under `~/.auto-mapper/`:
 
 Click **Open output window** in the editor. Drag the new window onto the projector and click inside it to go fullscreen (browsers only allow fullscreen from a click, so the app can't do this for you). The setup hint ("Drag this window onto the projector, then click to go fullscreen.") disappears once the window fills the screen, so it is never projected over the patterns.
 
-Keep only one output window open. The newest one owns the projector: if another opens (say, one left on the laptop), the old one goes dark and says "Another output window took over the projector: close this one." If Scan stays disabled because the output is the wrong size, its reason names the display the output window seems to be on.
+Keep only one output window open. The newest one owns the projector: if another opens (say, one left on the laptop), the old one goes dark and says "Another output window is in use. Click here to use this window instead." Click it to make that window the projector's output again; and when the newer window closes, the old one takes over again by itself. If Scan stays disabled because the output is the wrong size, its reason names the display the output window seems to be on.
 
 The editor's **Hardware** panel shows the projector (a dropdown: with more than one external monitor, pick the one that is the projector; the choice is remembered, and if that display is unplugged the editor says so and falls back to the first non-main display), the camera (a dropdown too: see the next step), whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
 
@@ -316,7 +316,7 @@ From real use on the rig:
 | "Camera read failed" (in a scan error or a broken preview) | The engine lost the webcam. Restart `make dev`; the camera is reopened on the next preview, calibration or scan. |
 | "Open the output window..." or "Output window must be WxH..." | Open the output window, move it onto the projector and click it to go fullscreen. Scanning needs the output to match the projector's resolution exactly. |
 | "The output window seems to be on *display*..." | The output window is on another screen, or a second output window took over. Close the extra one, and make the one on the projector fullscreen. |
-| "Another output window took over the projector: close this one." (on the output) | Only one output window drives the projector. Close the one showing this. |
+| "Another output window is in use. Click here to use this window instead." (on the output) | Only one output window drives the projector. If this window is the one on the projector, click it; otherwise close it. |
 | "The output window stopped responding..." during a scan | A minimized or hidden window stops drawing. Keep it visible and fullscreen on the projector, then scan again. |
 | "White and black frames look the same to the camera..." | The camera can't see the projection, or it is too dim to register. Check the preview, darken the room, move the projector closer, or raise `AUTO_MAPPER_SCAN_SETTLE`. |
 | "Only N% of the projection decoded." | Read the hint that follows it (bright room, faint projection, or camera not seeing the projection), then use **Show missed areas** to see where. |
