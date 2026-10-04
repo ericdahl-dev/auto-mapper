@@ -27,3 +27,15 @@ def test_one_output_window_on_the_projector_has_no_such_note(tmp_path):
     with engine(rig(), data_dir=tmp_path) as client, output(client):
         s = client.get("/api/status").json()
     assert s["scan_blocker"] is None or "Color LCD" not in s["scan_blocker"]
+
+
+def test_closing_the_newer_window_hands_the_projector_back_to_the_older_one(tmp_path):
+    """#169: the replaced window stayed dark after the newer one closed; only a reload helped."""
+    with engine(rig(), data_dir=tmp_path) as client, output(client) as first:
+        with output(client, 3456, 2034):
+            while first.receive_json()["type"] != "output_replaced":
+                pass
+        # the newer one closed
+        while (msg := first.receive_json())["type"] != "output_restored":
+            pass
+        assert client.get("/api/status").json()["output_resolution"] == {"width": 1920, "height": 1080}

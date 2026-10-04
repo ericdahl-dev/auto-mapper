@@ -164,7 +164,13 @@ export interface OutputReplacedMessage {
   type: "output_replaced";
 }
 
+/** To an output window: the newer one that replaced it closed; it owns the projector again (#169). */
+export interface OutputRestoredMessage {
+  type: "output_restored";
+}
+
 export type ServerMessage =
+  | OutputRestoredMessage
   | OutputReplacedMessage
   | StatusMessage
   | ShowTestFrameMessage
@@ -233,6 +239,8 @@ export function parseServerMessage(raw: string): ServerMessage | null {
       return isStatus(m) ? (m as unknown as StatusMessage) : null;
     case "output_replaced":
       return { type: "output_replaced" };
+    case "output_restored":
+      return { type: "output_restored" };
     case "show_test_frame":
       return TEST_FRAME_KINDS.includes(m.kind as TestFrameKind) ? (m as unknown as ShowTestFrameMessage) : null;
     case "show_pattern":

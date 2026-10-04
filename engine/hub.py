@@ -149,6 +149,10 @@ class Hub:
             for fut in self._acks.values():
                 if not fut.done():
                     fut.set_exception(OutputNotResponding(CLOSED))
+            if (back := self.output_window.ws) is not None:  # a window it had replaced takes over again
+                await self._send(back, {"type": "output_restored"})
+                if (show := self.show.message()) is not None:
+                    await self._send(back, show)
             await self.broadcast_status()
 
     async def output_stats(self, msg: OutputStats) -> None:
