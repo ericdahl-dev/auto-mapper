@@ -23,9 +23,6 @@ import numpy as np
 
 from engine.files import write_text_atomic
 
-BASE_ISO = 100
-MAX_ISO = 12800  # past this the a6600's photos get too noisy to decode fine stripes reliably
-GAIN_TRIPLES = 15  # gain 15 is about 3x brighter, as on the AC410 (engine/calibrate.py)
 
 
 STILL_PREFIX = "gphoto2:"  # unique ids of still cameras (webcams use AVFoundation ids)
@@ -94,35 +91,6 @@ class StillCamera:
         self.driver = driver
         self.retries = retries
         self._other: dict[str, str] = {}  # webcam-only controls (white balance, focus-abs): kept, unused
-        self._exposure: int | None = None  # 100 us units; None: as much as the shutter gives at base ISO
-        self._gain = 0
-
-    # Exposure is set with ISO, at the shutter speed the owner set on the dial: on the rig
-    # (EXIF-checked, 2026-10-03) the a6600 ignored every shutter change over USB, and each attempt
-    # quietly put ISO back to Auto. Calibration and HDR ask for "exposure" as with a webcam; here it
-    # means ISO = BASE_ISO x exposure / shutter (x the gain's share), within the ISOs the camera has.
-    def _shutter_units(self) -> float:
-        return (_seconds(self.driver.get_config("shutterspeed")) or 0.01) * 10000
-
-    def _isos(self) -> dict[str, float]:
-        return {s: float(s) for s in self.driver.choices("iso") if s.isdigit() and float(s) <= MAX_ISO}
-
-    @property
-    def longer_exposures(self) -> tuple[int, ...]:
-        """Exposures calibration tries first, longest first: up to the highest ISO at the dial's shutter."""
-        with _answering():
-            top = max(self._isos().values()) / BASE_ISO
-            return tuple(int(self._shutter_units() * top / k) for k in (1, 2, 4, 8))
-
-    def _apply_iso(self, refuse_more: bool) -> None:
-        exposure = self._exposure if self._exposure is not None else self._shutter_units()
-        want = BASE_ISO * exposure / self._shutter_units() * 3 ** (self._gain / GAIN_TRIPLES)
-        isos = self._isos()
-        lo, hi = min(isos.values()), max(isos.values())
-        choice = _nearest(min(hi, max(lo, want)), isos)
-        self.driver.set_config("iso", choice)
-        if refuse_more and want > hi * 1.05:  # like UvcUtil past the webcam's limit: applied, then said
-            raise RuntimeError(f"exposure-time-abs: asked for ISO {want:.0f}, the camera's highest is {hi:.0f}")
 
     # How every pattern photo is made (scan_profile): single shots (no bursts), fixed white balance,
     # no DRO, flash or exposure compensation, M mode, a wide focus area for the one-time focus, and
@@ -134,7 +102,7 @@ class StillCamera:
     )
     # Changed during a scan, so put back too.
     # The shutter isn't among them: it's never written (writing it puts the a6600's ISO back to Auto).
-    SCAN_CHANGES = ("f-number", "iso", "focusmode")
+    SCAN_CHANGES = ("f-number", "focusmode")
 
     @contextmanager
     def scan_profile(self, aperture: str | None = None, snapshot: Path | None = None):
@@ -159,7 +127,6 @@ class StillCamera:
                 if name in original:
                     with _answering():
                         self.driver.set_config(name, value)
-            self._exposure = None  # read afresh in M mode
             self.prepare(aperture=aperture)
             yield self
         finally:
@@ -195,24 +162,17 @@ class StillCamera:
             self._set(name, value)
 
     def _get(self, name: str) -> str:
-        if name == "exposure-time-abs":
-            return str(round(self._exposure if self._exposure is not None else self._shutter_units()))
-        if name == "gain":
-            return str(self._gain)
         if name == "auto-exposure-mode":
             return "1" if self.driver.get_config("expprogram") == "M" else "8"
         return self._other.get(name, "0")
 
     def _set(self, name: str, value: str) -> None:
-        if name == "exposure-time-abs":
-            self._exposure = int(value)
-            self._apply_iso(refuse_more=True)
-        elif name == "gain":
-            self._gain = int(value)
-            self._apply_iso(refuse_more=False)
-        elif name == "auto-exposure-mode":
+        # Exposure (shutter, ISO) is the owner's, set on the camera: the a6600 applies only the first
+        # exposure change over USB after connecting (rig, EXIF-checked, 2026-10-03). Webcam-style
+        # controls are kept here unused.
+        if name == "auto-exposure-mode":
             self.driver.set_config("expprogram", "M" if value == "1" else "P")
-        else:  # auto-focus, white balance: focus is held by focus_and_lock; white balance doesn't matter
+        else:
             self._other[name] = value
 
     def focus_and_lock(self, timeout: float = 5.0) -> None:

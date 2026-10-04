@@ -153,22 +153,27 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
   async function usingCamera(button: HTMLButtonElement, busyLabel: string, run: () => Promise<void>) {
     const label = button.textContent;
     button.disabled = true;
+    button.dataset.busy = "1"; // render leaves its label alone meanwhile
     button.textContent = busyLabel;
     try {
       await run();
     } finally {
       if (!previewRunning()) void engine.releaseCamera();
+      delete button.dataset.busy;
       button.textContent = label;
       render();
     }
   }
-  calibrate.addEventListener("click", () => void usingCamera(calibrate, "Calibrating…", async () => {
-    const res = await engine.calibrate();
-    const body = await res.json();
-    if (!res.ok) return notice(`Calibration failed: ${body.detail}`);
-    const c = body as CalibrateResponse;
-    notice(`Calibrated: exposure ${c.exposure}, white peak ${Math.round(c.p99)}`);
-  }));
+  calibrate.addEventListener("click", () => {
+    const checking = calibrate.textContent === "Check exposure"; // a still camera: its own exposure, checked
+    void usingCamera(calibrate, checking ? "Checking…" : "Calibrating…", async () => {
+      const res = await engine.calibrate();
+      const body = await res.json();
+      if (!res.ok) return notice(`${checking ? "Exposure check" : "Calibration"} failed: ${body.detail}`);
+      const c = body as CalibrateResponse;
+      notice(checking ? `Exposure is good: white peak ${Math.round(c.p99)}` : `Calibrated: exposure ${c.exposure}, white peak ${Math.round(c.p99)}`);
+    });
+  });
   checkFraming.addEventListener("click", () => void usingCamera(checkFraming, "Checking…", async () => {
     const res = await engine.checkFraming();
     const body = await res.json();
@@ -192,7 +197,12 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     calibrate.disabled = !status?.output_connected || !status.camera.selected;
     checkFraming.disabled = calibrate.disabled || scanning;
     const sel = status?.hardware.cameras.find((c) => c.unique_id === status?.camera.selected);
-    apertureRow.hidden = sel?.device_type !== "still"; // a webcam's lens has none to set
+    const still = sel?.device_type === "still";
+    apertureRow.hidden = !still; // a webcam's lens has none to set
+    // A still camera's exposure is set on it (the a6600 takes one exposure change over USB): the
+    // engine checks it rather than calibrating, and there's no HDR for it yet.
+    $("hdr-row").hidden = still;
+    if (!calibrate.dataset.busy) calibrate.textContent = still ? "Check exposure" : "Calibrate exposure";
   }
 
   return {

@@ -28,6 +28,7 @@ export interface Calibration {
   p99: number;
   max_exposure?: number | null;
   at_light_limit?: boolean | null;
+  manual?: boolean | null; // a still camera: exposure set on the camera, checked not calibrated
 }
 
 export interface StatusMessage {

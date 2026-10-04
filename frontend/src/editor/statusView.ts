@@ -86,6 +86,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
 
 function describeCalibration(c: Calibration | null, atLightLimit: boolean): string {
   if (!c) return "Not calibrated";
+  if (c.manual) return `Set on the camera (white frame peak ${Math.round(c.p99)})`;
   const text = `Exposure ${c.exposure}, gain ${c.gain} (white frame peak ${Math.round(c.p99)})`;
   return atLightLimit ? `${text} - camera at its light limit` : text;
 }
