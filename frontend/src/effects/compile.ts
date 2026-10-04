@@ -24,6 +24,7 @@ uniform float u_time;        // seconds
 uniform vec2 u_resolution;   // projector size in pixels
 uniform vec4 u_bounds;       // surface bounding box in projector pixels
 uniform sampler2D u_scan;    // the scan image (the space as the projector sees it)
+uniform sampler2D u_scanEdges; // its edge strength, precomputed (effects with scanEdges: output/scanEdges.ts)
 // Sound (0..1, all 0 without a mic): smoothed loudness, bands, and a pulse that decays after each beat.
 uniform float u_level;
 uniform float u_bass;
@@ -43,6 +44,13 @@ uniform float u_perimeter;
 // The scan image (the space as the projector sees it) at a projector pixel.
 vec3 scanAt(vec2 px) { return texture(u_scan, px / u_resolution).rgb; }
 float luminance(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+// The scan's edge strength at a projector pixel (Sobel of its brightness, at the effect's scanEdges
+// spread). Stored as sqrt(strength / 6), 16 bits over r and g (output/scanEdges.ts, EDGE_MAX).
+float scanEdgeAt(vec2 px) {
+  vec2 rg = texture(u_scanEdges, px / u_resolution).rg;
+  float e = rg.r + rg.g / 255.0;
+  return e * e * 6.0;
+}
 
 // Distance from p to the surface's outline; 'along' = how far round the outline the nearest point is.
 float polyEdge(vec2 p, out float along) {

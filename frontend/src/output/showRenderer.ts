@@ -10,6 +10,7 @@ import { MediaLibrary } from "./mediaLibrary";
 import { playbackPlan } from "./playback";
 import { AlignmentPass, isNeutral } from "./alignment";
 import { FadeLayer, fadeProgress } from "./crossfade";
+import { ScanEdges } from "./scanEdges";
 
 export interface EffectError {
   surface: number;
@@ -34,7 +35,8 @@ interface PreparedSurface {
 }
 
 // Texture unit 0 is the scan; media params take the units after it.
-const FIRST_MEDIA_UNIT = 1;
+const EDGES_UNIT = 1; // the scan's precomputed edges (scanEdges.ts)
+const FIRST_MEDIA_UNIT = 2;
 
 // Plain color, used for outlines and the selection highlight.
 const SOLID = `#version 300 es
@@ -64,6 +66,7 @@ export class ShowRenderer {
   private fade: { surfaces: PreparedSurface[]; buffers: WebGLBuffer[]; vaos: WebGLVertexArrayObject[]; seconds: number; start: number | null } | null = null;
   private fadeLayer: FadeLayer | null = null;
   private audio: AudioValues = SILENT;
+  private edges: ScanEdges | null = null; // made on first use by an effect with scanEdges
 
   constructor(
     private gl: WebGL2RenderingContext,
@@ -89,6 +92,7 @@ export class ShowRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    this.edges?.invalidate();
   }
 
   setShow(show: ShowMessage) {
@@ -281,6 +285,18 @@ export class ShowRenderer {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.scanTexture);
       gl.uniform1i(gl.getUniformLocation(p, "u_scan"), 0);
+      if (s.effect.scanEdges) {
+        this.edges ??= new ScanEdges(gl);
+        const name = s.effect.scanEdges.spread;
+        const schema = s.effect.params.find((q) => q.name === name);
+        const setting = s.params[name] ?? (schema && "default" in schema ? schema.default : 1);
+        const spread = Math.max(1, Math.round(Number(setting)));
+        const edges = this.edges.texture(this.scanTexture, spread, res[0], res[1]);
+        gl.useProgram(p); // the edge pass used its own program
+        gl.activeTexture(gl.TEXTURE0 + EDGES_UNIT);
+        gl.bindTexture(gl.TEXTURE_2D, edges);
+        gl.uniform1i(gl.getUniformLocation(p, "u_scanEdges"), EDGES_UNIT);
+      }
       this.bindMedia(p, s);
       for (const [name, value] of Object.entries(s.uniforms)) {
         const loc = gl.getUniformLocation(p, name);
