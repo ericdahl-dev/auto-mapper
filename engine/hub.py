@@ -9,7 +9,8 @@ from pydantic import ValidationError
 
 from engine.cameras import CameraSettings
 from engine.hardware import HardwareSnapshot
-from engine.messages import EngineMessage
+from engine.messages import EngineMessage, OutputStats
+from engine.output_window import OutputWindow
 from engine.show import CurrentShow
 from engine.still_camera import FLAT_BATTERY, LOW_BATTERY
 
@@ -43,13 +44,7 @@ class Hub:
         self.show = show
         self.projects = None  # set by the app; status reports the open project
         self.editors: set[WebSocket] = set()
-        self.output: WebSocket | None = None
-        self.output_resolution: dict | None = None
-        self.output_fps: float | None = None
-        self.output_sound: dict | None = None  # the output's sound meter: {"level", "error"}
-        self.output_video_sound_blocked = False  # a video should be heard but waits for a click
-        self.output_sound_output_error: str | None = None  # the chosen sound output couldn't be used
-        self.output_sound_channels: int | None = None  # channels the sound output has (2 for most)
+        self.output_window = OutputWindow()  # what the engine knows of the output window
         self.still_battery: int | None = None  # a still camera's last battery reading, taken when it's used
         self._seq = itertools.count(1)
         self._acks: dict[int, asyncio.Future] = {}
@@ -64,20 +59,26 @@ class Hub:
 
     @hardware.setter
     def hardware(self, snapshot: HardwareSnapshot) -> None:
-        snapshot.chosen = self.settings.projector()  # every probe honors the saved choice
         self._hardware = snapshot
+        self.apply_projector_choice()  # every probe honors the saved choice
+
+    def apply_projector_choice(self) -> None:
+        """Uses the projector saved in settings (after it's chosen, or a new probe)."""
+        self._hardware.chosen = self.settings.projector()
+
+    @property
+    def output(self) -> WebSocket | None:
+        return self.output_window.ws
+
+    @property
+    def output_resolution(self) -> dict | None:
+        return self.output_window.resolution
 
     def status(self) -> dict:
         return {
             "type": "status",
             "hardware": self.hardware.to_dict(),
-            "output_connected": self.output is not None,
-            "output_resolution": self.output_resolution,
-            "output_fps": self.output_fps,
-            "output_sound": self.output_sound,
-            "output_video_sound_blocked": self.output_video_sound_blocked,
-            "output_sound_output_error": self.output_sound_output_error,
-            "output_sound_channels": self.output_sound_channels,
+            **self.output_window.status(),
             "camera": self._camera_status(),
             "project": self.projects.active() if self.projects else None,
             "unsaved": self.projects.unsaved() if self.projects else False,
@@ -116,14 +117,7 @@ class Hub:
         }
 
     def _output_fills_projector(self) -> bool:
-        # Patterns are generated at projector resolution, so the output window must be
-        # fullscreen on the projector or the scan decodes garbage.
-        projector = self.hardware.projector
-        return (
-            self.output_resolution is not None
-            and projector is not None
-            and self.output_resolution == {"width": projector["width"], "height": projector["height"]}
-        )
+        return self.output_window.fills(self.hardware.projector)
 
     async def add_editor(self, ws: WebSocket) -> None:
         self.editors.add(ws)
@@ -132,29 +126,22 @@ class Hub:
             await self._send(ws, show)
 
     async def set_output(self, ws: WebSocket, width: int, height: int) -> None:
-        # A newer output window replaces the old one; only one owns the projector.
-        first_hello = ws is not self.output
-        self.output = ws
-        self.output_resolution = {"width": width, "height": height}
-        if first_hello and (show := self.show.message()) is not None:
+        if self.output_window.hello(ws, width, height) and (show := self.show.message()) is not None:
             await self._send(ws, show)  # a reconnecting output shows the show straight away
         await self.broadcast_status()
 
     async def remove(self, ws: WebSocket) -> None:
         self.editors.discard(ws)
-        if ws is self.output:
-            self.output = None
-            self.output_resolution = None
-            self.output_fps = None
-            self.output_sound = None
-            self.output_video_sound_blocked = False
-            self.output_sound_output_error = None
-            self.output_sound_channels = None
+        if self.output_window.gone(ws):
             # Don't make a scan wait out its timeout for a window that is gone.
             for fut in self._acks.values():
                 if not fut.done():
                     fut.set_exception(OutputNotResponding(CLOSED))
             await self.broadcast_status()
+
+    async def output_stats(self, msg: OutputStats) -> None:
+        self.output_window.stats(msg)
+        await self.broadcast_status()
 
     async def send_to_output(self, msg: dict) -> bool:
         if self.output is None:
