@@ -135,18 +135,15 @@ def test_room2_recessed_panel_is_one_surface(room2):
     assert len(found) == 1 and fills(found[0], PANEL, 0.6)
 
 
-@pytest.mark.xfail(strict=True, reason="#15: a large undecoded area enclosed by surfaces (the glossy TV) isn't a surface yet")
 def test_room2_tv_is_a_surface(room2):
     found = inside(room2[0], TV)
     assert len(found) == 1 and fills(found[0], TV, 0.7)
 
 
-@pytest.mark.xfail(strict=True, reason="#15: the bookshelf's contents come out as separate surfaces, not one")
 def test_room2_bookshelf_is_one_surface(room2):
     found = inside(room2[0], BOOKSHELF)
     assert len(found) == 1 and fills(found[0], BOOKSHELF, 0.8)
 
 
-@pytest.mark.xfail(strict=True, reason="#15: a scrap of the chair in front of the wall becomes a surface")
 def test_room2_no_surface_on_the_chair(room2):
     assert inside(room2[0], CHAIR) == []

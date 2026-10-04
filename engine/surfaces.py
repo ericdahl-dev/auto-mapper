@@ -32,6 +32,12 @@ CURVE_PX = 3.0  # a side whose smoothed deviation from straight exceeds this is 
 CURVE_FIT = 0.15  # ...and a cubic explains it: leftover below this share of the bend (real edges meander)
 CURVE_SMOOTH_PX = 2.0  # smoothing along a curved run before simplifying it
 CURVE_EPS_PX = 1.5  # simplification tolerance on curved runs
+ENCLOSED_OPEN_PX = 31  # slivers narrower than this between a surface and the frame edge enclose nothing
+TILE_SHARE = 0.7  # surfaces filling this much of an enclosed area are objects of their own (room2: panel 0.86)
+MERGE_SHARE = 0.2  # several filling less, but this much, are pieces of one object (room2: bookshelf contents 0.36)
+MISSED_SHARE = 0.8  # an enclosed area this much missed is a surface that doesn't decode (room2: TV 0.98, chair 0.59)
+MISSED_AREA_FRACTION = 0.02  # ...if this large, of the projector area (room2: TV 0.08)
+SCRAP_AREA_FRACTION = 0.008  # of the projector area; room2: a piece of chair 0.004
 
 
 def depth_edges(decoded: DecodeResult) -> np.ndarray:
@@ -106,18 +112,64 @@ def detect_surfaces(decoded: DecodeResult, view: tuple[np.ndarray, np.ndarray]) 
     free = (covered & ~boundary).astype(np.uint8)
     count, labels, stats, _ = cv2.connectedComponentsWithStats(free, connectivity=4)
     min_area = MIN_AREA_FRACTION * w * h
-    surfaces = []
+    regions = []
     for label in range(1, count):
         if stats[label, cv2.CC_STAT_AREA] < min_area:
             continue
         # Grow back over the boundary band so neighboring surfaces meet.
-        mask = cv2.dilate((labels == label).astype(np.uint8), k) & covered.astype(np.uint8)
-        poly = outline_polygon(mask)
+        regions.append((cv2.dilate((labels == label).astype(np.uint8), k) & covered.astype(np.uint8)).astype(bool))
+    surfaces = []
+    for mask in resolve_enclosed(regions, covered):
+        poly = outline_polygon(mask.astype(np.uint8))
         if len(poly) < 3:
             continue
         surfaces.append({"polygon": poly, "area": polygon_area(poly)})
     surfaces.sort(key=lambda s: s["area"], reverse=True)
     return surfaces
+
+
+def resolve_enclosed(regions: list[np.ndarray], covered: np.ndarray) -> list[np.ndarray]:
+    """Decides what the areas a surface encloses are (#15). A wall encloses whatever is on it or
+    in front of it: its holes, and notches it walls off against the edge of the frame.
+
+    - Surfaces that fill the area are objects of their own (a switch plate, two boxes side by side).
+    - Several surfaces that leave much of it unclaimed are pieces of one object whose outline
+      is the area's (a bookshelf's contents): they become one surface.
+    - A large area that is mostly missed is a surface that doesn't decode (a glossy TV); the
+      projector can still light it.
+    - Otherwise small surfaces in it are scraps of something in front (part of a chair): dropped.
+    """
+    h, w = covered.shape
+    min_area = MIN_AREA_FRACTION * w * h
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ENCLOSED_OPEN_PX, ENCLOSED_OPEN_PX))
+    order = sorted(range(len(regions)), key=lambda i: regions[i].sum(), reverse=True)
+    gone: set[int] = set()
+    added: list[np.ndarray] = []
+    for i in order:  # largest first, so a wall resolves what's on it before those are looked at
+        if i in gone:
+            continue
+        rest = cv2.morphologyEx((~regions[i]).astype(np.uint8), cv2.MORPH_OPEN, k)
+        count, labels, stats, _ = cv2.connectedComponentsWithStats(rest, connectivity=4)
+        for label in range(1, count):
+            area = stats[label, cv2.CC_STAT_AREA]
+            # Only areas smaller than the surface are enclosed by it; the rest is around it.
+            if not min_area <= area < regions[i].sum():
+                continue
+            enclosed = labels == label
+            inner = [j for j in order if j != i and j not in gone
+                     and (regions[j] & enclosed).sum() > 0.5 * regions[j].sum()]
+            claimed = np.logical_or.reduce([regions[j] for j in inner] + [np.zeros_like(enclosed)]) & enclosed
+            share = claimed.sum() / area
+            if share >= TILE_SHARE:
+                continue
+            if len(inner) >= 2 and share >= MERGE_SHARE:
+                added.append(np.logical_or.reduce([enclosed] + [regions[j] for j in inner]))
+                gone.update(inner)
+            elif area >= MISSED_AREA_FRACTION * w * h and (enclosed & ~covered).sum() >= MISSED_SHARE * area:
+                added.append(enclosed)
+            else:
+                gone.update(j for j in inner if regions[j].sum() < SCRAP_AREA_FRACTION * w * h)
+    return [r for i, r in enumerate(regions) if i not in gone] + added
 
 
 def outline_polygon(mask: np.ndarray) -> list[list[int]]:
