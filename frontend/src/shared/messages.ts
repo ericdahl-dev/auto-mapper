@@ -159,7 +159,13 @@ export interface EffectErrorMessage {
   log: string;
 }
 
+/** To an output window: a newer one took over the projector (#159). */
+export interface OutputReplacedMessage {
+  type: "output_replaced";
+}
+
 export type ServerMessage =
+  | OutputReplacedMessage
   | StatusMessage
   | ShowTestFrameMessage
   | ShowPatternMessage
@@ -225,6 +231,8 @@ export function parseServerMessage(raw: string): ServerMessage | null {
   switch (m.type) {
     case "status":
       return isStatus(m) ? (m as unknown as StatusMessage) : null;
+    case "output_replaced":
+      return { type: "output_replaced" };
     case "show_test_frame":
       return TEST_FRAME_KINDS.includes(m.kind as TestFrameKind) ? (m as unknown as ShowTestFrameMessage) : null;
     case "show_pattern":
