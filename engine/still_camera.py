@@ -23,9 +23,6 @@ import numpy as np
 
 from engine.files import write_text_atomic
 
-BASE_ISO = 100
-MAX_ISO = 12800  # past this the a6600's photos get too noisy to decode fine stripes reliably
-GAIN_TRIPLES = 15  # gain 15 is about 3x brighter, as on the AC410 (engine/calibrate.py)
 
 
 STILL_PREFIX = "gphoto2:"  # unique ids of still cameras (webcams use AVFoundation ids)
@@ -34,6 +31,11 @@ STILL_PREFIX = "gphoto2:"  # unique ids of still cameras (webcams use AVFoundati
 def is_still(unique_id: str | None) -> bool:
     return bool(unique_id) and unique_id.startswith(STILL_PREFIX)
 
+
+# HDR on a still camera: its own bracketing, the exposure change it can't take over USB. One press,
+# three photos 2 stops apart (rig, 2026-10-03); each is this much brighter than the darkest.
+BRACKET_MODE = "Bracketing C 2.0 Steps 3 Pictures"
+BRACKET_GAINS = (1.0, 4.0, 16.0)
 
 LOW_BATTERY = 20  # percent: warn
 FLAT_BATTERY = 10  # percent: don't start a scan (a camera dying mid-scan wastes it, and can stick)
@@ -54,6 +56,7 @@ class StillDriver(Protocol):
     def get_config(self, name: str) -> str: ...
     def choices(self, name: str) -> list[str]: ...
     def capture(self) -> np.ndarray: ...
+    def capture_burst(self, count: int) -> list[np.ndarray]: ...
 
 
 def _seconds(shutter: str) -> float | None:
@@ -94,35 +97,6 @@ class StillCamera:
         self.driver = driver
         self.retries = retries
         self._other: dict[str, str] = {}  # webcam-only controls (white balance, focus-abs): kept, unused
-        self._exposure: int | None = None  # 100 us units; None: as much as the shutter gives at base ISO
-        self._gain = 0
-
-    # Exposure is set with ISO, at the shutter speed the owner set on the dial: on the rig
-    # (EXIF-checked, 2026-10-03) the a6600 ignored every shutter change over USB, and each attempt
-    # quietly put ISO back to Auto. Calibration and HDR ask for "exposure" as with a webcam; here it
-    # means ISO = BASE_ISO x exposure / shutter (x the gain's share), within the ISOs the camera has.
-    def _shutter_units(self) -> float:
-        return (_seconds(self.driver.get_config("shutterspeed")) or 0.01) * 10000
-
-    def _isos(self) -> dict[str, float]:
-        return {s: float(s) for s in self.driver.choices("iso") if s.isdigit() and float(s) <= MAX_ISO}
-
-    @property
-    def longer_exposures(self) -> tuple[int, ...]:
-        """Exposures calibration tries first, longest first: up to the highest ISO at the dial's shutter."""
-        with _answering():
-            top = max(self._isos().values()) / BASE_ISO
-            return tuple(int(self._shutter_units() * top / k) for k in (1, 2, 4, 8))
-
-    def _apply_iso(self, refuse_more: bool) -> None:
-        exposure = self._exposure if self._exposure is not None else self._shutter_units()
-        want = BASE_ISO * exposure / self._shutter_units() * 3 ** (self._gain / GAIN_TRIPLES)
-        isos = self._isos()
-        lo, hi = min(isos.values()), max(isos.values())
-        choice = _nearest(min(hi, max(lo, want)), isos)
-        self.driver.set_config("iso", choice)
-        if refuse_more and want > hi * 1.05:  # like UvcUtil past the webcam's limit: applied, then said
-            raise RuntimeError(f"exposure-time-abs: asked for ISO {want:.0f}, the camera's highest is {hi:.0f}")
 
     # How every pattern photo is made (scan_profile): single shots (no bursts), fixed white balance,
     # no DRO, flash or exposure compensation, M mode, a wide focus area for the one-time focus, and
@@ -134,7 +108,7 @@ class StillCamera:
     )
     # Changed during a scan, so put back too.
     # The shutter isn't among them: it's never written (writing it puts the a6600's ISO back to Auto).
-    SCAN_CHANGES = ("f-number", "iso", "focusmode")
+    SCAN_CHANGES = ("f-number", "focusmode")
 
     @contextmanager
     def scan_profile(self, aperture: str | None = None, snapshot: Path | None = None):
@@ -159,7 +133,6 @@ class StillCamera:
                 if name in original:
                     with _answering():
                         self.driver.set_config(name, value)
-            self._exposure = None  # read afresh in M mode
             self.prepare(aperture=aperture)
             yield self
         finally:
@@ -195,24 +168,17 @@ class StillCamera:
             self._set(name, value)
 
     def _get(self, name: str) -> str:
-        if name == "exposure-time-abs":
-            return str(round(self._exposure if self._exposure is not None else self._shutter_units()))
-        if name == "gain":
-            return str(self._gain)
         if name == "auto-exposure-mode":
             return "1" if self.driver.get_config("expprogram") == "M" else "8"
         return self._other.get(name, "0")
 
     def _set(self, name: str, value: str) -> None:
-        if name == "exposure-time-abs":
-            self._exposure = int(value)
-            self._apply_iso(refuse_more=True)
-        elif name == "gain":
-            self._gain = int(value)
-            self._apply_iso(refuse_more=False)
-        elif name == "auto-exposure-mode":
+        # Exposure (shutter, ISO) is the owner's, set on the camera: the a6600 applies only the first
+        # exposure change over USB after connecting (rig, EXIF-checked, 2026-10-03). Webcam-style
+        # controls are kept here unused.
+        if name == "auto-exposure-mode":
             self.driver.set_config("expprogram", "M" if value == "1" else "P")
-        else:  # auto-focus, white balance: focus is held by focus_and_lock; white balance doesn't matter
+        else:
             self._other[name] = value
 
     def focus_and_lock(self, timeout: float = 5.0) -> None:
@@ -240,6 +206,21 @@ class StillCamera:
                     break
         raise CaptureFailed("The camera didn't take a photo. Check it's on, in PC Remote, and not showing a menu.")
 
+    def start_bracketing(self) -> None:
+        with _answering():
+            self.driver.set_config("capturemode", BRACKET_MODE)
+
+    def read_bracket(self) -> list[np.ndarray]:
+        """One press in bracketing: its photos, darkest first."""
+        for attempt in range(self.retries + 1):
+            try:
+                photos = self.driver.capture_burst(len(BRACKET_GAINS))
+                return sorted(photos, key=lambda p: float(np.median(p)))
+            except DriverError:
+                if attempt == self.retries:
+                    break
+        raise CaptureFailed("The camera didn't take its bracketed photos. Check it's on, in PC Remote, and not showing a menu.")
+
     def battery(self) -> int | None:
         """Battery level in percent, or None if the camera doesn't report it."""
         with _answering():
@@ -264,6 +245,7 @@ class FakeStillDriver:
         self.fail_next = fail_next
         self.captures = 0
         self.frame = frame  # optional: a function returning the photo (e.g. a synthetic scene)
+        self.exposure_scale = 1.0  # while bracketing: this photo's exposure relative to the owner's
 
     def set_config(self, name: str, value: str) -> None:
         self.calls.append(("set", name, value))
@@ -287,6 +269,16 @@ class FakeStillDriver:
         if self.frame:
             return self.frame()
         return np.full((24, 32, 3), 128, np.uint8)
+
+    def capture_burst(self, count: int) -> list[np.ndarray]:
+        """In a bracketing drive mode: one press, `count` photos 2 stops apart (-2, 0, +2)."""
+        self.calls.append(("capture_burst", count))
+        photos = []
+        for scale in (0.25, 1.0, 4.0)[:count]:
+            self.exposure_scale = scale
+            photos.append(self.frame() if self.frame else np.full((24, 32, 3), min(255, int(128 * scale)), np.uint8))
+        self.exposure_scale = 1.0
+        return photos
 
 
 # The real camera, through the gphoto2 command line.
@@ -520,6 +512,32 @@ class GPhoto2Session:
             return frame
 
         return self._do("taking a photo", shoot)
+
+    def capture_burst(self, count: int, wait_seconds: float = 10.0) -> list[np.ndarray]:
+        """One press that takes several photos (the camera's bracketing): the first comes from the
+        capture, the rest are announced as new files; each is downloaded and decoded, in order."""
+        import gphoto2 as gp
+
+        def shoot(cam):
+            first = cam.capture(0)  # GP_CAPTURE_IMAGE
+            paths = [(first.folder, first.name)]
+            end = time.monotonic() + wait_seconds
+            while len(paths) < count and time.monotonic() < end:
+                kind, data = cam.wait_for_event(500)
+                if kind == gp.GP_EVENT_FILE_ADDED:
+                    paths.append((data.folder, data.name))
+            if len(paths) < count:
+                raise DriverError(f"the camera sent {len(paths)} of {count} bracketed photos: "
+                                  "set Drive Mode to Bracketing C, 3 pictures")
+            photos = []
+            for folder, name in paths:
+                frame = decode_photo(bytes(memoryview(cam.file_get(folder, name, 1).get_data_and_size())))
+                if frame is None:
+                    raise DriverError("the camera sent no photo (set File Format to JPEG)")
+                photos.append(frame)
+            return photos
+
+        return self._do("taking bracketed photos", shoot)
 
     def close(self) -> None:
         if self._lock.acquire(timeout=2):  # a call stuck in libgphoto2 mustn't hold up shutdown
