@@ -19,7 +19,7 @@ describe("latestPerFrame (#161)", () => {
     expect(applied).toEqual([3, 4]);
   });
 
-  it("drops a pending value when cancelled (e.g. a scan pattern arrived after a show update)", () => {
+  it("drops a pending value when canceled (e.g. a scan pattern arrived after a show update)", () => {
     const f = frames(), applied: number[] = [];
     const latest = latestPerFrame<number>((v) => applied.push(v), f.schedule);
     latest.push(1); latest.cancel(); f.run();
