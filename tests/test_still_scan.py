@@ -152,12 +152,12 @@ def test_status_shows_the_camera_battery_and_a_nearly_flat_one_stops_a_scan(rig,
         driver.config["batterylevel"] = "8%"
         photos = driver.calls.count(("capture",))
         client.post("/api/scan")
+        play_output(out, scene)  # white goes up first; the camera refuses as it's taken over
         while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
             pass
         assert msg["type"] == "scan_failed" and "battery" in msg["error"].lower() and "8%" in msg["error"]
         assert client.get("/api/status").json()["camera"]["battery"] == 8
         assert driver.calls.count(("capture",)) == photos  # stopped before any photo
-
 
 
 @pytest.mark.parametrize("level, state, can_scan", [("64%", "ok", True), ("18%", "low", True), ("8%", "flat", False)])
@@ -175,3 +175,14 @@ def test_status_says_how_the_camera_battery_stands_and_a_flat_one_disables_scan(
     assert (s["scan_blocker"] is None) is can_scan
     if not can_scan:
         assert "battery" in s["scan_blocker"].lower() and "8%" in s["scan_blocker"]
+
+
+def test_calibration_refuses_a_flat_camera_battery_too(rig, tmp_path):
+    """The battery check lives with the camera, so calibration gets it as well as scans (#143)."""
+    scene, driver, hw, shown = rig
+    driver.config["batterylevel"] = "8%"
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            output(client, W, H):
+        resp = client.post("/api/camera/calibrate")
+    assert resp.status_code == 422 and "8%" in resp.json()["detail"]
+    assert not any(c[:2] == ("set", "shutterspeed") for c in driver.calls)  # never took the camera over

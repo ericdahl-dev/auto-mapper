@@ -202,3 +202,23 @@ def test_battery_level_reads_as_a_percentage():
     assert cam.battery() == 98
     driver.config["batterylevel"] = ""  # a camera that doesn't report it
     assert cam.battery() is None
+
+
+def test_settings_left_by_an_interrupted_scan_go_back_to_the_owner_next_time(tmp_path):
+    """A scan killed mid-way skips giving the camera back. The owner's settings are on disk while a
+    scan has the camera, so the next take-over gives back those, not the scan's (#143)."""
+    import json
+
+    cam, driver = camera()
+    driver.config.update({"capturemode": "Continuous Med Speed", "whitebalance": "Automatic"})
+    snapshot = tmp_path / "still-camera-restore.json"
+
+    profile = cam.scan_profile(snapshot=snapshot)
+    profile.__enter__()  # killed here: never exits
+    assert json.loads(snapshot.read_text())["capturemode"] == "Continuous Med Speed"
+    assert driver.config["capturemode"] == "Single Shot"
+
+    with StillCamera(driver).scan_profile(snapshot=snapshot):  # the next run, in a new engine
+        pass
+    assert (driver.config["capturemode"], driver.config["whitebalance"]) == ("Continuous Med Speed", "Automatic")
+    assert not snapshot.exists()
