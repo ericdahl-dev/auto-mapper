@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import ValidationError
 
 from engine.camera_device import CAPTURE_SIZE, CameraFactory, CameraSession, OpenCVCameraFactory
-from engine.calibrate import CalibrationError, calibrate_exposure
+from engine.calibrate import CalibrationError
 from engine.camera_lock import Uvc, UvcUtil, recover_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
 from engine.framing import measure_framing
@@ -237,7 +237,7 @@ def create_app(
         def run() -> dict:
             camera = scan_cameras.open(cameras, selected)
             with camera.taken_over():  # white is on screen: a still camera focuses on it
-                return calibrate_exposure(camera.controls, camera.read, camera.longer_exposures)
+                return camera.calibrate()
 
         try:
             result = await asyncio.to_thread(run)

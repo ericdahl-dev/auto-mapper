@@ -6,7 +6,7 @@ from typing import Callable
 
 import numpy as np
 
-from engine.calibrate import MAX_EXPOSURE, MAX_GAIN, MIN_RESPONSE, calibrate_exposure
+from engine.calibrate import MAX_EXPOSURE, MAX_GAIN, MIN_RESPONSE
 from engine.scan import DecodeResult, HdrDecoder, pattern_sequence
 from engine.scan_camera import ScanCamera
 
@@ -54,11 +54,12 @@ def capture_scan(
     hdr: int = 1,  # exposures per pattern (#66): 1 = off
 ) -> tuple[DecodeResult, dict]:
     seq = pattern_sequence(width, height)
+    hdr = min(hdr, camera.max_hdr)
     uvc, read_frame = camera.controls, camera.read
     drop_frames, frames_per_pattern = camera.drop_frames, camera.frames_per_pattern
     if calibration is None:
         show({"kind": "white"})
-        calibration = calibrate_exposure(uvc, read_frame, camera.longer_exposures)
+        calibration = camera.calibrate()
     # Calibration leaves the camera at whatever it probed last; set the chosen values.
     uvc.set("gain", str(calibration["gain"]))
     uvc.set("exposure-time-abs", str(calibration["exposure"]))

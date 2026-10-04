@@ -26,6 +26,7 @@ def rig():
         return scene.frame()
 
     driver = FakeStillDriver(shutters=SHUTTERS, isos=ISOS, frame=photo)
+    driver.config.update({"iso": "100", "shutterspeed": "1/60"})  # exposure set on the camera by its owner
     hw = FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=[A6600])
     return scene, driver, hw, shown
 
@@ -96,34 +97,6 @@ def test_a_scan_sets_the_cameras_aperture_and_calibrates_for_it(rig, tmp_path):
 
 
 
-def test_an_hdr_scan_with_a_still_camera_takes_each_pattern_at_two_isos_and_never_touches_the_shutter(rig, tmp_path):
-    scene, driver, hw, shown = rig
-
-    def scan(client, ed, out):
-        before = sum(c == ("capture",) for c in driver.calls)
-        mark = len(driver.calls)
-        client.post("/api/scan")
-        play_output(out, scene)
-        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
-            pass
-        assert msg["type"] == "scan_result", msg
-        calls = driver.calls[mark:]
-        photos = sum(c == ("capture",) for c in driver.calls) - before
-        assert not any(c[:2] == ("set", "shutterspeed") for c in calls)  # the dial's, never written
-        # The ISOs photos were taken at (Auto ISO: the owner's, given back after).
-        return photos, {c[2] for c in calls if c[:2] == ("set", "iso")} - {"Auto ISO"}, msg
-
-    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
-            editor(client) as ed, output(client, W, H) as out:
-        scan(client, ed, out)  # HDR off; this one also calibrates
-        plain, plain_shutters, _ = scan(client, ed, out)  # calibrated: just the patterns
-        client.post("/api/camera/scan-settings", json={"hdr": 2})
-        hdr, hdr_shutters, msg = scan(client, ed, out)
-    assert hdr == 2 * plain  # every pattern twice
-    assert len(hdr_shutters) == 2 and len(plain_shutters) <= 1  # two ISOs, alternating
-    assert msg["coverage"] > 0.9
-
-
 def test_after_a_scan_the_camera_is_back_as_its_owner_had_it(rig, tmp_path):
     scene, driver, hw, shown = rig
     driver.config.update({"capturemode": "Continuous Med Speed", "whitebalance": "Automatic", "focusmode": "AF-C"})
@@ -186,3 +159,48 @@ def test_calibration_refuses_a_flat_camera_battery_too(rig, tmp_path):
         resp = client.post("/api/camera/calibrate")
     assert resp.status_code == 422 and "8%" in resp.json()["detail"]
     assert not any(c[:2] == ("set", "shutterspeed") for c in driver.calls)  # never took the camera over
+
+
+# The a6600 applies only the first exposure change after connecting (rig, EXIF-checked, 2026-10-03):
+# its owner sets exposure on the camera; the app checks it and never writes shutter or ISO (#136).
+EXPOSURE_WRITES = ("shutterspeed", "iso")
+
+
+def check_exposure(rig, tmp_path, **config):
+    scene, driver, hw, shown = rig
+    driver.config.update(config)
+    scene.pattern = {"kind": "white"}  # what the output window shows for the check
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, output(client, W, H):
+        resp = client.post("/api/camera/calibrate")
+    assert not any(c[0] == "set" and c[1] in EXPOSURE_WRITES for c in driver.calls)
+    return resp
+
+
+def test_a_still_cameras_exposure_is_checked_not_changed(rig, tmp_path):
+    resp = check_exposure(rig, tmp_path)
+    assert resp.status_code == 200, resp.json()
+    assert resp.json()["manual"] is True and 120 <= resp.json()["p99"] < 250
+
+
+def test_the_check_says_what_to_change_on_the_camera(rig, tmp_path):
+    dark = check_exposure(rig, tmp_path, shutterspeed="1/4000")
+    assert dark.status_code == 422 and "slower shutter" in dark.json()["detail"]
+    bright = check_exposure(rig, tmp_path, shutterspeed="1")
+    assert bright.status_code == 422 and "faster shutter" in bright.json()["detail"]
+    auto = check_exposure(rig, tmp_path, iso="Auto ISO")
+    assert auto.status_code == 422 and "Auto ISO" in auto.json()["detail"]
+
+
+def test_a_still_camera_scans_at_its_own_exposure_one_photo_per_pattern(rig, tmp_path):
+    scene, driver, hw, shown = rig
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, \
+            editor(client) as ed, output(client, W, H) as out:
+        client.post("/api/camera/scan-settings", json={"hdr": 2})  # HDR on a still camera: its bracketing, later
+        client.post("/api/scan")
+        patterns = play_output(out, scene)
+        while (msg := ed.receive_json())["type"] not in ("scan_result", "scan_failed"):
+            pass
+    assert msg["type"] == "scan_result", msg
+    photos = sum(c == ("capture",) for c in driver.calls)
+    assert photos == len(patterns) - 1  # one per pattern; the white it focuses on isn't photographed
+    assert not any(c[0] == "set" and c[1] in EXPOSURE_WRITES for c in driver.calls)

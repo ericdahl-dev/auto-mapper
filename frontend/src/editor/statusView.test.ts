@@ -199,3 +199,11 @@ describe("camera battery (still cameras)", () => {
     expect(cam(15, "flat").banners).toContain("Camera battery is at 15%: charge or swap it before scanning.");
   });
 });
+
+describe("a still camera's exposure", () => {
+  it("is the camera's own, checked by the engine", () => {
+    const calibration = { exposure: 167, gain: 0, p99: 201.4, manual: true };
+    expect(describeStatus(status({ camera: camera({ calibration }) })).calibration)
+      .toBe("Set on the camera (white frame peak 201)");
+  });
+});

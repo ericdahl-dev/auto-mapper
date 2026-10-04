@@ -126,4 +126,27 @@ describe("the Camera section", () => {
     hdr.dispatchEvent(new Event("change"));
     expect(calls).toContain('setScanSettings {"hdr":3}');
   });
+
+  it("for a still camera, checks the exposure set on it rather than calibrating, and has no HDR", () => {
+    const { engine } = fakeEngine();
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    panel.update(status(A6600), false);
+    expect($("calibrate").textContent).toBe("Check exposure");
+    expect($("hdr-row").hidden).toBe(true);
+    panel.update(status(AC410), false);
+    expect($("calibrate").textContent).toBe("Calibrate exposure");
+    expect($("hdr-row").hidden).toBe(false);
+  });
+
+  it("says what to change on a still camera when its exposure isn't right", async () => {
+    const detail = "The white frame is too dark: use a slower shutter or a higher ISO on the camera.";
+    const { engine } = fakeEngine({ calibrate: async () => json({ detail }, 422) });
+    const notices: string[] = [];
+    const panel = mountCameraPanel({ engine, notice: (t) => notices.push(t) });
+    panel.update(status(A6600), false);
+    $("calibrate").click();
+    expect($("calibrate").textContent).toBe("Checking…");
+    await vi.waitFor(() => expect(notices).toEqual([`Exposure check failed: ${detail}`]));
+    expect($("calibrate").textContent).toBe("Check exposure");
+  });
 });

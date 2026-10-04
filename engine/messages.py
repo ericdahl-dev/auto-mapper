@@ -223,6 +223,7 @@ class CalibrationOut(_Out):
     p99: float
     max_exposure: int | None = None  # older saved calibrations lack these
     at_light_limit: bool | None = None
+    manual: bool | None = None  # a still camera: exposure set on the camera, checked not calibrated
 
 
 class CameraStatusOut(_Out):
