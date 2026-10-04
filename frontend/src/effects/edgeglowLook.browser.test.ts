@@ -60,7 +60,8 @@ function pixels(effect: string, params: Record<string, unknown>): Uint8Array {
 }
 
 describe("Edge glow's look (#158)", () => {
-  for (const params of [{}, { spread: 1, threshold: 0.03 }, { spread: 4, threshold: 0.2, pulse: 0.5 }, { spread: 8, base: 0 }]) {
+  // Smoothing 0: the original had none.
+  for (const params of [{ smoothing: 0 }, { spread: 1, threshold: 0.03, smoothing: 0 }, { spread: 4, threshold: 0.2, pulse: 0.5, smoothing: 0 }, { spread: 8, base: 0, smoothing: 0 }]) {
     it(`matches the per-pixel original: ${JSON.stringify(params)}`, () => {
       const a = pixels("edgeglow", params), b = pixels("edgeglowReference", params);
       let max = 0, sum = 0, lit = 0;

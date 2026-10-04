@@ -318,11 +318,14 @@ export class ShowRenderer {
       gl.uniform1i(gl.getUniformLocation(p, "u_scan"), 0);
       if (s.effect.scanEdges) {
         this.edges ??= new ScanEdges(gl);
-        const name = s.effect.scanEdges.spread;
-        const schema = s.effect.params.find((q) => q.name === name);
-        const setting = s.params[name] ?? (schema && "default" in schema ? schema.default : 1);
-        const spread = Math.max(1, Math.round(Number(setting)));
-        const edges = this.edges.texture(this.scanTexture, spread, res[0], res[1]);
+        const setting = (name: string | undefined, fallback: number) => {
+          if (!name) return fallback;
+          const schema = s.effect.params.find((q) => q.name === name);
+          return Number(s.params[name] ?? (schema && "default" in schema ? schema.default : fallback));
+        };
+        const spread = Math.max(1, Math.round(setting(s.effect.scanEdges.spread, 1)));
+        const smoothing = Math.max(0, Math.min(2, Math.round(setting(s.effect.scanEdges.smoothing, 0))));
+        const edges = this.edges.texture(this.scanTexture, spread, smoothing, res[0], res[1]);
         gl.useProgram(p); // the edge pass used its own program
         gl.activeTexture(gl.TEXTURE0 + EDGES_UNIT);
         gl.bindTexture(gl.TEXTURE_2D, edges);

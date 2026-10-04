@@ -36,9 +36,9 @@ export interface Effect {
     pan?: number;
     group?: string; // sync group ("none", "A".."D"): output/syncGroups.ts
   };
-  /** Effects that read the scan's edges (scanEdgeAt in the preamble): the setting giving their spread
-   *  in pixels. The renderer precomputes the edges once per scan and spread (output/scanEdges.ts). */
-  scanEdges?: { spread: string };
+  /** Effects that read the scan's edges (scanEdgeAt in the preamble): the settings giving their spread
+   *  in pixels and, optionally, their smoothing (a median before the edges: 0 none, 1, 2). The renderer precomputes the edges once per scan and spread (output/scanEdges.ts). */
+  scanEdges?: { spread: string; smoothing?: string };
   /** Fragment shader body. The shared preamble (see compile.ts) is prepended. null = draw nothing. */
   fragment: string | null;
 }
