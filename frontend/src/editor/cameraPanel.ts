@@ -200,8 +200,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     const still = sel?.device_type === "still";
     apertureRow.hidden = !still; // a webcam's lens has none to set
     // A still camera's exposure is set on it (the a6600 takes one exposure change over USB): the
-    // engine checks it rather than calibrating, and there's no HDR for it yet.
-    $("hdr-row").hidden = still;
+    // engine checks it rather than calibrating. Its HDR is its own bracketing (3 photos per press).
     if (!calibrate.dataset.busy) calibrate.textContent = still ? "Check exposure" : "Calibrate exposure";
   }
 

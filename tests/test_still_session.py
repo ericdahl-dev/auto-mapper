@@ -291,3 +291,42 @@ def test_a_photo_sent_wrapped_by_the_camera_is_unwrapped_to_the_full_size_image(
 
     s = GPhoto2Session(camera=lambda: Wrapping(), stop_macos=lambda: None, settle_seconds=0)
     assert s.capture().shape == (240, 424, 3)  # the main photo, not the thumbnail or the preview
+
+
+def test_one_press_in_bracketing_collects_every_photo_it_takes():
+    """On the rig, one capture in 'Bracketing C ... 3 Pictures' gave three photos: the first from the
+    capture, the other two announced as new files within half a second."""
+    import cv2
+
+    shades = [40, 120, 220]
+
+    class Bracketing(FakeGpCamera):
+        def __init__(self):
+            super().__init__()
+            self.pending = []
+
+        def capture(self, kind):
+            self.pending = [("/", "b.JPG"), ("/", "c.JPG")]
+            p = Path(); p.name = "a.JPG"
+            return p
+
+        def wait_for_event(self, timeout_ms):
+            import gphoto2 as gp
+
+            if self.pending:
+                folder, name = self.pending.pop(0)
+                p = Path(); p.folder, p.name = folder, name
+                return gp.GP_EVENT_FILE_ADDED, p
+            return gp.GP_EVENT_TIMEOUT, None
+
+        def file_get(self, folder, name, kind):
+            shade = shades["abc".index(name[0])]
+
+            class F:
+                def get_data_and_size(self_):
+                    return cv2.imencode(".jpg", np.full((12, 16, 3), shade, np.uint8))[1].tobytes()
+            return F()
+
+    s = GPhoto2Session(camera=lambda: Bracketing(), stop_macos=lambda: None, settle_seconds=0)
+    photos = s.capture_burst(3)
+    assert [int(np.median(p)) for p in photos] == [40, 120, 220]
