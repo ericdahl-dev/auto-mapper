@@ -7,6 +7,7 @@ import { applyVideoSound, outputChannels, resumeVideoAudio, videoAudioSuspended 
 import { ShowRenderer } from "./showRenderer";
 import { shouldShowHint } from "./hint";
 import { OutputRenderer } from "./renderer";
+import { latestPerFrame } from "./latestPerFrame";
 
 const canvas = document.getElementById("stage") as HTMLCanvasElement;
 const hint = document.getElementById("hint")!;
@@ -81,19 +82,25 @@ function showFrames() {
   cancelAnimationFrame(raf);
 }
 
+// Show updates (every drag step) are applied once per frame, the newest (#161).
+const showUpdates = latestPerFrame<ShowMessage>(applyShow);
+
 const conn = connect({
   hello: () => ({ type: "hello", role: "output", ...size }),
   onMessage(msg) {
-    if (msg.type === "show") applyShow(msg);
+    if (msg.type === "show") showUpdates.push(msg);
     if (msg.type === "show_cleared") { // a new project: go dark, stay fullscreen
+      showUpdates.cancel();
       show = null;
       showRenderer.clear();
     }
     if (msg.type === "show_test_frame") {
+      showUpdates.cancel(); // a show still pending mustn't take the screen back from the frame
       showFrames();
       renderer.showTestFrame(msg.kind);
     }
     if (msg.type === "show_pattern") {
+      showUpdates.cancel();
       showFrames();
       renderer.showPattern(msg.pattern);
       // Ack only once the frame has been composited: one rAF gets it drawn, the second
