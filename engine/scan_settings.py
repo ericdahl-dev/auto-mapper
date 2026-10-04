@@ -17,7 +17,7 @@ MASK_MAX_POINTS = 200
 class ScanSettings:
     hole_fill: int = 9  # px gap between decoded pixels the scan fills in (0 = none)
     hdr: int = 1  # exposures per pattern: 1 = off
-    mask: list | None = None  # areas of the camera image to scan (0..1 coordinates); None = all of it
+    mask: list | None = None  # areas of the camera image to skip (0..1 coordinates); None = scan it all
     aperture: str = "8"  # still cameras: the f-number to scan at (f/8: deep focus), or "camera": as set
 
     @classmethod

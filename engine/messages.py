@@ -108,6 +108,7 @@ UnitPoint = Annotated[list[Annotated[float, Field(ge=0, le=1)]], Field(min_lengt
 class ScanSettingsRequest(BaseModel):
     # What each means, its default and bounds: engine/scan_settings.py.
     hole_fill: Annotated[int, Field(ge=0, le=HOLE_FILL_MAX)] | None = None
+    # Areas of the camera image to skip (0..1 coordinates), drawn on the preview (#170).
     mask: Annotated[list[Annotated[list[UnitPoint], Field(min_length=3, max_length=MASK_MAX_POINTS)]],
                     Field(min_length=1, max_length=MASK_MAX_AREAS)] | None = None
     clear_mask: bool = False  # back to scanning the whole camera image

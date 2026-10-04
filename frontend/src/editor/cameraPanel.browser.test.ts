@@ -148,4 +148,46 @@ describe("the Camera section", () => {
     await vi.waitFor(() => expect(notices).toEqual([`Exposure check failed: ${detail}`]));
     expect($("calibrate").textContent).toBe("Check exposure");
   });
+
+  it("says drawn areas are skipped (#170)", async () => {
+    const twoAreas = [[[0, 0], [0.2, 0], [0.2, 0.2]], [[0.5, 0.5], [0.7, 0.5], [0.7, 0.7]]];
+    const { engine } = fakeEngine({ scanSettings: async () => json({ hole_fill: 9, hdr: 1, mask: twoAreas, aperture: "8" }) });
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    expect($("mask-draw").textContent).toBe("Skip an area");
+    await panel.loadScanSettings();
+    expect($("mask-note").textContent).toBe("Skipping 2 areas");
+    expect($("mask-draw").title + $("mask-draw").closest(".row")!.getAttribute("title")).toMatch(/skip/i);
+  });
+
+  it("removes one skipped area when it's clicked, keeping the others", async () => {
+    const twoAreas = [[[0, 0], [0.2, 0], [0.2, 0.2]], [[0.5, 0.5], [0.7, 0.5], [0.7, 0.7]]];
+    const { engine, calls } = fakeEngine({ scanSettings: async () => json({ hole_fill: 9, hdr: 1, mask: twoAreas, aperture: "8" }) });
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    await panel.loadScanSettings();
+    document.querySelectorAll("#mask-overlay polygon")[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(calls).toContain(`setScanSettings ${JSON.stringify({ mask: [twoAreas[1]] })}`);
+  });
+
+  it("shows the preview after a framing check, so its outline can be seen (#170)", async () => {
+    const { engine } = fakeEngine();
+    const panel = mountCameraPanel({ engine, notice: () => {}, fetchPreview: async () => new Response(new Blob(["x"])) });
+    panel.update(status(AC410), false);
+    expect($("preview-box").hidden).toBe(true);
+    $("check-framing").click();
+    await vi.waitFor(() => expect($("framing-note").hidden).toBe(false));
+    expect($("preview-box").hidden).toBe(false);
+    panel.stopPreview();
+  });
+
+  it("forgets the framing result when another camera is chosen", async () => {
+    const { engine } = fakeEngine();
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    panel.update(status(AC410), false);
+    $("check-framing").click();
+    await vi.waitFor(() => expect($("framing-note").hidden).toBe(false));
+    panel.update(status(A6600), false);
+    expect($("framing-note").hidden).toBe(true);
+    expect(document.querySelector("#framing-overlay polygon")!.getAttribute("points")).toBe("");
+  });
 });
+

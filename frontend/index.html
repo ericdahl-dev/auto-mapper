@@ -88,7 +88,8 @@
       #framing-overlay { pointer-events: none; }
       #framing-overlay polygon { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
       #framing-note.warn { color: #fbbf24; }
-      #mask-overlay polygon { fill: rgba(74, 222, 128, 0.15); stroke: #4ade80; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      /* Skipped areas: shaded, so the preview shows what the scan will leave out (#170); click one to remove it. */
+      #mask-overlay polygon { fill: rgba(239, 68, 68, 0.35); stroke: #ef4444; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: pointer; }
       #mask-overlay polyline { fill: none; stroke: #fbbf24; stroke-width: 2; vector-effect: non-scaling-stroke; }
       #preview-box.drawing { cursor: crosshair; }
       details.fold-inline { margin: 0 0 12px; }
@@ -333,9 +334,9 @@
           <svg id="framing-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><polygon /></svg>
           <svg id="mask-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
-        <div class="row" title="Scan only part of what the camera sees: skip a window, a TV or shiny things. Click corners on the preview, double-click or Enter to finish; add as many areas as you like. Applies to the next scan.">
-          <button id="mask-draw">Mask area</button>
-          <button id="mask-clear" hidden>Clear mask</button>
+        <div class="row" title="Skip part of what the camera sees: draw around a window, a TV or shiny things, and the next scan leaves them out. Click corners on the preview, double-click or Enter to finish; add as many areas as you like. Click a shaded area to stop skipping it.">
+          <button id="mask-draw">Skip an area</button>
+          <button id="mask-clear" hidden>Skip nothing</button>
           <span id="mask-note" class="muted"></span>
         </div>
         </details>
