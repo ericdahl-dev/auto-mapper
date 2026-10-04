@@ -46,7 +46,12 @@ def test_the_editor_can_ask_how_the_projection_is_framed(tmp_path):
     scene = Scene(proj_w=256, proj_h=144, box=False)
     hw = FakeHardware(displays=[LAPTOP, {"name": "AML TV", "width": 256, "height": 144, "main": False}],
                       cameras=RIG_CAMERAS)
-    with engine(hw, data_dir=tmp_path, camera_factory=FakeCameraFactory(frame=scene.frame)) as client, \
+    from engine.camera_lock import FakeUvc
+    from tests.test_calibrate import DEFAULTS
+
+    uvc = FakeUvc(DEFAULTS)
+    with engine(hw, data_dir=tmp_path, camera_factory=FakeCameraFactory(frame=scene.frame),
+                uvc_factory=lambda address: uvc) as client, \
             output(client, 256, 144) as out:
         result = {}
         t = threading.Thread(target=lambda: result.update(r=client.post("/api/camera/framing")))
@@ -57,6 +62,7 @@ def test_the_editor_can_ask_how_the_projection_is_framed(tmp_path):
     body = result["r"].json()
     assert abs(body["span"] - 255 / 320) < 0.03 and body["cut_off"] is False
     assert body["advice"] is None  # 80%: framed well enough
+    assert uvc.values == DEFAULTS  # taken over like a scan, given back after
 
 
 def test_a_camera_that_doesnt_see_the_projection_is_told_to_point_at_it():

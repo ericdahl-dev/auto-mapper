@@ -224,3 +224,24 @@ def test_hdr_with_a_still_camera_uses_its_own_bracketing_one_press_per_pattern(r
     assert ("set", "capturemode", BRACKET_MODE) in driver.calls
     assert driver.config["capturemode"] == "Continuous Med Speed"  # given back
     assert not any(c[0] == "set" and c[1] in EXPOSURE_WRITES for c in driver.calls)
+
+
+def test_the_framing_check_takes_the_camera_over_like_a_scan(rig, tmp_path):
+    """Single shots (a bracketing drive mode's extra photos broke it on the rig), the scan's
+    aperture, focus on white; the owner's settings back after."""
+    import threading
+
+    scene, driver, hw, shown = rig
+    driver.config["capturemode"] = BRACKET_MODE  # the owner left bracketing on
+    with engine(hw, data_dir=tmp_path, still_factory=lambda uid: StillCamera(driver)) as client, output(client, W, H) as out:
+        result = {}
+        t = threading.Thread(target=lambda: result.update(r=client.post("/api/camera/framing")))
+        t.start()
+        play_output(out, scene)
+        t.join(10)
+    body = result["r"].json()
+    assert body["outline"] and body["span"] > 0.5, body
+    photos_at = [i for i, c in enumerate(driver.calls) if c == ("capture",)]
+    single = driver.calls.index(("set", "capturemode", "Single Shot"))
+    assert single < photos_at[0]
+    assert driver.config["capturemode"] == BRACKET_MODE  # given back

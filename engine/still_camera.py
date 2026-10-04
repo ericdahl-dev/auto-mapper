@@ -283,6 +283,19 @@ class FakeStillDriver:
 
 # The real camera, through the gphoto2 command line.
 
+def _drain_new_files(cam, quiet_ms: int = 300, most_seconds: float = 3.0) -> None:
+    """Reads and drops the camera's pending events, e.g. the other photos of a bracketing drive
+    mode's press (announced as new files within ~0.5 s). libgphoto2 takes the next new file as a
+    capture's result, so a leftover came back as the next photo."""
+    import gphoto2 as gp
+
+    end = time.monotonic() + most_seconds
+    while time.monotonic() < end:
+        kind, _ = cam.wait_for_event(quiet_ms)
+        if kind == gp.GP_EVENT_TIMEOUT:
+            return
+
+
 def decode_photo(data: bytes) -> np.ndarray | None:
     """The photo in what the camera sent: a JPEG, or (the a6600 over USB, seen 2026-10-03) a Sony
     wrapper holding EXIF tags, a thumbnail, the main photo's JPEG without its start marker, and a
@@ -507,6 +520,7 @@ class GPhoto2Session:
             path = cam.capture(0)  # GP_CAPTURE_IMAGE
             data = cam.file_get(path.folder, path.name, 1).get_data_and_size()  # GP_FILE_TYPE_NORMAL
             frame = decode_photo(bytes(memoryview(data)))
+            _drain_new_files(cam)  # a bracketing drive mode took more: they mustn't be the next photo
             if frame is None:
                 raise DriverError("the camera sent no photo (set File Format to JPEG)")
             return frame
@@ -529,6 +543,7 @@ class GPhoto2Session:
             if len(paths) < count:
                 raise DriverError(f"the camera sent {len(paths)} of {count} bracketed photos: "
                                   "set Drive Mode to Bracketing C, 3 pictures")
+            _drain_new_files(cam)
             photos = []
             for folder, name in paths:
                 frame = decode_photo(bytes(memoryview(cam.file_get(folder, name, 1).get_data_and_size())))

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -20,7 +21,7 @@ from engine.hardware import HardwareProbe, MacHardware
 from engine.hub import Hub, OutputNotResponding
 from engine import media
 from engine.scan_folder import ScanFolder
-from engine.scan_camera import ScanCameras
+from engine.scan_camera import NotScannable, ScanCameras
 from engine.scan_job import ScanBusy, ScanJob, ScanNotRunning, latest_image_url
 from engine.projects import ProjectStore, UnknownProject
 from engine.osc import OscControl, OscServer
@@ -265,16 +266,22 @@ def create_app(
             return camera.read()
 
         frames = []
+        taking = contextlib.ExitStack()  # the camera, taken over as a scan does (single shots, focus)
         try:
             for kind in ("white", "black"):
                 await hub.show_pattern({"kind": kind}, ack_timeout)
                 await asyncio.sleep(scan_settle_seconds)
+                if not taking._exit_callbacks:  # on white: a still camera focuses on it
+                    await asyncio.to_thread(taking.enter_context, camera.taken_over())
                 frames.append(await asyncio.to_thread(fresh))
         except OutputNotResponding as e:
             raise HTTPException(409, str(e))
         except CaptureFailed as e:
             raise HTTPException(409, str(e))
+        except NotScannable:
+            raise HTTPException(409, "The framing check needs a USB webcam with UVC controls, or a still camera over USB")
         finally:
+            await asyncio.to_thread(taking.close)  # the owner's settings back
             await hub.send_to_output({"type": "show_test_frame", "kind": "black"})
             await hub.broadcast_show()
         return measure_framing(*frames).to_dict()
