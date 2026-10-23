@@ -11,7 +11,7 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
-import { toast } from "./toast";
+import { clearFailures, toast } from "./toast";
 import { EditSession, type SurfaceEdit } from "./editSession";
 import { createEngineClient, type Schedule } from "./engineClient";
 import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
@@ -1214,6 +1214,7 @@ connect({
       renderSurfaces();
     } else if (msg.type.startsWith("scan_")) {
       scanState = scanReducer(scanState, msg as Parameters<typeof scanReducer>[1]);
+      if (msg.type === "scan_started") clearFailures($("toasts"));
       if (msg.type === "scan_failed") notice(`Scan failed: ${msg.error}`, true);
       renderScan();
     }

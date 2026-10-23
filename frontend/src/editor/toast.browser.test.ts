@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { toast } from "./toast";
+import { clearFailures, toast } from "./toast";
 
 afterEach(() => vi.useRealTimers());
 
@@ -23,5 +23,14 @@ describe("toasts", () => {
     expect(box.children).toHaveLength(1);
     toast(box, "Scan failed: the camera sent no photo", true);
     expect(box.children).toHaveLength(2);
+  });
+
+  it("clears failures, not successes, when a new scan starts (#171)", () => {
+    const box = document.createElement("div");
+    toast(box, "Saved.");
+    toast(box, "Cannot scan: no camera", true);
+    toast(box, "Scan failed: the camera sent no photo", true);
+    clearFailures(box);
+    expect([...box.children].map((n) => (n as HTMLElement).dataset.text)).toEqual(["Saved."]);
   });
 });

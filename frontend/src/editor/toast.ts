@@ -4,6 +4,7 @@ export function toast(box: HTMLElement, text: string, failure = false) {
   const note = Object.assign(document.createElement("div"), { className: "banner", textContent: text });
   note.dataset.text = text;
   if (failure) {
+    note.classList.add("failure");
     const close = Object.assign(document.createElement("button"), { className: "close", textContent: "×" });
     close.setAttribute("aria-label", "Dismiss");
     close.addEventListener("click", () => note.remove());
@@ -13,4 +14,9 @@ export function toast(box: HTMLElement, text: string, failure = false) {
   }
   for (const old of [...box.children]) if ((old as HTMLElement).dataset.text === text) old.remove(); // a retry doesn't stack
   box.append(note);
+}
+
+// A new scan makes old failures stale: its own reason replaces them (#171).
+export function clearFailures(box: HTMLElement) {
+  for (const note of box.querySelectorAll(".failure")) note.remove();
 }
