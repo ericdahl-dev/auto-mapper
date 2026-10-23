@@ -6,8 +6,9 @@ import { textKey, type TextStyle } from "./textTexture";
 
 export type ParamSchema =
   | { name: string; label: string; type: "color"; default: string }
-  // `unit` is shown after the value in the editor's readout ("6 px", "90°").
-  | { name: string; label: string; type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string }
+  // `unit` is shown after the value in the editor's readout ("6 px", "90°"); `steps` names each step
+  // instead ("Off", "Low", "High"); `hint` is the control's one-line tooltip.
+  | { name: string; label: string; type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; steps?: string[]; hint?: string }
   // One of a few named options; the shader gets the option's index as a float.
   | { name: string; label: string; type: "choice"; default: string; options: { value: string; label: string }[] }
   // An uploaded image or video (its URL). The shader gets `sampler2D u_<name>` and its pixel size `vec2 u_<name>Size`.

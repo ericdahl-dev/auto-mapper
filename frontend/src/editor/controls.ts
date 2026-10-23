@@ -15,8 +15,9 @@ export function parseControlValue(kind: Control["kind"], raw: string): string | 
   return kind === "range" ? Number(raw) : raw;
 }
 
-/** A range setting's value as its readout shows it, with its unit: "6 px", "90°". */
+/** A range setting's value as its readout shows it, with its unit or step name: "6 px", "90°", "Low". */
 export function readout(c: Control, value: number | string): string {
+  if (c.kind === "range" && c.steps) return c.steps[Math.round((Number(value) - c.min) / c.step)] ?? String(value);
   if (c.kind !== "range" || !c.unit) return String(value);
   return c.unit === "°" ? `${value}°` : `${value} ${c.unit}`;
 }
