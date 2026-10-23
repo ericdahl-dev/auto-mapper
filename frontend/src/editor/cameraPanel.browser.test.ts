@@ -84,10 +84,19 @@ describe("the Camera section", () => {
     panel.update(status(AC410), false);
     $("calibrate").click();
     await vi.waitFor(() => expect($("exposure-note").hidden).toBe(false));
-    expect($("exposure-note").textContent).toBe("Adjusted the camera: exposure 1200, gain 3");
+    expect($("exposure-note").textContent).toBe("Good: adjusted the camera to exposure 1200, gain 3");
     expect($("exposure-note").classList.contains("warn")).toBe(false);
     await vi.waitFor(() => expect(calls).toContain("releaseCamera"));
     expect($("calibrate").textContent).toBe("Check exposure");
+  });
+
+  it("leads with the light limit when the camera has no more to give (#172)", async () => {
+    const { engine } = fakeEngine({ calibrate: async () => json({ exposure: 1000, gain: 15, p99: 120, at_light_limit: true }) });
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    panel.update(status(AC410), false);
+    $("calibrate").click();
+    await vi.waitFor(() => expect($("exposure-note").textContent)
+      .toBe("At the camera's light limit: adjusted the camera to exposure 1000, gain 15"));
   });
 
   it("keeps why calibration failed in the section until another camera is chosen (#171)", async () => {
@@ -185,7 +194,7 @@ describe("the Camera section", () => {
     expect($("calibrate").textContent).toBe("Check exposure");
     expect($("hdr-row").hidden).toBe(false); // HDR: the camera's own bracketing
     $("calibrate").click();
-    await vi.waitFor(() => expect($("exposure-note").textContent).toBe("Checked the exposure set on the camera; nothing changed on it"));
+    await vi.waitFor(() => expect($("exposure-note").textContent).toBe("Good: checked the exposure set on the camera; nothing changed on it"));
     panel.update(status(AC410), false);
     expect($("calibrate").textContent).toBe("Check exposure");
   });

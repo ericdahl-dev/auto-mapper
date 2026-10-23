@@ -174,16 +174,16 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
       render();
     }
   }
-  // One name for both kinds of camera (#172): the result says whether it adjusted the camera (a webcam)
-  // or only checked the exposure set on it (a still camera). The verdict is in the Exposure line.
+  // One name for both kinds of camera (#172): the result leads with the engine's verdict, then says whether
+  // it adjusted the camera (a webcam) or only checked the exposure set on it (a still camera).
   calibrate.addEventListener("click", () => void usingCamera(calibrate, "Checking…", async () => {
     const res = await engine.calibrate();
     const body = await res.json();
     const c = body as CalibrateResponse;
     // Kept in the section until the next check or another camera (#171), pass or fail. A failure is
     // the engine's own words, verdict first ("Too dark (...): use a slower shutter ...").
-    exposureNote.textContent = !res.ok ? body.detail
-      : c.manual ? "Checked the exposure set on the camera; nothing changed on it" : `Adjusted the camera: exposure ${c.exposure}, gain ${c.gain}`;
+    const done = c.manual ? "checked the exposure set on the camera; nothing changed on it" : `adjusted the camera to exposure ${c.exposure}, gain ${c.gain}`;
+    exposureNote.textContent = !res.ok ? body.detail : `${c.at_light_limit ? "At the camera's light limit" : "Good"}: ${done}`;
     exposureNote.classList.toggle("warn", !res.ok);
     exposureNote.hidden = false;
   }));
