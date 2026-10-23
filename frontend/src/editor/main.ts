@@ -11,6 +11,7 @@ import { handleIndices, moveOnRun, nearestEdge } from "./curves";
 import { drawStep, idleDraw, type DrawEvent } from "./drawing";
 import { insertVertex, removeVertex, toProjector } from "./polygonEdit";
 import { initialScan, scanLabel, scanReducer, type ScanState } from "./scanState";
+import { clearFailures, toast } from "./toast";
 import { EditSession, type SurfaceEdit } from "./editSession";
 import { createEngineClient, type Schedule } from "./engineClient";
 import { framingOf, panAfterDrag, zoomAfterWheel } from "./framing";
@@ -68,7 +69,7 @@ newProject.addEventListener("click", async () => {
   clearTimeout(newArmed);
   newArmed = null;
   const r = await engine.newProject();
-  if (!r.ok) notice(r.status === 409 ? "Wait for the scan to finish, or cancel it." : "Couldn't start a new project.");
+  if (!r.ok) notice(r.status === 409 ? "Wait for the scan to finish, or cancel it." : "Couldn't start a new project.", true);
 });
 
 // Open replaces the working show and goes to Play: with unsaved changes, a second click confirms.
@@ -86,7 +87,7 @@ function openButton(slug: string, name: string): HTMLButtonElement {
     if (armed) clearTimeout(armed);
     armed = null;
     const r = await engine.openProject(slug);
-    if (!r.ok) notice(`Cannot open: ${(await r.json()).detail}`);
+    if (!r.ok) notice(`Cannot open: ${(await r.json()).detail}`, true);
   });
   return b;
 }
@@ -268,7 +269,7 @@ window.addEventListener("keydown", (ev) => {
 });
 redetectButton.addEventListener("click", async () => {
   const r = await engine.redetect();
-  notice(r.ok ? "Surfaces detected again. Drawn and edited surfaces were kept." : `Cannot redetect: ${(await r.json()).detail}`);
+  notice(r.ok ? "Surfaces detected again. Drawn and edited surfaces were kept." : `Cannot redetect: ${(await r.json()).detail}`, !r.ok);
 });
 
 function draftElements(): SVGElement[] {
@@ -993,7 +994,7 @@ function mediaControl(row: HTMLLabelElement, surfaceId: number, name: string, la
     if (!res.ok) {
       const detail = await res.json().catch(() => null);
       current.textContent = mediaLabel(src);
-      notice(`Upload failed: ${detail?.detail ?? res.statusText}`);
+      notice(`Upload failed: ${detail?.detail ?? res.statusText}`, true);
       return;
     }
     const uploaded: { url: string } = await res.json();
@@ -1167,11 +1168,8 @@ function renderSound() {
   }
 }
 
-function notice(text: string) {
-  // A floating toast: the page doesn't move, so a click just after Save still lands where you aimed.
-  const note = Object.assign(document.createElement("div"), { className: "banner", textContent: text });
-  $("toasts").append(note);
-  setTimeout(() => note.remove(), 6000);
+function notice(text: string, failure = false) {
+  toast($("toasts"), text, failure);
 }
 
 // Every engine show is applied here, exactly once, whether it arrived idle or during a drag.
@@ -1216,7 +1214,8 @@ connect({
       renderSurfaces();
     } else if (msg.type.startsWith("scan_")) {
       scanState = scanReducer(scanState, msg as Parameters<typeof scanReducer>[1]);
-      if (msg.type === "scan_failed") notice(`Scan failed: ${msg.error}`);
+      if (msg.type === "scan_started") clearFailures($("toasts"));
+      if (msg.type === "scan_failed") notice(`Scan failed: ${msg.error}`, true);
       renderScan();
     }
   },
@@ -1243,7 +1242,7 @@ scan.addEventListener("click", async () => {
   }
   cameraPanel.stopPreview(); // the scan needs the camera to itself
   const res = await engine.startScan();
-  if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`);
+  if (!res.ok) notice(`Cannot scan: ${(await res.json()).detail}`, true);
 });
 // Show the last scan, with its surfaces, after a reload.
 void reloadScan();
@@ -1253,7 +1252,7 @@ projectSave.addEventListener("click", async () => {
   const name = projectSaveName.value.trim();
   if (!name) return notice("Name the project first.");
   const r = await engine.saveProject(name);
-  notice(r.ok ? `Saved "${name}".` : `Cannot save: ${(await r.json()).detail}`);
+  notice(r.ok ? `Saved "${name}".` : `Cannot save: ${(await r.json()).detail}`, !r.ok);
   void refreshProjects();
 });
 

@@ -34,7 +34,8 @@ describe("scanReducer", () => {
     expect(s.running).toBe(false);
     expect(s.error).toBe("boom");
     expect(s.image).toBe("/api/scan/latest.png?t=1");
-    expect(scanLabel(s)).toBe("Scan failed");
+    expect(scanLabel(s)).toBe("Scan failed: boom");
+    expect(scanLabel(scanReducer(s, { type: "scan_started" }))).toBe("Scanning…");
   });
 });
 

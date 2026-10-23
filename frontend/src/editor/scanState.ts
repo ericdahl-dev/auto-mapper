@@ -46,7 +46,7 @@ export function scanReducer(s: ScanState, msg: ScanMessage): ScanState {
 export function scanLabel(s: ScanState): string {
   if (s.running) return s.total ? `Scanning… ${Math.round((100 * s.done) / s.total)}%` : "Scanning…";
   if (s.canceled) return "Scan canceled";
-  if (s.error) return "Scan failed";
+  if (s.error) return `Scan failed: ${s.error}`; // until the next scan starts (#171)
   if (s.coverage !== null) return `Coverage ${Math.round(s.coverage * 100)}% · ${s.seconds} s`;
   return "No scan yet";
 }

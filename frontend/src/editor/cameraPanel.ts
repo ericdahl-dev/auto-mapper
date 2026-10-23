@@ -14,7 +14,7 @@ const PREVIEW_EVERY_MS = 500;
 
 export interface CameraPanelDeps {
   engine: EngineClient;
-  notice: (text: string) => void;
+  notice: (text: string, failure?: boolean) => void;
   fetchPreview?: () => Promise<Response>;
 }
 
@@ -158,6 +158,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
   const calibrate = $<HTMLButtonElement>("calibrate");
   const checkFraming = $<HTMLButtonElement>("check-framing");
   const framingNote = $("framing-note");
+  const exposureNote = $("exposure-note");
   async function usingCamera(button: HTMLButtonElement, busyLabel: string, run: () => Promise<void>) {
     const label = button.textContent;
     button.disabled = true;
@@ -177,15 +178,18 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     void usingCamera(calibrate, checking ? "Checking…" : "Calibrating…", async () => {
       const res = await engine.calibrate();
       const body = await res.json();
-      if (!res.ok) return notice(`${checking ? "Exposure check" : "Calibration"} failed: ${body.detail}`);
       const c = body as CalibrateResponse;
-      notice(checking ? `Exposure is good: white peak ${Math.round(c.p99)}` : `Calibrated: exposure ${c.exposure}, white peak ${Math.round(c.p99)}`);
+      // Kept in the section until the next check or another camera (#171), pass or fail.
+      exposureNote.textContent = !res.ok ? `${checking ? "Exposure check" : "Calibration"} failed: ${body.detail}`
+        : checking ? `Exposure is good: white peak ${Math.round(c.p99)}` : `Calibrated: exposure ${c.exposure}, white peak ${Math.round(c.p99)}`;
+      exposureNote.classList.toggle("warn", !res.ok);
+      exposureNote.hidden = false;
     });
   });
   checkFraming.addEventListener("click", () => void usingCamera(checkFraming, "Checking…", async () => {
     const res = await engine.checkFraming();
     const body = await res.json();
-    if (!res.ok) return notice(`Framing check failed: ${body.detail}`);
+    if (!res.ok) return notice(`Framing check failed: ${body.detail}`, true);
     const view = describeFraming(body as FramingResult);
     framingNote.textContent = view.text;
     framingNote.classList.toggle("warn", view.warn);
@@ -216,7 +220,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
   return {
     update(next, isScanning) {
       if (next?.camera.selected !== status?.camera.selected) { // another camera: its framing is unknown
-        framingNote.hidden = true;
+        framingNote.hidden = exposureNote.hidden = true;
         document.querySelector("#framing-overlay polygon")!.setAttribute("points", "");
       }
       status = next;
