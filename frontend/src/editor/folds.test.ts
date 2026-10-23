@@ -17,6 +17,16 @@ describe("which sidebar sections are open", () => {
   it("opens a section with a problem, whatever you chose, so collapsing never hides one", () => {
     expect(foldOpen("hardware", { hardware: false }, new Set(["hardware"]))).toBe(true);
   });
+
+  it("folds the Setup checklist when nothing needs it: it opens as a problem does (#168)", () => {
+    expect(foldOpen("setup", {}, new Set())).toBe(false);
+    expect(foldOpen("setup", { setup: false }, new Set(["setup"]))).toBe(true);
+  });
+
+  it("opens Camera by default while there's no scan yet; your choice still wins (#168)", () => {
+    expect(foldOpen("camera", {}, new Set(), new Set(["camera"]))).toBe(true);
+    expect(foldOpen("camera", { camera: false }, new Set(), new Set(["camera"]))).toBe(false);
+  });
 });
 
 describe("sections with a problem", () => {

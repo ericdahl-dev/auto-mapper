@@ -20,6 +20,8 @@ import { movePin, pinHandles } from "./pin";
 import { ACTIONS, MidiRouter, parseMidi, settingValue, targetMenu, type MidiTarget, type TargetItem } from "./midi";
 import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
+import { mountSetup } from "./setupPanel";
+import { scanAnswered, scanWarning, setupNeeded, setupSteps } from "./setupView";
 import { labelPoint } from "./labelPoint";
 import { modePill } from "./modePill";
 import { moveScene } from "./sceneList";
@@ -110,13 +112,13 @@ async function refreshProjects() {
   );
 }
 
+let scanKnown = false; // whether there's a scan is known once the engine answers (no Setup flash meanwhile)
 async function reloadScan() {
   if (view !== FIT) setView(FIT); // a different scan: start from the whole of it
-  const r = await engine.latestScan();
-  if (r.ok) {
-    scanState = scanReducer(initialScan, { type: "scan_result", ...(await r.json()) });
-    renderScan();
-  }
+  const r = await engine.latestScan().catch(() => null);
+  scanKnown ||= scanAnswered(r); // no answer: asked again when the engine reconnects
+  if (r?.ok) scanState = scanReducer(initialScan, { type: "scan_result", ...(await r.json()) });
+  renderScan();
 }
 let scanState: ScanState = initialScan;
 const scanImage = $<HTMLImageElement>("scan-image");
@@ -140,7 +142,7 @@ effectSelect.replaceChildren(...EFFECTS.map((e) => Object.assign(document.create
 // save at most once per frame; show updates that arrive during a drag wait until it ends.
 const engine = createEngineClient();
 // The Camera section: preview, calibration, framing check and the camera's scan settings.
-const cameraPanel = mountCameraPanel({ engine, notice });
+const cameraPanel = mountCameraPanel({ engine, notice, onChange: () => renderScanButton() });
 void cameraPanel.loadScanSettings();
 
 const session = new EditSession({ patch: (id, body, gesture) => void engine.patchSurface(id, body, gesture) });
@@ -879,9 +881,14 @@ try {
 const foldShown = new Map<string, boolean>(); // what applyFolds last set, to tell its toggles from yours
 function applyFolds() {
   const problems = problemFolds(status ?? null);
+  // Setup shows itself until there's a scan, then only when a step needs doing again; Camera opens by
+  // default while there's no scan yet (#168).
+  const hasScan = !!scanState.image;
+  if (scanKnown && setupNeeded(status ?? null, hasScan)) problems.add("setup");
+  const openFirst = new Set(scanKnown && !hasScan ? ["camera"] : []);
   for (const d of folds) {
     const name = d.dataset.fold!;
-    const open = foldOpen(name, savedFolds, problems);
+    const open = foldOpen(name, savedFolds, problems, openFirst);
     foldShown.set(name, open);
     if (d.open !== open) d.open = open;
   }
@@ -1081,22 +1088,27 @@ function renderScan() {
   renderSurfaces();
 
   renderScanButton();
+  applyFolds(); // a scan collapses Setup
   scanWarnings.replaceChildren(
     ...scanState.warnings.map((w) => Object.assign(document.createElement("div"), { className: "banner", textContent: w })),
   );
   renderMissed();
 }
 
-/** Scan, or Cancel scan while one runs; when it can't run, why (in its tooltip and beside it). */
+/** Scan, or Cancel scan while one runs; when it can't run, why (in its tooltip and beside it), and when
+ *  it can, what to check first (#168). Then the camera controls and the Setup steps, which mirror them. */
 function renderScanButton() {
   const reason = scanState.running ? null : describeStatus(status).scanReason;
+  const note = reason ?? (scanState.running ? null : scanWarning(status));
   scan.textContent = scanState.running ? "Cancel scan" : "Scan";
   scan.disabled = reason !== null;
   scan.title = reason ?? (scanState.running ? "Stop the scan" : "Project the scan patterns and find the surfaces");
-  scanReason.textContent = reason ?? "";
-  scanReason.hidden = !reason;
+  scanReason.textContent = note ?? "";
+  scanReason.hidden = !note;
   cameraPanel.update(status, scanState.running); // on scan start and end too, not only on the next status (#173)
+  renderSetup(setupSteps(status, cameraPanel.framing(), !!scanState.image));
 }
+const renderSetup = mountSetup();
 
 function render() {
   const view = describeStatus(status);
@@ -1227,7 +1239,7 @@ connect({
     if (!open) {
       status = null;
       render();
-    }
+    } else if (!scanKnown) void reloadScan(); // the engine wasn't up at load: Setup waits for its answer
   },
 });
 

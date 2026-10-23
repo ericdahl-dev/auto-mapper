@@ -109,7 +109,7 @@ class Hub:
             size = f"{projector['width']}×{projector['height']}"
             return f"Output window must be {size}: make it fullscreen on the projector"
         if self.settings.selected(hw.cameras) is None:
-            return "Choose the camera that scans (Hardware)"
+            return "Choose the camera that scans (Camera)"
         if self.still_battery is not None and self.still_battery <= FLAT_BATTERY:
             return f"The camera battery is at {self.still_battery}%: charge or swap it before scanning"
         return None

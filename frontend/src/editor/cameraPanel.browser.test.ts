@@ -271,5 +271,20 @@ describe("the Camera section", () => {
     expect($("framing-note").hidden).toBe(true);
     expect(document.querySelector("#framing-overlay polygon")!.getAttribute("points")).toBe("");
   });
-});
 
+  it("keeps the last framing result for the Setup checklist, and says when a check starts and ends (#168)", async () => {
+    const { engine } = fakeEngine();
+    const onChange = vi.fn();
+    const panel = mountCameraPanel({ engine, notice: () => {}, onChange });
+    panel.update(status(AC410), false);
+    expect(panel.framing()).toBeNull();
+    $("check-framing").click();
+    expect(onChange).toHaveBeenCalledTimes(1); // busy: the checklist's button follows it
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+    expect(panel.framing()).toMatchObject({ span: 0.8, advice: null });
+    $("calibrate").click();
+    await vi.waitFor(() => expect(onChange).toHaveBeenCalledTimes(4));
+    panel.update(status(A6600), false); // another camera: its framing is unknown
+    expect(panel.framing()).toBeNull();
+  });
+});
