@@ -142,7 +142,7 @@ effectSelect.replaceChildren(...EFFECTS.map((e) => Object.assign(document.create
 // save at most once per frame; show updates that arrive during a drag wait until it ends.
 const engine = createEngineClient();
 // The Camera section: preview, calibration, framing check and the camera's scan settings.
-const cameraPanel = mountCameraPanel({ engine, notice, onResult: () => renderScanButton() });
+const cameraPanel = mountCameraPanel({ engine, notice, onChange: () => renderScanButton() });
 void cameraPanel.loadScanSettings();
 
 const session = new EditSession({ patch: (id, body, gesture) => void engine.patchSurface(id, body, gesture) });
@@ -1239,7 +1239,7 @@ connect({
     if (!open) {
       status = null;
       render();
-    }
+    } else if (!scanKnown) void reloadScan(); // the engine wasn't up at load: Setup waits for its answer
   },
 });
 

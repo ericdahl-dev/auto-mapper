@@ -61,6 +61,7 @@ describe("the Setup checklist", () => {
     document.querySelector<HTMLButtonElement>('#setup-steps li[data-step="camera"] button')!.click();
     expect(camera.open).toBe(true);
     expect(document.activeElement).toBe($("camera-select"));
+    expect(document.querySelector('#setup-steps li[data-step="camera"] button')!.getAttribute("aria-label")).toBe("Choose camera");
   });
 
   it("updates in place, so a click isn't lost to a redraw", () => {

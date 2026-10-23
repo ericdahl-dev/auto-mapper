@@ -26,6 +26,7 @@ export function mountSetup(): (steps: SetupStep[]) => void {
       row.li.className = step.level;
       row.state.textContent = step.state;
       row.button.textContent = step.press ? target.textContent : "Choose";
+      if (!step.press) row.button.setAttribute("aria-label", `Choose ${step.label.toLowerCase()}`);
       row.button.disabled = step.press && target.disabled;
       row.button.title = step.press ? target.title : "";
     }

@@ -16,7 +16,7 @@ export interface CameraPanelDeps {
   engine: EngineClient;
   notice: (text: string, failure?: boolean) => void;
   fetchPreview?: () => Promise<Response>;
-  onResult?: () => void; // a framing or exposure check finished (the Setup checklist shows both, #168)
+  onChange?: () => void; // a framing or exposure check started or finished (the Setup checklist follows both, #168)
 }
 
 export interface CameraPanel {
@@ -168,6 +168,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     button.disabled = true;
     button.dataset.busy = "1"; // render leaves its label alone meanwhile
     button.textContent = busyLabel;
+    deps.onChange?.();
     try {
       await run();
     } finally {
@@ -175,7 +176,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
       delete button.dataset.busy;
       button.textContent = label;
       render();
-      deps.onResult?.();
+      deps.onChange?.();
     }
   }
   // One name for both kinds of camera (#172): the result leads with the engine's verdict, then says whether
