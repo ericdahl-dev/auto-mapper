@@ -113,14 +113,48 @@ describe("the Camera section", () => {
     expect(document.querySelector("#framing-overlay polygon")!.getAttribute("points")).toBe("0.1,0.1 0.9,0.1 0.9,0.9");
   });
 
-  it("can't check framing or calibrate without the output window, or check framing during a scan", () => {
+  it("says beside them why calibrate and the framing check can't run without the output window (#173)", () => {
     const { engine } = fakeEngine();
     const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update({ ...status(AC410), output_connected: false }, false);
-    expect($<HTMLButtonElement>("calibrate").disabled).toBe(true);
-    panel.update(status(AC410), true);
+    for (const id of ["calibrate", "check-framing"]) {
+      expect($<HTMLButtonElement>(id).disabled).toBe(true);
+      expect($(id).title).toBe("Open the output window first");
+    }
+    expect($("camera-reason").hidden).toBe(false);
+    expect($("camera-reason").textContent).toBe("Open the output window first");
+    panel.update(status(AC410), false);
     expect($<HTMLButtonElement>("calibrate").disabled).toBe(false);
+    expect($("camera-reason").hidden).toBe(true);
+    expect($("check-framing").title).toMatch(/^Shows white, then black/); // its description is back
+  });
+
+  it("says to choose a camera when none is, and to start the engine when it's down (#173)", () => {
+    const { engine } = fakeEngine();
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    const none = status(AC410);
+    panel.update({ ...none, camera: { ...none.camera, selected: null } }, false);
+    expect($<HTMLButtonElement>("calibrate").disabled).toBe(true);
+    expect($("camera-reason").textContent).toBe("Choose a camera first");
+    panel.update(null, false);
     expect($<HTMLButtonElement>("check-framing").disabled).toBe(true);
+    expect($("camera-reason").textContent).toBe("The engine isn't running: start it with make dev");
+  });
+
+  it("disables what needs the camera while a scan runs, and says why (#173)", () => {
+    const { engine } = fakeEngine();
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    panel.update(status(AC410), true);
+    for (const id of ["preview-toggle", "calibrate", "check-framing", "mask-draw"]) {
+      expect($<HTMLButtonElement>(id).disabled, id).toBe(true);
+      expect($(id).title, id).toBe("The scan is using the camera");
+    }
+    expect($("camera-reason").textContent).toBe("The scan is using the camera");
+    expect($("mask-reason").textContent).toBe("The scan is using the camera"); // beside Skip an area, further down
+    expect($<HTMLButtonElement>("mask-clear").disabled).toBe(false); // doesn't need the camera
+    panel.update(status(AC410), false);
+    for (const id of ["preview-toggle", "calibrate", "check-framing", "mask-draw"]) expect($<HTMLButtonElement>(id).disabled, id).toBe(false);
+    expect($("mask-reason").hidden).toBe(true);
   });
 
   it("saves a scan setting as it's changed", () => {

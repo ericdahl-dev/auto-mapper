@@ -73,4 +73,23 @@ describe("a setting's readout", () => {
   it("is the bare value for settings without a unit", () => {
     expect(readout(control("fill", "brightness"), 0.5)).toBe("0.5");
   });
+
+  it("names Edge glow's Smoothing steps instead of 0, 1, 2", () => {
+    const smoothing = control("edgeglow", "smoothing");
+    expect([0, 1, 2].map((v) => readout(smoothing, v))).toEqual(["Off", "Low", "High"]);
+    expect(readout(smoothing, "2")).toBe("High"); // the slider's own string value
+  });
+});
+
+describe("Edge glow's settings (#173)", () => {
+  const controls = controlsFor(effectById("edgeglow"), {});
+  const byName = (name: string) => controls.find((c) => c.name === name)!;
+
+  it("calls its threshold what it is, says which way it goes, and keeps the saved key", () => {
+    expect(byName("threshold")).toMatchObject({ label: "Edge threshold", hint: "Higher: only strong edges", min: 0.01, max: 0.5 });
+  });
+
+  it("says what Smoothing does", () => {
+    expect(byName("smoothing")).toMatchObject({ hint: "Ignores speckle in the scan. Off: every edge, High: only clean lines" });
+  });
 });

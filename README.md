@@ -242,7 +242,7 @@ Pick an effect for the selected surface in the surface panel; its controls appea
 | **Outline trace** | A glowing line around the surface's edge, optionally chasing round it | Color, Line width (1 to 40 px), Glow, Chase, Speed (0 to 2 laps/s), Segments (1 to 8), React to sound |
 | **Noise flow** | Slowly drifting cloud-like texture between two colors | Color, Second color, Scale, Speed, Contrast, Brightness, React to sound |
 | **Tint (scan)** | Recolors the real object while keeping its texture (wood grain, fabric) visible | Color, Texture, Scan gain |
-| **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Color, Sensitivity, Line width (1 to 8 px), Smoothing (0 to 2), Base light, Pulse |
+| **Edge glow (scan)** | Glowing lines along the real edges the scan sees: panel grooves, grain, folds | Color, Edge threshold (higher: only strong edges), Line width (1 to 8 px), Smoothing (Off, Low, High: ignores speckle in the scan), Base light, Pulse |
 | **Posterize (scan)** | Flattens the real surface into a few bands of color, like a screen print | Bands (2 to 8), Dark color, Light color, Scan gain |
 | **Text** | Your text, as large as fits inside the surface (or corner-pinned to it), several lines allowed | Text, Color, Background, Font (Sans, Serif, Mono), Align, Fit (Fit inside, Map to corners), Motion (None, Scroll, Pulse), Speed, React to sound |
 | **Image / video** | An uploaded image or video, clipped to the surface's outline | Image or video (file); Fit: Cover, Stretch, Map to corners, Contain, Original size, Tile; Zoom, Pan, Rotate, Flip, Background; Video start and speed, Video sound and Volume |

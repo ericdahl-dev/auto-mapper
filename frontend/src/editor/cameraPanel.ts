@@ -159,6 +159,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
   const checkFraming = $<HTMLButtonElement>("check-framing");
   const framingNote = $("framing-note");
   const exposureNote = $("exposure-note");
+  const framingTip = checkFraming.title; // what it does; its reason replaces it while disabled
   async function usingCamera(button: HTMLButtonElement, busyLabel: string, run: () => Promise<void>) {
     const label = button.textContent;
     button.disabled = true;
@@ -202,13 +203,33 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
   const calibration = $("calibration");
   const battery = $("battery");
   const batteryLabel = $("battery-label");
+  const cameraReason = $("camera-reason");
+  const maskReason = $("mask-reason");
+  // A reason as the tooltip; none leaves the row's own tooltip showing (an empty title would hide it).
+  const tip = (el: HTMLElement, text: string | null) => (text ? (el.title = text) : el.removeAttribute("title"));
   function render() {
     const view = describeStatus(status);
     calibration.textContent = view.calibration;
     battery.textContent = view.battery?.replace("Battery ", "") ?? "";
     battery.hidden = batteryLabel.hidden = view.battery === null;
-    calibrate.disabled = !status?.output_connected || !status.camera.selected;
-    checkFraming.disabled = calibrate.disabled || scanning;
+    // Why calibrate and the framing check can't run, beside them and in their tooltips, as Scan does (#173).
+    const scanReason = scanning ? "The scan is using the camera" : null;
+    const reason = scanning ? scanReason
+      : !status ? view.scanReason // the engine is down
+      : !status.output_connected ? "Open the output window first"
+      : !status.camera.selected ? "Choose a camera first" : null;
+    calibrate.disabled = checkFraming.disabled = reason !== null;
+    tip(calibrate, reason);
+    checkFraming.title = reason ?? framingTip;
+    cameraReason.textContent = reason ?? "";
+    cameraReason.hidden = !reason;
+    // The preview and drawing a skipped area (which starts it) need the camera too, but not the output.
+    const maskDrawButton = $<HTMLButtonElement>("mask-draw");
+    previewToggle.disabled = maskDrawButton.disabled = scanning;
+    tip(previewToggle, scanReason);
+    tip(maskDrawButton, scanReason);
+    maskReason.textContent = scanReason ?? "";
+    maskReason.hidden = !scanning;
     const sel = status?.hardware.cameras.find((c) => c.unique_id === status?.camera.selected);
     const still = sel?.device_type === "still";
     apertureRow.hidden = !still; // a webcam's lens has none to set

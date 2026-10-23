@@ -3,7 +3,7 @@ import { linkProgram } from "../effects/compile";
 // The scan image's edge strength (#158), computed once per scan, line width and size instead of by
 // every Edge glow surface on every frame (8 scan reads per pixel, 11 surfaces: it slowed the rig).
 // Strength is the Sobel magnitude of the scan's brightness, 0..~5.7; it's stored as sqrt(m / MAX) in
-// 16 bits over two 8-bit channels: 8 bits alone left steps that Sensitivity's sharp threshold made
+// 16 bits over two 8-bit channels: 8 bits alone left steps that Edge threshold's sharp cutoff made
 // visible, and the square root keeps low strengths (where those thresholds sit) precise.
 // `scanEdgeAt()` in the effect preamble decodes it (keep the two in step).
 

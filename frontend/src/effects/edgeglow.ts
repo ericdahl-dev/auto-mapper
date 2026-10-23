@@ -6,10 +6,10 @@ export const edgeglow: Effect = {
   name: "Edge glow (scan)",
   params: [
     { name: "glowColor", label: "Color", type: "color", default: "#22d3ee" },
-    { name: "threshold", label: "Sensitivity", type: "number", default: 0.08, min: 0.01, max: 0.5, step: 0.01 },
+    { name: "threshold", label: "Edge threshold", type: "number", default: 0.08, min: 0.01, max: 0.5, step: 0.01, hint: "Higher: only strong edges" },
     { name: "spread", label: "Line width", type: "number", default: 2, min: 1, max: 8, step: 1, unit: "px" },
-    // Ignores stray pixels and fine speckle in the scan (0: every last edge, as it was).
-    { name: "smoothing", label: "Smoothing", type: "number", default: 1, min: 0, max: 2, step: 1 },
+    { name: "smoothing", label: "Smoothing", type: "number", default: 1, min: 0, max: 2, step: 1, steps: ["Off", "Low", "High"],
+      hint: "Ignores speckle in the scan. Off: every edge, High: only clean lines" },
     { name: "base", label: "Base light", type: "number", default: 0.1, min: 0, max: 1, step: 0.01 },
     { name: "pulse", label: "Pulse", type: "number", default: 0, min: 0, max: 1, step: 0.01 },
   ],

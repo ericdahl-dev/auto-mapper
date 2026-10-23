@@ -303,9 +303,10 @@
         </details>
         <details class="fold" data-fold="camera"><summary><h2>Camera</h2></summary>
         <div class="row">
-          <button id="preview-toggle">Show preview</button>
-          <button id="calibrate">Calibrate exposure</button>
-          <button id="check-framing" title="Shows white, then black, and measures how much of the camera's view the projection fills: the more, the finer the scan. Outlined on the preview.">Check framing</button>
+          <button id="preview-toggle" aria-describedby="camera-reason">Show preview</button>
+          <button id="calibrate" aria-describedby="camera-reason">Calibrate exposure</button>
+          <button id="check-framing" title="Shows white, then black, and measures how much of the camera's view the projection fills: the more, the finer the scan. Outlined on the preview." aria-describedby="camera-reason">Check framing</button>
+          <span id="camera-reason" class="scan-reason" hidden></span>
         </div>
         <p id="framing-note" class="muted hint" role="status" hidden></p>
         <p id="exposure-note" class="muted hint" role="status" hidden></p>
@@ -337,9 +338,10 @@
           <svg id="mask-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
         <div class="row" title="Skip part of what the camera sees: draw around a window, a TV or shiny things, and the next scan leaves them out. Click corners on the preview, double-click or Enter to finish; add as many areas as you like. Click a shaded area to stop skipping it.">
-          <button id="mask-draw">Skip an area</button>
+          <button id="mask-draw" aria-describedby="mask-reason">Skip an area</button>
           <button id="mask-clear" hidden>Skip nothing</button>
           <span id="mask-note" class="muted"></span>
+          <span id="mask-reason" class="scan-reason" hidden></span>
         </div>
         </details>
         <details class="fold" data-fold="test-frame"><summary><h2>Test frame</h2></summary>
