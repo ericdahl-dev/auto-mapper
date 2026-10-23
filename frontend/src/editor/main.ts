@@ -964,7 +964,10 @@ function renderPanel() {
           patchSurface(surface.id, { params: { [c.name]: parseControlValue(c.kind, input.value) } });
         });
         row.append(Object.assign(document.createElement("span"), { textContent: c.label }), readout, input);
-        if (c.kind === "range" && c.hint) row.title = c.hint;
+        if (c.kind === "range" && c.hint) {
+          row.title = c.hint;
+          input.setAttribute("aria-description", c.hint); // a screen reader may skip the row's title
+        }
         // Shown below while sound is off (see the end of renderPanel); after the slider, so the label names it.
         if (c.name === "react") row.append(Object.assign(soundOffNote(), { hidden: true }));
         return row;
@@ -1092,6 +1095,7 @@ function renderScanButton() {
   scan.title = reason ?? (scanState.running ? "Stop the scan" : "Project the scan patterns and find the surfaces");
   scanReason.textContent = reason ?? "";
   scanReason.hidden = !reason;
+  cameraPanel.update(status, scanState.running); // on scan start and end too, not only on the next status (#173)
 }
 
 function render() {
@@ -1112,7 +1116,6 @@ function render() {
     projectSaveName.value = status.project.name;
   }
   syncOptions(cameraSelect, cameraOptions(status));
-  cameraPanel.update(status, scanState.running);
 }
 
 // Sound: the output window listens; the editor switches it and shows its meter.

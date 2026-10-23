@@ -157,6 +157,18 @@ describe("the Camera section", () => {
     expect($("mask-reason").hidden).toBe(true);
   });
 
+  it("keeps a busy button disabled when status arrives while it runs", async () => {
+    let finish!: (r: Response) => void;
+    const { engine } = fakeEngine({ calibrate: () => new Promise<Response>((r) => { finish = r; }) });
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    panel.update(status(AC410), false);
+    $<HTMLButtonElement>("calibrate").click();
+    panel.update(status(AC410), false); // e.g. the output window's stats, every 2 s
+    expect($<HTMLButtonElement>("calibrate").disabled).toBe(true);
+    finish(json({ exposure: 1200, gain: 3, p99: 201.4 }));
+    await vi.waitFor(() => expect($<HTMLButtonElement>("calibrate").disabled).toBe(false));
+  });
+
   it("saves a scan setting as it's changed", () => {
     const { engine, calls } = fakeEngine();
     mountCameraPanel({ engine, notice: () => {} });

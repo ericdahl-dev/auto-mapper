@@ -218,7 +218,8 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
       : !status ? view.scanReason // the engine is down
       : !status.output_connected ? "Open the output window first"
       : !status.camera.selected ? "Choose a camera first" : null;
-    calibrate.disabled = checkFraming.disabled = reason !== null;
+    calibrate.disabled = reason !== null || !!calibrate.dataset.busy;
+    checkFraming.disabled = reason !== null || !!checkFraming.dataset.busy;
     tip(calibrate, reason);
     checkFraming.title = reason ?? framingTip;
     cameraReason.textContent = reason ?? "";
