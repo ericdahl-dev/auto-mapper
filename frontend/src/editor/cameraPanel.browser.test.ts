@@ -80,22 +80,27 @@ describe("the Camera section", () => {
 
   it("says what calibration found, and lets the camera go when not previewing", async () => {
     const { engine, calls } = fakeEngine();
-    const notices: string[] = [];
-    const panel = mountCameraPanel({ engine, notice: (t) => notices.push(t) });
+    const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(AC410), false);
     $("calibrate").click();
-    await vi.waitFor(() => expect(notices).toEqual(["Calibrated: exposure 1200, white peak 201"]));
+    await vi.waitFor(() => expect($("exposure-note").hidden).toBe(false));
+    expect($("exposure-note").textContent).toBe("Calibrated: exposure 1200, white peak 201");
+    expect($("exposure-note").classList.contains("warn")).toBe(false);
     await vi.waitFor(() => expect(calls).toContain("releaseCamera"));
     expect($("calibrate").textContent).toBe("Calibrate exposure");
   });
 
-  it("says why calibration failed", async () => {
+  it("keeps why calibration failed in the section until another camera is chosen (#171)", async () => {
     const { engine } = fakeEngine({ calibrate: async () => json({ detail: "Output window is not connected" }, 409) });
-    const notices: string[] = [];
-    const panel = mountCameraPanel({ engine, notice: (t) => notices.push(t) });
+    const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(AC410), false);
     $("calibrate").click();
-    await vi.waitFor(() => expect(notices).toEqual(["Calibration failed: Output window is not connected"]));
+    await vi.waitFor(() => expect($("exposure-note").textContent).toBe("Calibration failed: Output window is not connected"));
+    expect($("exposure-note").classList.contains("warn")).toBe(true);
+    panel.update(status(AC410), false);
+    expect($("exposure-note").hidden).toBe(false);
+    panel.update(status(A6600), false);
+    expect($("exposure-note").hidden).toBe(true);
   });
 
   it("outlines the projection after a framing check", async () => {
@@ -140,12 +145,11 @@ describe("the Camera section", () => {
   it("says what to change on a still camera when its exposure isn't right", async () => {
     const detail = "The white frame is too dark: use a slower shutter or a higher ISO on the camera.";
     const { engine } = fakeEngine({ calibrate: async () => json({ detail }, 422) });
-    const notices: string[] = [];
-    const panel = mountCameraPanel({ engine, notice: (t) => notices.push(t) });
+    const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(A6600), false);
     $("calibrate").click();
     expect($("calibrate").textContent).toBe("Checking…");
-    await vi.waitFor(() => expect(notices).toEqual([`Exposure check failed: ${detail}`]));
+    await vi.waitFor(() => expect($("exposure-note").textContent).toBe(`Exposure check failed: ${detail}`));
     expect($("calibrate").textContent).toBe("Check exposure");
   });
 

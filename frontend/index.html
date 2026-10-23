@@ -87,7 +87,7 @@
       #mask-overlay, #framing-overlay { position: absolute; inset: 0; width: 100%; height: 100%; }
       #framing-overlay { pointer-events: none; }
       #framing-overlay polygon { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; }
-      #framing-note.warn { color: #fbbf24; }
+      #framing-note.warn, #exposure-note.warn { color: #fbbf24; }
       /* Skipped areas: shaded, so the preview shows what the scan will leave out (#170); click one to remove it. */
       #mask-overlay polygon { fill: rgba(239, 68, 68, 0.35); stroke: #ef4444; stroke-width: 2; vector-effect: non-scaling-stroke; cursor: pointer; }
       #mask-overlay polyline { fill: none; stroke: #fbbf24; stroke-width: 2; vector-effect: non-scaling-stroke; }
@@ -138,6 +138,7 @@
       .pill.dark { background: #b91c1c; color: #fff; }
       #toasts { position: fixed; left: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 10; max-width: min(420px, calc(100vw - 32px)); }
       #toasts .banner { border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
+      #toasts .close { float: right; margin: -4px -10px 0 8px; padding: 0 6px; background: none; border: none; color: inherit; font-size: 16px; }
       .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
       [hidden] { display: none !important; } /* hidden wins over display rules like .row */
       select { width: 100%; min-width: 0; background: #262626; color: var(--text); border: 1px solid #3a3a3a; border-radius: 4px; padding: 6px; }
@@ -307,6 +308,7 @@
           <button id="check-framing" title="Shows white, then black, and measures how much of the camera's view the projection fills: the more, the finer the scan. Outlined on the preview.">Check framing</button>
         </div>
         <p id="framing-note" class="muted hint" role="status" hidden></p>
+        <p id="exposure-note" class="muted hint" role="status" hidden></p>
         <dl><dt>Exposure</dt><dd id="calibration">…</dd><dt id="battery-label" hidden>Battery</dt><dd id="battery" hidden></dd></dl>
         <div class="row" id="aperture-row" hidden title="Still cameras: the lens opening for scans. f/8 keeps a scene with depth in focus; wider lets in more light but blurs what's nearer or farther than the focus. Needs the mode dial on M. Applies to the next scan.">
           <select id="aperture" aria-label="Aperture for scans">
