@@ -21,7 +21,7 @@ import { ACTIONS, MidiRouter, parseMidi, settingValue, targetMenu, type MidiTarg
 import { deleteKeyTargets } from "./deleteKey";
 import { foldOpen, problemFolds } from "./folds";
 import { mountSetup } from "./setupPanel";
-import { scanWarning, setupNeeded, setupSteps } from "./setupView";
+import { scanAnswered, scanWarning, setupNeeded, setupSteps } from "./setupView";
 import { labelPoint } from "./labelPoint";
 import { modePill } from "./modePill";
 import { moveScene } from "./sceneList";
@@ -115,9 +115,9 @@ async function refreshProjects() {
 let scanKnown = false; // whether there's a scan is known once the engine answers (no Setup flash meanwhile)
 async function reloadScan() {
   if (view !== FIT) setView(FIT); // a different scan: start from the whole of it
-  const r = await engine.latestScan();
-  scanKnown = true;
-  if (r.ok) scanState = scanReducer(initialScan, { type: "scan_result", ...(await r.json()) });
+  const r = await engine.latestScan().catch(() => null);
+  scanKnown ||= scanAnswered(r); // no answer: asked again when the engine reconnects
+  if (r?.ok) scanState = scanReducer(initialScan, { type: "scan_result", ...(await r.json()) });
   renderScan();
 }
 let scanState: ScanState = initialScan;

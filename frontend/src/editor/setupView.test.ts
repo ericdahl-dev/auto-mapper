@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CameraInfo, StatusMessage } from "../shared/messages";
-import { scanWarning, setupNeeded, setupSteps } from "./setupView";
+import { scanAnswered, scanWarning, setupNeeded, setupSteps } from "./setupView";
 
 const AC410: CameraInfo = { name: "Webcam AC410", unique_id: "0x2110000f1311306", device_type: "external" };
 const A6600: CameraInfo = { name: "Sony Alpha-A6600", unique_id: "gphoto2:Sony", device_type: "still" };
@@ -83,6 +83,15 @@ describe("when the checklist is needed (#168)", () => {
     expect(setupNeeded(status({ output_connected: false, output_resolution: null }), true)).toBe(true);
     expect(setupNeeded(status({}, { selected: null }), true)).toBe(true);
     expect(setupNeeded(null, true)).toBe(false); // the engine is down: its banner says so, not the checklist
+  });
+});
+
+describe("whether the engine has said if there's a scan (#168)", () => {
+  it("is a scan (200) or none (404); a proxy's 502 or a failed request is no answer yet", () => {
+    expect(scanAnswered(new Response("{}", { status: 200 }))).toBe(true);
+    expect(scanAnswered(new Response("", { status: 404 }))).toBe(true);
+    expect(scanAnswered(new Response("", { status: 502 }))).toBe(false); // the Vite proxy, engine down
+    expect(scanAnswered(null)).toBe(false); // the request itself failed
   });
 });
 

@@ -62,3 +62,9 @@ export function setupNeeded(status: StatusMessage | null, hasScan: boolean): boo
   if (!hasScan) return true;
   return !!status && setupSteps(status, null, hasScan).some((s) => s.level === "todo" && s.key !== "scan");
 }
+
+/** Whether a latest-scan answer says if there's a scan: 200 there is, 404 there isn't. Anything else
+ *  (the dev proxy's 502 while the engine is down) or a failed request (null) is no answer yet. */
+export function scanAnswered(r: Response | null): boolean {
+  return !!r && (r.ok || r.status === 404);
+}
