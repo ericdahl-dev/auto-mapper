@@ -16,6 +16,7 @@ export interface CameraPanelDeps {
   engine: EngineClient;
   notice: (text: string, failure?: boolean) => void;
   fetchPreview?: () => Promise<Response>;
+  onResult?: () => void; // a framing or exposure check finished (the Setup checklist shows both, #168)
 }
 
 export interface CameraPanel {
@@ -23,6 +24,7 @@ export interface CameraPanel {
   loadScanSettings(): Promise<void>;
   stopPreview(): void; // e.g. before a scan: it needs the camera to itself
   previewRunning(): boolean;
+  framing(): FramingResult | null; // the selected camera's last framing check, or null
 }
 
 export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
@@ -160,6 +162,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
   const framingNote = $("framing-note");
   const exposureNote = $("exposure-note");
   const framingTip = checkFraming.title; // what it does; its reason replaces it while disabled
+  let framing: FramingResult | null = null;
   async function usingCamera(button: HTMLButtonElement, busyLabel: string, run: () => Promise<void>) {
     const label = button.textContent;
     button.disabled = true;
@@ -172,6 +175,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
       delete button.dataset.busy;
       button.textContent = label;
       render();
+      deps.onResult?.();
     }
   }
   // One name for both kinds of camera (#172): the result leads with the engine's verdict, then says whether
@@ -191,7 +195,8 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     const res = await engine.checkFraming();
     const body = await res.json();
     if (!res.ok) return notice(`Framing check failed: ${body.detail}`, true);
-    const view = describeFraming(body as FramingResult);
+    framing = body as FramingResult;
+    const view = describeFraming(framing);
     framingNote.textContent = view.text;
     framingNote.classList.toggle("warn", view.warn);
     framingNote.hidden = false;
@@ -241,6 +246,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     update(next, isScanning) {
       if (next?.camera.selected !== status?.camera.selected) { // another camera: its framing is unknown
         framingNote.hidden = exposureNote.hidden = true;
+        framing = null;
         document.querySelector("#framing-overlay polygon")!.setAttribute("points", "");
       }
       status = next;
@@ -250,5 +256,6 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     loadScanSettings,
     stopPreview: () => { if (previewRunning()) togglePreview(); },
     previewRunning,
+    framing: () => framing,
   };
 }

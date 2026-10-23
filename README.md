@@ -62,7 +62,7 @@ For long sessions, power the camera from a dummy battery and AC adapter (NP-FZ10
 **Connect in this order.**
 
 1. Plug in the USB cable with the camera **off**, and start `make dev`.
-2. Turn the camera on, click **Refresh hardware**, and pick it in the **Camera** dropdown.
+2. Turn the camera on, click **Refresh hardware**, and pick it in the **Camera** dropdown (in the Camera section).
 3. Click **Show preview** (or Check exposure, Check framing or Scan). The first of these connects. macOS's camera service (`ptpcamerad`) grabs any camera like this the moment it appears; while connecting, the app stops it and keeps it stopped until the camera is the app's. You don't need to quit anything yourself. The app then holds the connection between scans.
 
 If the camera shows **Connecting** and the app can't reach it, turn the camera off and on.
@@ -145,19 +145,21 @@ Everything is plain files under `~/.auto-mapper/`:
 
 ## Using it
 
+Until the first scan, the **Setup** list at the top of the sidebar walks through these steps in order: projector, output window, camera, framing, exposure, then Scan. Each step shows its state and a button that does it. Framing and exposure are recommended rather than required: Scan stays enabled without them, but with a still camera and no exposure check, the editor says so beside Scan. After a scan the list folds away, and it opens again by itself only if the projector, output window or camera needs doing again.
+
 ### 1. Open the output window
 
 Click **Open output window** in the editor. Drag the new window onto the projector and click inside it to go fullscreen (browsers only allow fullscreen from a click, so the app can't do this for you). The setup hint ("Drag this window onto the projector, then click to go fullscreen.") disappears once the window fills the screen, so it is never projected over the patterns.
 
 Keep only one output window open. The newest one owns the projector: if another opens (say, one left on the laptop), the old one goes dark and says "Another output window is in use. Click here to use this window instead." Click it to make that window the projector's output again; and when the newer window closes, the old one takes over again by itself. If the output window isn't on the projector, the banner at the top says so and names the display it seems to be on.
 
-The editor's **Hardware** panel shows the projector (a dropdown: with more than one external monitor, pick the one that is the projector; the choice is remembered, and if that display is unplugged the editor says so and falls back to the first non-main display), the camera (a dropdown too: see the next step), whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
+The editor's **Hardware** panel shows the projector (a dropdown: with more than one external monitor, pick the one that is the projector; the choice is remembered, and if that display is unplugged the editor says so and falls back to the first non-main display), whether the output is connected and at what size, and the output's frame rate. Scan stays disabled until the output window exactly matches the projector's resolution. Use **Refresh hardware** after plugging something in.
 
 The **Test frame** buttons (Grid, White, Black) put a test image on the projector, which helps with aiming and focusing.
 
 ### 2. Pick the camera
 
-The **Camera** dropdown in the Hardware panel lists every camera, labeled `(USB)`, `(photos over USB)` for a still camera, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default, else a still camera; your choice is remembered in `settings.json`.
+The **Camera** dropdown, at the top of the **Camera** section with the camera's preview, checks and scan settings, lists every camera, labeled `(USB)`, `(photos over USB)` for a still camera, `(built-in)`, `(external)`, `(phone)` or `(other)`. The first USB webcam is selected by default, else a still camera; your choice is remembered in `settings.json`.
 
 **Show preview**, in the **Camera** section, is off by default. While it's on, the editor polls a camera frame twice a second; turning it off releases the webcam. A still camera takes a photo per preview (a few seconds each) and reuses it for 5 seconds. Starting a scan turns the preview off, because the scan needs the camera to itself. Use the preview to check that the camera sees the whole projected area.
 
@@ -208,7 +210,7 @@ Detected surfaces appear as numbered outlines over the scan. In the editor:
 | Remove a corner | Alt-click a handle. A surface always keeps at least three corners. |
 | Skip part of the room when scanning | Camera section: **Skip an area**, then click corners on the camera preview around a window, a TV or shiny things, double-click to finish; add more areas as needed. Skipped areas are shaded on the preview and left out of the next scan; click one to stop skipping it, or **Skip nothing** to clear them all. **Hole fill** sets how much small gaps in the scan are filled (more: fuller surfaces; less: truer edges). **HDR** captures each pattern at 2 or 3 exposures and keeps the best-lit reading per pixel, for scenes with dark and bright surfaces (slower). A still camera uses its own bracketing for HDR instead, at either setting: the app switches its drive mode to Bracketing C 2.0 Steps 3 Pictures for the scan, so one press per pattern takes 3 photos 2 stops apart. All are kept per camera. |
 | Zoom in to place points precisely | Pinch on the trackpad (or Cmd/Ctrl + scroll) over the scan to zoom, up to 16×; two-finger scroll moves around. **−**, **+** and **Fit** sit under the scan. Handles and labels keep their size, so you can place points much more precisely. |
-| Less on screen | Click a sidebar heading to fold or open that section; the Editor remembers it. Set-up-once sections (Schedule, MIDI, Hardware, Camera, Test frame) start folded, and a section with a problem (no projector, sound blocked) opens by itself. |
+| Less on screen | Click a sidebar heading to fold or open that section; the Editor remembers it. Set-up-once sections (Schedule, MIDI, Hardware, Camera, Test frame) start folded, and a section with a problem (no projector, sound blocked) opens by itself. Camera opens by default until the first scan. |
 | Delete surfaces | Click a surface and press **Delete** or **Backspace** (or the panel's Delete). Shift-click more surfaces to delete them all at once; one Undo brings them back. |
 | Start a new project | **New** under Project, then click again to confirm: the scan and show are cleared and the output goes dark, ready for a new scan. Saved projects are kept, so **Save** the current one first if you want it back. |
 | Several scenes | **Scenes** in the sidebar: **Add** starts a dark scene, **Duplicate** copies the open one. Click a scene to show and edit it; every scene uses the same surfaces. Name it, set its seconds for the playlist, and move it with ↑ ↓. In **Play** mode the scenes play in that order with a **Crossfade** between them (**Loop** to start over); the Right and Left arrow keys step through them by hand. |
