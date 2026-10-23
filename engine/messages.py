@@ -227,10 +227,19 @@ class CalibrationOut(_Out):
     manual: bool | None = None  # a still camera: exposure set on the camera, checked not calibrated
 
 
+class ExposureOut(_Out):
+    """The saved exposure's verdict, with the engine's range for the editor to quote (#172)."""
+    verdict: Literal["good", "light_limit"]
+    low: int | None  # a still camera's least white level; a webcam has none, it adds gain
+    high: int  # the most before clipping
+    target: int | None  # what a webcam's calibration aims for
+
+
 class CameraStatusOut(_Out):
     selected: str | None
     calibration: CalibrationOut | None
     at_light_limit: bool  # longest exposure and most gain, still too dim
+    exposure: ExposureOut | None
     battery: int | None  # a still camera's last reading in percent; None before one
     battery_state: Literal["ok", "low", "flat"] | None  # flat: Scan is disabled
 

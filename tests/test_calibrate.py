@@ -167,3 +167,21 @@ def test_calibration_says_when_the_camera_is_at_its_light_limit():
     assert run(0.05)["at_light_limit"] is True  # 50 at 100 ms, ~87 with all the gain: too dim
     assert run(0.12)["at_light_limit"] is False  # reaches the target with some gain
     assert run(1.0)["at_light_limit"] is False  # bright: a shorter exposure, no gain
+
+
+def test_a_saved_exposure_gets_a_verdict_and_the_range_it_was_judged_by():
+    # The editor leads with the verdict and quotes the engine's range, not a copy of it (#172).
+    from engine.calibrate import exposure_verdict
+
+    assert exposure_verdict(None) is None
+    webcam = exposure_verdict({"exposure": 300, "gain": 0, "p99": 181.0})
+    assert webcam == {"verdict": "good", "low": None, "high": 249, "target": 180}
+    assert exposure_verdict({"exposure": 1000, "gain": 15, "p99": 120.0, "at_light_limit": True})["verdict"] == "light_limit"
+    still = exposure_verdict({"exposure": 167, "gain": 0, "p99": 149.0, "manual": True})
+    assert still == {"verdict": "good", "low": 120, "high": 249, "target": None}
+
+
+def test_status_carries_the_exposure_verdict(tmp_path):
+    hw = FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=RIG_CAMERAS)
+    with engine(hw, data_dir=tmp_path) as client:
+        assert client.get("/api/status").json()["camera"]["exposure"] is None  # nothing saved yet

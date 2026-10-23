@@ -16,10 +16,26 @@ MIN_RESPONSE = 10  # brightness must move at least this much across the exposure
 STALE_FRAMES = 2  # frames captured before the new exposure took effect
 MAX_GAIN = 15  # AC410 range
 TARGET_LEVEL = 180  # below this at the longest exposure, add gain (dark or distant surfaces)
+DARK_LEVEL = 120  # a still camera's white frame below this: too dark to separate lit from unlit
+STILL_RANGE = f"a still camera needs {DARK_LEVEL} to {CLIP_LEVEL - 1}"  # quoted in its check's verdict (#172)
 
 
 class CalibrationError(Exception):
     pass
+
+
+def exposure_verdict(calibration: dict | None) -> dict | None:
+    """A saved exposure's verdict and the range behind it. Only good or light-limited ones are saved:
+    a dark or clipping white frame fails the check instead."""
+    if calibration is None:
+        return None
+    still = bool(calibration.get("manual"))
+    return {
+        "verdict": "light_limit" if calibration.get("at_light_limit") else "good",
+        "low": DARK_LEVEL if still else None,
+        "high": CLIP_LEVEL - 1,
+        "target": None if still else TARGET_LEVEL,
+    }
 
 
 def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray],
@@ -39,7 +55,7 @@ def calibrate_exposure(uvc: Uvc, read_frame: Callable[[], np.ndarray],
             "camera being controlled may be different devices, or the lens is covered."
         )
     if darkest >= CLIP_LEVEL:
-        raise CalibrationError("White frame clips even at the shortest exposure. Dim the projector or the room.")
+        raise CalibrationError("Clipping even at the shortest exposure: dim the projector or the room.")
     if brightest < CLIP_LEVEL:
         found = _add_gain(uvc, read_frame, brightest, longest)
         # All the exposure and gain this camera has, and still short of the target: the editor says so.

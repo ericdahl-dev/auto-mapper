@@ -174,19 +174,19 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
       render();
     }
   }
-  calibrate.addEventListener("click", () => {
-    const checking = calibrate.textContent === "Check exposure"; // a still camera: its own exposure, checked
-    void usingCamera(calibrate, checking ? "Checking…" : "Calibrating…", async () => {
-      const res = await engine.calibrate();
-      const body = await res.json();
-      const c = body as CalibrateResponse;
-      // Kept in the section until the next check or another camera (#171), pass or fail.
-      exposureNote.textContent = !res.ok ? `${checking ? "Exposure check" : "Calibration"} failed: ${body.detail}`
-        : checking ? `Exposure is good: white peak ${Math.round(c.p99)}` : `Calibrated: exposure ${c.exposure}, white peak ${Math.round(c.p99)}`;
-      exposureNote.classList.toggle("warn", !res.ok);
-      exposureNote.hidden = false;
-    });
-  });
+  // One name for both kinds of camera (#172): the result leads with the engine's verdict, then says whether
+  // it adjusted the camera (a webcam) or only checked the exposure set on it (a still camera).
+  calibrate.addEventListener("click", () => void usingCamera(calibrate, "Checking…", async () => {
+    const res = await engine.calibrate();
+    const body = await res.json();
+    const c = body as CalibrateResponse;
+    // Kept in the section until the next check or another camera (#171), pass or fail. A failure is
+    // the engine's own words, verdict first ("Too dark (...): use a slower shutter ...").
+    const done = c.manual ? "checked the exposure set on the camera; nothing changed on it" : `adjusted the camera to exposure ${c.exposure}, gain ${c.gain}`;
+    exposureNote.textContent = !res.ok ? body.detail : `${c.at_light_limit ? "At the camera's light limit" : "Good"}: ${done}`;
+    exposureNote.classList.toggle("warn", !res.ok);
+    exposureNote.hidden = false;
+  }));
   checkFraming.addEventListener("click", () => void usingCamera(checkFraming, "Checking…", async () => {
     const res = await engine.checkFraming();
     const body = await res.json();
@@ -234,9 +234,7 @@ export function mountCameraPanel(deps: CameraPanelDeps): CameraPanel {
     const sel = status?.hardware.cameras.find((c) => c.unique_id === status?.camera.selected);
     const still = sel?.device_type === "still";
     apertureRow.hidden = !still; // a webcam's lens has none to set
-    // A still camera's exposure is set on it (the a6600 takes one exposure change over USB): the
-    // engine checks it rather than calibrating. Its HDR is its own bracketing (3 photos per press).
-    if (!calibrate.dataset.busy) calibrate.textContent = still ? "Check exposure" : "Calibrate exposure";
+    $("scan-settings-camera").textContent = sel ? `Scan settings for ${sel.name}` : "Scan settings"; // saved per camera
   }
 
   return {

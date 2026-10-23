@@ -78,6 +78,7 @@ def test_preview_and_calibration_work_with_a_still_camera(rig, tmp_path):
         cal = client.post("/api/camera/calibrate")
         assert cal.status_code == 200, cal.text
         assert client.get("/api/status").json()["camera"]["calibration"]["exposure"] > 0
+        assert client.get("/api/status").json()["camera"]["exposure"]["low"] == 120
 
 
 def test_a_scan_sets_the_cameras_aperture_and_calibrates_for_it(rig, tmp_path):
@@ -185,8 +186,10 @@ def test_a_still_cameras_exposure_is_checked_not_changed(rig, tmp_path):
 def test_the_check_says_what_to_change_on_the_camera(rig, tmp_path):
     dark = check_exposure(rig, tmp_path, shutterspeed="1/4000")
     assert dark.status_code == 422 and "slower shutter" in dark.json()["detail"]
+    assert dark.json()["detail"].startswith("Too dark (white at ")  # the verdict first (#172)
     bright = check_exposure(rig, tmp_path, shutterspeed="1")
     assert bright.status_code == 422 and "faster shutter" in bright.json()["detail"]
+    assert bright.json()["detail"].startswith("Clipping (white at ")
     auto = check_exposure(rig, tmp_path, iso="Auto ISO")
     assert auto.status_code == 422 and "Auto ISO" in auto.json()["detail"]
 

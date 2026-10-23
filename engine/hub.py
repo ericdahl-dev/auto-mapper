@@ -7,6 +7,7 @@ import logging
 from fastapi import WebSocket
 from pydantic import ValidationError
 
+from engine.calibrate import exposure_verdict
 from engine.cameras import CameraSettings
 from engine.hardware import HardwareSnapshot
 from engine.messages import EngineMessage, OutputStats
@@ -120,6 +121,7 @@ class Hub:
             "selected": selected,
             "calibration": calibration,
             "at_light_limit": bool(calibration and calibration.get("at_light_limit")),
+            "exposure": exposure_verdict(calibration),
             "battery": self.still_battery,
             "battery_state": _battery_state(self.still_battery),
         }

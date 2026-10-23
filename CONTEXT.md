@@ -31,7 +31,7 @@ A picture of the space as the projector sees it, made by a scan; surfaces are fo
 _Avoid_: Scene (for the picture), photo, camera image
 
 **Calibration**:
-Setting the camera's exposure and gain so the projected white is bright but not clipped, before a scan.
+Setting the camera's exposure and gain so the projected white is bright but not clipped, before a scan. In the Editor it's **Check exposure** for every camera: it calibrates a webcam, and only checks a still camera, whose exposure is set on it.
 _Avoid_: Calibration for alignment (say realignment) or for sound timing (say sync measurement)
 
 **Coverage**:
