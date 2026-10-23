@@ -1,5 +1,6 @@
 """#51: sound-reactive effects. The engine only relays settings and the output's meter."""
 
+import json
 
 import pytest
 
@@ -111,3 +112,9 @@ def test_editors_see_how_many_channels_the_sound_output_has(rig, scanned):
         out.send_json({"type": "output_stats", "sound_channels": 4000})  # nonsense is refused, not stored
         out.send_json({"type": "output_stats", "fps": 30})
         assert ed.receive_json()["output_sound_channels"] == 8
+
+
+def test_settings_saved_before_the_sound_delay_load_it_as_zero(tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({"selected_camera": AC410["unique_id"]}))  # no sound_delay
+    with engine(FakeHardware(displays=[LAPTOP], cameras=[AC410]), data_dir=tmp_path) as client:
+        assert client.post("/api/sound", json={}).json()["delay"] == 0
