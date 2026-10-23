@@ -259,6 +259,7 @@
       "battery": null,
       "battery_state": null,
       "calibration": null,
+      "exposure": null,
       "selected": "0x2110000f1311306"
     },
     "can_scan": false,

@@ -31,6 +31,14 @@ export interface Calibration {
   manual?: boolean | null; // a still camera: exposure set on the camera, checked not calibrated
 }
 
+/** The saved exposure's verdict, with the engine's range to quote (#172). */
+export interface Exposure {
+  verdict: "good" | "light_limit";
+  low: number | null; // a still camera's least white level
+  high: number; // the most before clipping
+  target: number | null; // what a webcam's calibration aims for
+}
+
 export interface StatusMessage {
   type: "status";
   hardware: {
@@ -54,6 +62,7 @@ export interface StatusMessage {
     selected: string | null;
     calibration: Calibration | null;
     at_light_limit: boolean;
+    exposure: Exposure | null;
     battery: number | null;
     battery_state: "ok" | "low" | "flat" | null;
   };

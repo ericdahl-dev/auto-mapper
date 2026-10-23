@@ -32,7 +32,7 @@ function status(selected: typeof A6600 | typeof AC410): StatusMessage {
     type: "status",
     hardware: { projector: { name: "TV", key: "tv", width: 8, height: 4 }, projector_missing: null, displays: [], cameras: [A6600, AC410], issues: [] },
     output_connected: true, output_resolution: { width: 8, height: 4 },
-    camera: { selected: selected.unique_id, calibration: null, at_light_limit: false, battery: null, battery_state: null },
+    camera: { selected: selected.unique_id, calibration: null, at_light_limit: false, exposure: null, battery: null, battery_state: null },
     project: null, can_scan: true, scan_blocker: null,
   } as StatusMessage;
 }
@@ -78,16 +78,16 @@ describe("the Camera section", () => {
     revoke.mockRestore();
   });
 
-  it("says what calibration found, and lets the camera go when not previewing", async () => {
+  it("says it adjusted a webcam, and lets the camera go when not previewing", async () => {
     const { engine, calls } = fakeEngine();
     const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(AC410), false);
     $("calibrate").click();
     await vi.waitFor(() => expect($("exposure-note").hidden).toBe(false));
-    expect($("exposure-note").textContent).toBe("Calibrated: exposure 1200, white peak 201");
+    expect($("exposure-note").textContent).toBe("Adjusted the camera: exposure 1200, gain 3");
     expect($("exposure-note").classList.contains("warn")).toBe(false);
     await vi.waitFor(() => expect(calls).toContain("releaseCamera"));
-    expect($("calibrate").textContent).toBe("Calibrate exposure");
+    expect($("calibrate").textContent).toBe("Check exposure");
   });
 
   it("keeps why calibration failed in the section until another camera is chosen (#171)", async () => {
@@ -95,7 +95,7 @@ describe("the Camera section", () => {
     const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(AC410), false);
     $("calibrate").click();
-    await vi.waitFor(() => expect($("exposure-note").textContent).toBe("Calibration failed: Output window is not connected"));
+    await vi.waitFor(() => expect($("exposure-note").textContent).toBe("Output window is not connected"));
     expect($("exposure-note").classList.contains("warn")).toBe(true);
     panel.update(status(AC410), false);
     expect($("exposure-note").hidden).toBe(false);
@@ -178,25 +178,48 @@ describe("the Camera section", () => {
     expect(calls).toContain('setScanSettings {"hdr":3}');
   });
 
-  it("for a still camera, checks the exposure set on it rather than calibrating", () => {
-    const { engine } = fakeEngine();
+  it("keeps one button name for both kinds of camera, and says a still camera was only checked (#172)", async () => {
+    const { engine } = fakeEngine({ calibrate: async () => json({ exposure: 167, gain: 0, p99: 149, manual: true }) });
     const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(A6600), false);
     expect($("calibrate").textContent).toBe("Check exposure");
     expect($("hdr-row").hidden).toBe(false); // HDR: the camera's own bracketing
+    $("calibrate").click();
+    await vi.waitFor(() => expect($("exposure-note").textContent).toBe("Checked the exposure set on the camera; nothing changed on it"));
     panel.update(status(AC410), false);
-    expect($("calibrate").textContent).toBe("Calibrate exposure");
+    expect($("calibrate").textContent).toBe("Check exposure");
   });
 
   it("says what to change on a still camera when its exposure isn't right", async () => {
-    const detail = "The white frame is too dark: use a slower shutter or a higher ISO on the camera.";
+    const detail = "Too dark (white at 90 of 255; a still camera needs 120 to 249): use a slower shutter or a higher ISO on the camera.";
     const { engine } = fakeEngine({ calibrate: async () => json({ detail }, 422) });
     const panel = mountCameraPanel({ engine, notice: () => {} });
     panel.update(status(A6600), false);
     $("calibrate").click();
     expect($("calibrate").textContent).toBe("Checking…");
-    await vi.waitFor(() => expect($("exposure-note").textContent).toBe(`Exposure check failed: ${detail}`));
+    await vi.waitFor(() => expect($("exposure-note").textContent).toBe(detail)); // the engine's verdict first (#172)
     expect($("calibrate").textContent).toBe("Check exposure");
+  });
+
+  it("names the camera its scan settings belong to, each setting labeled and explained on screen (#172)", () => {
+    const { engine } = fakeEngine();
+    const panel = mountCameraPanel({ engine, notice: () => {} });
+    panel.update(status(A6600), false);
+    expect($("scan-settings-camera").textContent).toBe("Scan settings for Sony Alpha-A6600");
+    expect(document.querySelector("[data-fold=camera]")!.textContent).toContain("Before scanning");
+    expect(document.querySelector("[data-fold=camera]")!.textContent!.match(/Used by the next scan/g)).toHaveLength(1);
+    for (const id of ["aperture", "hdr", "hole-fill"]) {
+      expect($<HTMLSelectElement>(id).labels?.[0]?.textContent?.trim(), id).toBeTruthy(); // visible, not only aria-label
+    }
+    for (const id of ["aperture", "hdr", "hole-fill", "mask-draw"]) {
+      const hint = ($(id).getAttribute("aria-describedby") ?? "").split(/\s+/)
+        .map((h) => document.getElementById(h)).find((h) => h?.classList.contains("hint"));
+      expect(hint?.textContent?.length ?? 0, id).toBeGreaterThan(20);
+      expect(hint!.closest("[hidden]"), id).toBeNull();
+    }
+    expect([...$<HTMLSelectElement>("hdr").options].map((o) => o.text)).not.toContain("HDR: off"); // the label says HDR
+    panel.update(status(AC410), false);
+    expect($("scan-settings-camera").textContent).toBe("Scan settings for Webcam AC410");
   });
 
   it("says drawn areas are skipped (#170)", async () => {
@@ -206,7 +229,7 @@ describe("the Camera section", () => {
     expect($("mask-draw").textContent).toBe("Skip an area");
     await panel.loadScanSettings();
     expect($("mask-note").textContent).toBe("Skipping 2 areas");
-    expect($("mask-draw").title + $("mask-draw").closest(".row")!.getAttribute("title")).toMatch(/skip/i);
+    expect($("mask-hint").textContent).toMatch(/leaves them out/); // on screen, not only a tooltip (#172)
   });
 
   it("removes one skipped area when it's clicked, keeping the others", async () => {

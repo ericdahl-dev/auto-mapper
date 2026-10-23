@@ -107,6 +107,7 @@
       #scene-list li input[type="number"] { width: 4.5em; }
       #scene-list li button { padding: 2px 6px; min-width: 24px; min-height: 24px; }
       .hint { font-size: 12px; margin: 0 0 8px; }
+      details.fold h3 { font-size: 12px; font-weight: 600; margin: 12px 0 4px; }
       #surfaces.drawing { cursor: crosshair; }
       #surfaces polyline.draft { fill: rgba(251, 191, 36, 0.15); stroke: #fbbf24; stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
       #surfaces circle.draft { fill: #fbbf24; pointer-events: none; }
@@ -302,47 +303,59 @@
         <div class="row"><meter id="sound-meter" min="0" max="100" value="0" aria-label="Sound level"></meter> <span id="sound-note" class="muted">Off</span></div>
         </details>
         <details class="fold" data-fold="camera"><summary><h2>Camera</h2></summary>
+        <h3>Before scanning</h3>
+        <p class="muted hint">Each shows white on the projector. Check framing measures how much of the camera's view the projection fills (the more, the finer the scan) and outlines it on the preview. Check exposure makes sure the white is neither too dark nor clipping.</p>
         <div class="row">
           <button id="preview-toggle" aria-describedby="camera-reason">Show preview</button>
-          <button id="calibrate" aria-describedby="camera-reason">Calibrate exposure</button>
+          <button id="calibrate" aria-describedby="camera-reason">Check exposure</button>
           <button id="check-framing" title="Shows white, then black, and measures how much of the camera's view the projection fills: the more, the finer the scan. Outlined on the preview." aria-describedby="camera-reason">Check framing</button>
           <span id="camera-reason" class="scan-reason" hidden></span>
         </div>
         <p id="framing-note" class="muted hint" role="status" hidden></p>
         <p id="exposure-note" class="muted hint" role="status" hidden></p>
         <dl><dt>Exposure</dt><dd id="calibration">…</dd><dt id="battery-label" hidden>Battery</dt><dd id="battery" hidden></dd></dl>
-        <div class="row" id="aperture-row" hidden title="Still cameras: the lens opening for scans. f/8 keeps a scene with depth in focus; wider lets in more light but blurs what's nearer or farther than the focus. Needs the mode dial on M. Applies to the next scan.">
-          <select id="aperture" aria-label="Aperture for scans">
-            <option value="camera">Aperture: as set on the camera</option>
-            <option value="4">Aperture: f/4</option>
-            <option value="5.6">Aperture: f/5.6</option>
-            <option value="8">Aperture: f/8 (deep focus)</option>
-            <option value="11">Aperture: f/11</option>
-          </select>
-        </div>
-        <div class="row" id="hdr-row" title="Capture each pattern at more than one exposure and keep the best-lit reading per pixel: helps when dark and bright surfaces share the scene. Slower. A still camera brackets by itself: 3 photos, 2 stops apart, per pattern. Applies to the next scan.">
-          <select id="hdr" aria-label="HDR scan">
-            <option value="1">HDR: off</option>
-            <option value="2">HDR: 2 exposures</option>
-            <option value="3">HDR: 3 exposures (slowest)</option>
-          </select>
-        </div>
-        <label class="control" title="How wide a gap between decoded pixels the scan fills in: more gives fuller surfaces, less gives truer edges. Applies to the next scan.">
-          <span>Hole fill</span><span id="hole-fill-readout" class="muted">9 px</span>
-          <input id="hole-fill" type="range" min="0" max="31" step="1" value="9" aria-label="Hole fill" />
-        </label>
         <p id="preview-note" class="muted hint" role="status"></p>
         <div id="preview-box" hidden>
           <img id="preview" alt="Camera preview" />
           <svg id="framing-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><polygon /></svg>
           <svg id="mask-overlay" viewBox="0 0 1 1" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
-        <div class="row" title="Skip part of what the camera sees: draw around a window, a TV or shiny things, and the next scan leaves them out. Click corners on the preview, double-click or Enter to finish; add as many areas as you like. Click a shaded area to stop skipping it.">
-          <button id="mask-draw" aria-describedby="mask-reason">Skip an area</button>
+        <h3 id="scan-settings-camera">Scan settings</h3>
+        <p class="muted hint">Saved for this camera. Used by the next scan.</p>
+        <div id="aperture-row" hidden>
+          <label class="control"><span>Aperture</span>
+            <select id="aperture" aria-describedby="aperture-hint">
+              <option value="camera">As set on the camera</option>
+              <option value="4">f/4</option>
+              <option value="5.6">f/5.6</option>
+              <option value="8">f/8 (deep focus)</option>
+              <option value="11">f/11</option>
+            </select>
+          </label>
+          <p id="aperture-hint" class="muted hint">The lens opening. f/8 keeps a deep scene in focus; wider lets in more light but blurs what's nearer or farther. Needs the mode dial on M.</p>
+        </div>
+        <div id="hdr-row">
+          <label class="control"><span>HDR</span>
+            <select id="hdr" aria-describedby="hdr-hint">
+              <option value="1">Off</option>
+              <option value="2">2 exposures</option>
+              <option value="3">3 exposures (slowest)</option>
+            </select>
+          </label>
+          <p id="hdr-hint" class="muted hint">Several exposures per pattern, keeping the best-lit reading: helps when dark and bright surfaces share the scene. Slower. A still camera brackets by itself: 3 photos, 2 stops apart.</p>
+        </div>
+        <label class="control">
+          <span>Hole fill</span><span id="hole-fill-readout" class="muted">9 px</span>
+          <input id="hole-fill" type="range" min="0" max="31" step="1" value="9" aria-describedby="hole-fill-hint" />
+        </label>
+        <p id="hole-fill-hint" class="muted hint">Fills small gaps in the scan. More: fuller surfaces. Less: truer edges.</p>
+        <div class="row">
+          <button id="mask-draw" aria-describedby="mask-hint mask-reason">Skip an area</button>
           <button id="mask-clear" hidden>Skip nothing</button>
           <span id="mask-note" class="muted"></span>
           <span id="mask-reason" class="scan-reason" hidden></span>
         </div>
+        <p id="mask-hint" class="muted hint">Draw around a window, a TV or shiny things on the preview, and the scan leaves them out: click corners, then double-click or press Enter. Click a shaded area to stop skipping it.</p>
         </details>
         <details class="fold" data-fold="test-frame"><summary><h2>Test frame</h2></summary>
         <div class="row">

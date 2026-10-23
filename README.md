@@ -161,17 +161,19 @@ The **Camera** dropdown in the Hardware panel lists every camera, labeled `(USB)
 
 **Show preview**, in the **Camera** section, is off by default. While it's on, the editor polls a camera frame twice a second; turning it off releases the webcam. A still camera takes a photo per preview (a few seconds each) and reuses it for 5 seconds. Starting a scan turns the preview off, because the scan needs the camera to itself. Use the preview to check that the camera sees the whole projected area.
 
-### 3. Calibrate exposure and check framing
+### 3. Check exposure and framing
 
-**With a webcam**, click **Calibrate exposure**. The projector shows full white, the camera's auto controls are locked, and the engine searches for the longest exposure (up to 100 ms) at which the white frame is bright but not clipped. Long exposures brighten the image without the noise that gain adds, and scans don't need speed. Only if the longest exposure is still too dark does it raise gain, step by step.
+The Camera section has two groups: **Before scanning** (Show preview, Check exposure, Check framing, each with its last result) and **Scan settings for** the selected camera (Aperture, HDR, Hole fill, Skip an area), which are saved per camera and used by the next scan.
 
-The result shows as "Exposure N, gain G (white frame peak P)". If it reads **"camera at its light limit"**, the camera is at maximum exposure and maximum gain: the projection is very faint for this camera, so expect poor decoding on dark or distant surfaces.
+**With a webcam**, click **Check exposure**. The app adjusts the camera: the projector shows full white, the camera's auto controls are locked, and the engine searches for the longest exposure (up to 100 ms) at which the white frame is bright but not clipped. Long exposures brighten the image without the noise that gain adds, and scans don't need speed. Only if the longest exposure is still too dark does it raise gain, step by step.
 
-**With a still camera**, the same button reads **Check exposure**. The app doesn't set the exposure (see [Still camera](#still-camera-sony-a6600)); it photographs the projected white and tells you what to change on the camera:
+The Exposure line leads with a verdict, then the white level against what the engine aims for: "Good (white at 181 of 255; aiming near 180, at most 249): exposure 300, gain 0, set by the app". **At the camera's light limit** means maximum exposure and maximum gain and still dim: brighten the projector, darken the room or move the camera closer, or expect poor decoding on dark or distant surfaces. Before any check it reads "Not checked yet": that isn't blocking anything, since the scan checks first.
+
+**With a still camera**, the same button only checks. The app doesn't set the exposure (see [Still camera](#still-camera-sony-a6600)); it photographs the projected white and tells you what to change on the camera:
 
 | Result | Do this on the camera |
 |--------|-----------------------|
-| Exposure is good | Nothing. |
+| Good (white at 149 of 255; a still camera needs 120 to 249) | Nothing. |
 | Too dark | A slower shutter or a higher ISO. |
 | Clipping | A faster shutter or a lower ISO. |
 | ISO is Auto | Set a number, so every pattern is photographed the same way. |

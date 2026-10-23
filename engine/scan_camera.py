@@ -21,7 +21,7 @@ from typing import Callable, Iterator, Protocol
 
 import numpy as np
 
-from engine.calibrate import CLIP_LEVEL, LONGER_EXPOSURES, CalibrationError, calibrate_exposure
+from engine.calibrate import CLIP_LEVEL, DARK_LEVEL, LONGER_EXPOSURES, STILL_RANGE, CalibrationError, calibrate_exposure
 from engine.camera_device import CameraSession
 from engine.camera_lock import Uvc, locked_camera
 from engine.cameras import CameraSettings, UsbAddress, usb_address
@@ -114,9 +114,6 @@ class _OwnersExposure:
         pass
 
 
-DARK_LEVEL = 120  # a still camera's white frame below this: too dark to separate lit from unlit
-
-
 class _Still:
     drop_frames = 0  # each frame is a fresh photo
     frames_per_pattern = 1
@@ -176,10 +173,11 @@ class _Still:
             raise CalibrationError(f"The camera's ISO is {iso}: set a number on the camera (e.g. 400), "
                                    "so every pattern is photographed the same way.")
         p99 = float(np.percentile(self.read(), 99))
+        level = f"(white at {round(p99)} of 255; {STILL_RANGE})"
         if p99 >= CLIP_LEVEL:
-            raise CalibrationError("The white frame is clipping: use a faster shutter or a lower ISO on the camera.")
+            raise CalibrationError(f"Clipping {level}: use a faster shutter or a lower ISO on the camera.")
         if p99 < DARK_LEVEL:
-            raise CalibrationError("The white frame is too dark: use a slower shutter or a higher ISO on the camera.")
+            raise CalibrationError(f"Too dark {level}: use a slower shutter or a higher ISO on the camera.")
         shutter = _seconds(self._still.driver.get_config("shutterspeed")) or 0.01
         return {"exposure": max(1, round(shutter * 10000)), "gain": 0, "p99": p99, "manual": True}
 

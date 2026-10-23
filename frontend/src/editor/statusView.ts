@@ -1,4 +1,4 @@
-import type { Calibration, CameraInfo, HardwareIssue, StatusMessage } from "../shared/messages";
+import type { Calibration, CameraInfo, Exposure, HardwareIssue, StatusMessage } from "../shared/messages";
 
 export interface StatusView {
   /** Problems that stop the work: full-width banners. */
@@ -83,17 +83,21 @@ export function describeStatus(status: StatusMessage | null): StatusView {
       : status.scan_blocker ?? "The rig isn't ready to scan",
     projector: projector ? `${projector.name} (${size(projector)})` : "None",
     output: status.output_connected && out ? `Output connected (${size(out)})` : "Output not connected",
-    calibration: describeCalibration(status.camera.calibration, status.camera.at_light_limit),
+    calibration: describeCalibration(status.camera.calibration, status.camera.exposure),
     project: status.project?.name ?? "Unsaved",
     battery: battery === null ? null : `Battery ${battery}%`,
   };
 }
 
-function describeCalibration(c: Calibration | null, atLightLimit: boolean): string {
-  if (!c) return "Not calibrated";
-  if (c.manual) return `Set on the camera (white frame peak ${Math.round(c.p99)})`;
-  const text = `Exposure ${c.exposure}, gain ${c.gain} (white frame peak ${Math.round(c.p99)})`;
-  return atLightLimit ? `${text} - camera at its light limit` : text;
+// The verdict first, then the white level against the engine's range (#172).
+function describeCalibration(c: Calibration | null, e: Exposure | null): string {
+  if (!c || !e) return "Not checked yet: the scan checks it first, or check exposure now";
+  const range = e.low !== null ? `a still camera needs ${e.low} to ${e.high}` : `aiming near ${e.target}, at most ${e.high}`;
+  const level = `(white at ${Math.round(c.p99)} of 255; ${range})`;
+  if (e.verdict === "light_limit") {
+    return `At the camera's light limit ${level}: brighten the projector, darken the room or move the camera closer`;
+  }
+  return `Good ${level}: ${c.manual ? "set on the camera, checked by the app" : `exposure ${c.exposure}, gain ${c.gain}, set by the app`}`;
 }
 
 // USB webcams have uniqueIDs like 0x2110000f1311306 (location + vendor + product).

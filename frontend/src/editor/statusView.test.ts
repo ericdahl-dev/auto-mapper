@@ -6,7 +6,7 @@ const AC410: CameraInfo = { name: "Webcam AC410", unique_id: "0x2110000f1311306"
 const FACETIME: CameraInfo = { name: "FaceTime HD Camera", unique_id: "3F45E80A", device_type: "builtin" };
 
 function camera(over: Partial<StatusMessage["camera"]> = {}): StatusMessage["camera"] {
-  return { selected: AC410.unique_id, calibration: null, at_light_limit: false, battery: null, battery_state: null, ...over };
+  return { selected: AC410.unique_id, calibration: null, at_light_limit: false, exposure: null, battery: null, battery_state: null, ...over };
 }
 
 function status(over: Partial<StatusMessage> = {}, issues: StatusMessage["hardware"]["issues"] = []): StatusMessage {
@@ -93,14 +93,18 @@ describe("cameraOptions", () => {
   });
 });
 
+// The verdict and its range come from the engine (#172): the editor keeps no levels of its own.
+const WEBCAM_GOOD = { verdict: "good", low: null, high: 249, target: 180 } as const;
+const STILL_GOOD = { verdict: "good", low: 120, high: 249, target: null } as const;
+
 describe("calibration summary", () => {
-  it("shows the saved exposure for the selected camera", () => {
-    const view = describeStatus(status({ camera: camera({ calibration: { exposure: 124, gain: 0, p99: 248 } }) }));
-    expect(view.calibration).toBe("Exposure 124, gain 0 (white frame peak 248)");
+  it("leads with the verdict, then the white level against the engine's range", () => {
+    const view = describeStatus(status({ camera: camera({ calibration: { exposure: 124, gain: 0, p99: 248 }, exposure: WEBCAM_GOOD }) }));
+    expect(view.calibration).toBe("Good (white at 248 of 255; aiming near 180, at most 249): exposure 124, gain 0, set by the app");
   });
 
-  it("says when the camera is not calibrated", () => {
-    expect(describeStatus(status()).calibration).toBe("Not calibrated");
+  it("doesn't look like a step blocking the scan when nothing is saved", () => {
+    expect(describeStatus(status()).calibration).toBe("Not checked yet: the scan checks it first, or check exposure now");
   });
 });
 
@@ -114,15 +118,17 @@ describe("project label", () => {
 describe("calibration at the camera's limit", () => {
   const calibration = { exposure: 1000, gain: 15, p99: 120 };
 
-  it("says so when the engine says the camera is at its light limit", () => {
-    const view = describeStatus(status({ camera: camera({ calibration, at_light_limit: true }) }));
-    expect(view.calibration).toBe("Exposure 1000, gain 15 (white frame peak 120) - camera at its light limit");
+  it("says so, and what to change, when the engine says the camera is at its light limit", () => {
+    const exposure = { ...WEBCAM_GOOD, verdict: "light_limit" } as const;
+    const view = describeStatus(status({ camera: camera({ calibration, at_light_limit: true, exposure }) }));
+    expect(view.calibration).toBe("At the camera's light limit (white at 120 of 255; aiming near 180, at most 249): "
+      + "brighten the projector, darken the room or move the camera closer");
   });
 
   it("keeps no limits of its own: the engine decides, per camera (#142)", () => {
     // 100 ms and gain 15 was the AC410's old limit; a still camera goes to seconds.
-    const view = describeStatus(status({ camera: camera({ calibration, at_light_limit: false }) }));
-    expect(view.calibration).toBe("Exposure 1000, gain 15 (white frame peak 120)");
+    const view = describeStatus(status({ camera: camera({ calibration, at_light_limit: false, exposure: WEBCAM_GOOD }) }));
+    expect(view.calibration).toMatch(/^Good /);
   });
 });
 
@@ -203,8 +209,8 @@ describe("camera battery (still cameras)", () => {
 describe("a still camera's exposure", () => {
   it("is the camera's own, checked by the engine", () => {
     const calibration = { exposure: 167, gain: 0, p99: 201.4, manual: true };
-    expect(describeStatus(status({ camera: camera({ calibration }) })).calibration)
-      .toBe("Set on the camera (white frame peak 201)");
+    expect(describeStatus(status({ camera: camera({ calibration, exposure: STILL_GOOD }) })).calibration)
+      .toBe("Good (white at 201 of 255; a still camera needs 120 to 249): set on the camera, checked by the app");
   });
 });
 
