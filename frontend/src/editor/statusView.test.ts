@@ -93,14 +93,15 @@ describe("cameraOptions", () => {
   });
 });
 
-// The verdict and its range come from the engine (#172): the editor keeps no levels of its own.
-const WEBCAM_GOOD = { verdict: "good", low: null, high: 249, target: 180 } as const;
-const STILL_GOOD = { verdict: "good", low: 120, high: 249, target: null } as const;
+// The verdict and its range come from the engine (#172): the editor keeps no levels of its own, so these
+// are numbers the engine doesn't use. A copy of 120/180/249 in the frontend would fail these tests.
+const WEBCAM_GOOD = { verdict: "good", low: null, high: 230, target: 150 } as const;
+const STILL_GOOD = { verdict: "good", low: 100, high: 230, target: null } as const;
 
 describe("calibration summary", () => {
   it("leads with the verdict, then the white level against the engine's range", () => {
     const view = describeStatus(status({ camera: camera({ calibration: { exposure: 124, gain: 0, p99: 248 }, exposure: WEBCAM_GOOD }) }));
-    expect(view.calibration).toBe("Good (white at 248 of 255; aiming near 180, at most 249): exposure 124, gain 0, set by the app");
+    expect(view.calibration).toBe("Good (white at 248 of 255; aiming near 150, at most 230): exposure 124, gain 0, set by the app");
   });
 
   it("doesn't look like a step blocking the scan when nothing is saved", () => {
@@ -121,7 +122,7 @@ describe("calibration at the camera's limit", () => {
   it("says so, and what to change, when the engine says the camera is at its light limit", () => {
     const exposure = { ...WEBCAM_GOOD, verdict: "light_limit" } as const;
     const view = describeStatus(status({ camera: camera({ calibration, at_light_limit: true, exposure }) }));
-    expect(view.calibration).toBe("At the camera's light limit (white at 120 of 255; aiming near 180, at most 249): "
+    expect(view.calibration).toBe("At the camera's light limit (white at 120 of 255; aiming near 150, at most 230): "
       + "brighten the projector, darken the room or move the camera closer");
   });
 
@@ -210,7 +211,7 @@ describe("a still camera's exposure", () => {
   it("is the camera's own, checked by the engine", () => {
     const calibration = { exposure: 167, gain: 0, p99: 201.4, manual: true };
     expect(describeStatus(status({ camera: camera({ calibration, exposure: STILL_GOOD }) })).calibration)
-      .toBe("Good (white at 201 of 255; a still camera needs 120 to 249): set on the camera, checked by the app");
+      .toBe("Good (white at 201 of 255; a still camera needs 100 to 230): set on the camera, checked by the app");
   });
 });
 
