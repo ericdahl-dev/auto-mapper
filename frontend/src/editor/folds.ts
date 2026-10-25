@@ -1,12 +1,13 @@
 // The Editor's sidebar sections fold open or shut (#110): everyday ones start open, set-up-once ones
 // folded, your choice is remembered, and a section with a problem always opens so nothing is hidden.
 
-const FOLDED_AT_FIRST = new Set(["schedule", "midi", "hardware", "camera", "test-frame"]);
+const FOLDED_AT_FIRST = new Set(["setup", "schedule", "midi", "hardware", "camera", "test-frame"]);
 
-/** Whether a section is open: a problem opens it; otherwise your last choice, else its default. */
-export function foldOpen(name: string, saved: Record<string, boolean>, problems: Set<string>): boolean {
+/** Whether a section is open: a problem opens it; otherwise your last choice, else its default, which
+ *  `openFirst` turns to open (Camera while there's no scan yet, #168). */
+export function foldOpen(name: string, saved: Record<string, boolean>, problems: Set<string>, openFirst = new Set<string>()): boolean {
   if (problems.has(name)) return true;
-  return saved[name] ?? !FOLDED_AT_FIRST.has(name);
+  return saved[name] ?? (openFirst.has(name) || !FOLDED_AT_FIRST.has(name));
 }
 
 interface StatusLike {

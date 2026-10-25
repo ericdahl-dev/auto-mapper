@@ -93,7 +93,9 @@ def test_releasing_the_camera_closes_it(rig, tmp_path):
 def test_scan_needs_a_selected_camera(tmp_path):
     hw = FakeHardware(displays=[LAPTOP, PROJECTOR], cameras=[FACETIME])
     with engine(hw, data_dir=tmp_path) as client, output(client):
-        assert client.get("/api/status").json()["can_scan"] is False
+        s = client.get("/api/status").json()
+        assert s["can_scan"] is False
+        assert s["scan_blocker"] == "Choose the camera that scans (Camera)"  # where its picker is (#168)
 
         client.post("/api/camera", json={"unique_id": FACETIME["unique_id"]})
 

@@ -65,8 +65,7 @@ export function describeStatus(status: StatusMessage | null): StatusView {
   if (status.output_video_sound_blocked) {
     banners.push("Video sound is waiting: click the output window once to allow it.");
   }
-  const offProjector = !!(status.output_connected && projector && out
-    && (out.width !== projector.width || out.height !== projector.height));
+  const offProjector = outputOffProjector(status);
   if (!status.output_connected) {
     banners.push("Output window not connected. Open it and move it fullscreen onto the projector.");
   } else if (offProjector) {
@@ -87,6 +86,13 @@ export function describeStatus(status: StatusMessage | null): StatusView {
     project: status.project?.name ?? "Unsaved",
     battery: battery === null ? null : `Battery ${battery}%`,
   };
+}
+
+/** The output window is open but not fullscreen on the projector (its size isn't the projector's). */
+export function outputOffProjector(status: StatusMessage): boolean {
+  const { projector } = status.hardware;
+  const out = status.output_resolution;
+  return !!(status.output_connected && projector && out && (out.width !== projector.width || out.height !== projector.height));
 }
 
 // The verdict first, then the white level against the engine's range (#172).
